@@ -1,0 +1,184 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &9100000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 9100000002}
+  - component: {fileID: 9100000003}
+  - component: {fileID: 9100000004}
+  - component: {fileID: 9100000005}
+  - component: {fileID: 9100000006}
+  m_Layer: 0
+  m_Name: BombPickupItem
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &9100000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9100000001}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!212 &9100000003
+SpriteRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9100000001}
+  m_Enabled: 1
+  m_CastShadows: 0
+  m_ReceiveShadows: 0
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 0
+  m_RayTraceProcedural: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 1
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 0
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 2
+  m_Sprite: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_FlipX: 0
+  m_FlipY: 0
+  m_DrawMode: 0
+  m_Size: {x: 1, y: 1}
+  m_AdaptiveModeThreshold: 0.5
+  m_SpriteTileMode: 0
+  m_WasSpriteAssigned: 0
+  m_MaskInteraction: 0
+  m_SpriteSortPoint: 0
+--- !u!61 &9100000004
+BoxCollider2D:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9100000001}
+  m_Enabled: 1
+  m_Density: 1
+  m_Material: {fileID: 0}
+  m_IsTrigger: 1
+  m_UsedByEffector: 0
+  m_UsedByComposite: 0
+  m_Offset: {x: 0, y: 0}
+  m_SpriteTilingProperty:
+    border: {x: 0, y: 0, z: 0, w: 0}
+    pivot: {x: 0.5, y: 0.5}
+    oldSize: {x: 1, y: 1}
+    newSize: {x: 1, y: 1}
+    adaptiveTilingThreshold: 0.5
+    drawMode: 0
+    adaptiveTiling: 0
+  m_AutoTiling: 0
+  serializedVersion: 2
+  m_Size: {x: 0.75, y: 0.75}
+  m_EdgeRadius: 0
+--- !u!114 &9100000005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9100000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d09ee5811d0b49b0a0c4d1f5b4fa9cec, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  itemColor: {r: 0.16, g: 0.18, b: 0.22, a: 1}
+  worldScale: 0.55
+  bodyColor: {r: 0.16, g: 0.18, b: 0.22, a: 1}
+  useBodyHighlight: 1
+  bodyHighlightColor: {r: 0.34, g: 0.38, b: 0.46, a: 1}
+  fuseColor: {r: 0.78, g: 0.64, b: 0.43, a: 1}
+--- !u!114 &9100000006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9100000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 129bda3d7c724496ae43a7c6ada5feda, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  itemName: "\u70B8\u5F39"
+  itemDescription: "\u4E00\u4E2A\u666E\u901A\u7684\u70B8\u5F39\uFF0C\u4F7F\u7528\u4F1A\u653E\u7F6E\u5728\u539F\u5730\uFF0C\u5E76\u5728\u4E00\u6BB5\u65F6\u95F4\u540E\u7206\u70B8\uFF0C\u7206\u70B8\u4F1A\u7834\u73AF\u4E00\u4E9B\u969C\u788D\u5E76\u5F15\u53D1\u5DE8\u5927\u7684\u7684\u58F0\u54CD\u3002"
+  itemId: bomb
+  persistentIdentity: {fileID: 0}
+  uniqueInstanceId: 
+  pickupQuantity: 1
+  maxStackSize: 5
+  pickupDistance: 1.25
+  droppedPickupDelay: 0.35
+  pickupPromptOffset: {x: 0, y: 0.9}
+  restorePreviousTaskOnPickup: 0
+  journalChangesOnPickup: []
+  fuseDuration: 4
+  flashInterval: 0.16
+  bombColor: {r: 0.16, g: 0.18, b: 0.22, a: 1}
+  usePlacedBombHighlight: 1
+  placedBombHighlightColor: {r: 0.34, g: 0.38, b: 0.46, a: 1}
+  flashColor: {r: 1, g: 0, b: 0, a: 1}
+  placedBombSize: 0.55
+  explosionAttackPower: 4
+  explosionSize: {x: 2.4, y: 2.4}
+  explosionHitboxDuration: 0.18
+  explosionHitboxColor: {r: 1, g: 0.2, b: 0.08, a: 0.5}
+  explosionSound: {fileID: 0}
+  explosionSoundVolume: 1
+  explosionSoundPitch: 1
+  explosionSoundSpatialBlend: 0.85
+  explosionSoundMaxDistance: 24
+  investigationRadius: 7
+  investigationPulseDuration: 0.7
+  investigationPulseColor: {r: 1, g: 1, b: 1, a: 1}
+  effectSortingOrder: 10
+  emitPlacedBombParticles: 0
+  placedBombParticleColor: {r: 0.62, g: 0.24, b: 0.9, a: 0.85}
+  placedBombParticlesPerSecond: 18
+  placedBombParticleLifetime: 0.9
+  placedBombParticleRadius: 0.18
+  placedBombParticleSpeed: 0.55
+  placedBombParticleSize: 0.09

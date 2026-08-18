@@ -1,0 +1,289 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &7832618691216883880
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7832618691216883889}
+  - component: {fileID: 7832618691216883890}
+  - component: {fileID: 7832618691216883891}
+  - component: {fileID: 7832618691216883884}
+  - component: {fileID: 7832618691216883885}
+  - component: {fileID: 7832618691216883886}
+  - component: {fileID: 4657559875753840611}
+  m_Layer: 0
+  m_Name: SwordGuy
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7832618691216883889
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7832618691216883880}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!50 &7832618691216883890
+Rigidbody2D:
+  serializedVersion: 4
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7832618691216883880}
+  m_BodyType: 1
+  m_Simulated: 1
+  m_UseFullKinematicContacts: 1
+  m_UseAutoMass: 0
+  m_Mass: 1
+  m_LinearDrag: 0
+  m_AngularDrag: 0.05
+  m_GravityScale: 0
+  m_Material: {fileID: 0}
+  m_Interpolate: 1
+  m_SleepingMode: 1
+  m_CollisionDetection: 0
+  m_Constraints: 4
+--- !u!61 &7832618691216883891
+BoxCollider2D:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7832618691216883880}
+  m_Enabled: 1
+  m_Density: 1
+  m_Material: {fileID: 0}
+  m_IsTrigger: 0
+  m_UsedByEffector: 0
+  m_UsedByComposite: 0
+  m_Offset: {x: -0.0004733503, y: 0.26713133}
+  m_SpriteTilingProperty:
+    border: {x: 0, y: 0, z: 0, w: 0}
+    pivot: {x: 0.5, y: 0.5}
+    oldSize: {x: 1, y: 1}
+    newSize: {x: 1, y: 1}
+    adaptiveTilingThreshold: 0.5
+    drawMode: 0
+    adaptiveTiling: 0
+  m_AutoTiling: 0
+  serializedVersion: 2
+  m_Size: {x: 0.4467712, y: 0.63898516}
+  m_EdgeRadius: 0
+--- !u!212 &7832618691216883884
+SpriteRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7832618691216883880}
+  m_Enabled: 1
+  m_CastShadows: 0
+  m_ReceiveShadows: 0
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 0
+  m_RayTraceProcedural: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 0
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 1
+  m_Sprite: {fileID: 0}
+  m_Color: {r: 0.4644594, g: 0.9512434, b: 0.9716981, a: 1}
+  m_FlipX: 0
+  m_FlipY: 0
+  m_DrawMode: 0
+  m_Size: {x: 1, y: 1}
+  m_AdaptiveModeThreshold: 0.5
+  m_SpriteTileMode: 0
+  m_WasSpriteAssigned: 0
+  m_MaskInteraction: 0
+  m_SpriteSortPoint: 0
+--- !u!114 &7832618691216883885
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7832618691216883880}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6d0b8d13d21746a8ba6b4ceaf2eec3a7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  health: 6
+  skillValue: 1
+  permissionLevel: 0
+  possessionEnergy: 3
+  possessionCost: 1
+  moveSpeed: 3.5
+  deathExplosionDuration: 0.35
+  deathExplosionScale: 5
+  deathExplosionTint: {r: 1, g: 0.65, b: 0.12, a: 1}
+  damageFeedbackDuration: 0.18
+  damageTint: {r: 1, g: 0.2, b: 0.2, a: 1}
+  damageShakeAmount: 0.04
+  damageShakeSpeed: 80
+  attributeWindowOffset: {x: 0, y: -0.25}
+  attributeWindowScale: 2.2
+  attackPower: 1
+  attackPrefab: {fileID: 100000, guid: c7a3afec32db4e4d83d29bb18d2f601c, type: 3}
+  attackDuration: 0.25
+  attackSpawnOffset: {x: 0, y: 0.6}
+  attackSize: {x: 0.55, y: 0.9}
+  idleTint: {r: 0.978106, g: 0.990566, b: 0.98177075, a: 1}
+  movingTint: {r: 1, g: 1, b: 1, a: 1}
+  attackVisualTint: {r: 1, g: 0.85, b: 0.2, a: 0.65}
+  useYellowArmorHighlights: 0
+  useMagentaArmorHighlights: 0
+--- !u!114 &7832618691216883886
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7832618691216883880}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a6df8c329184af4a985710734a46f2c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  initialFacingDirection: 0
+  controlSwitchDistance: 0.5
+  controlSwitchRadius: 0.5
+  controlSwitchHoldDuration: 3
+  controlSwitchProgressOffset: {x: 0, y: 1.1}
+  controlSwitchProgressScale: 0.8
+  controlSwitchFailureDuration: 0.9
+  controlSwitchFailureFlashCount: 3
+  possessionPromptOffset: {x: 0, y: 0.9}
+  controlSwitchLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  solidCollisionLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  collisionSkinWidth: 0.01
+  deathGhostPrefab: {fileID: 4527040845616928534, guid: 3686e58a077f8534bbf32cc6244eab34, type: 3}
+--- !u!114 &4657559875753840611
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7832618691216883880}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 80364a7bb9d1479f91f357c4bc3619fa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  visionRadius: 4
+  visionAngle: 90
+  peripheralVisionAngle: 240
+  peripheralVisionRadius: 1
+  visionRayCount: 48
+  visionObstacleLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  visionColor: {r: 0.50112724, g: 0.80612683, b: 0.9716981, a: 0.22}
+  immediateResponseDistance: 2
+  maximumSuspicion: 100
+  suspicionIncreasePerSecond: 35
+  suspicionDecreasePerSecond: 25
+  attackDistance: 1.1
+  attackFacingTolerance: 20
+  attackCooldown: 0.35
+  regularHostileLoseSightDelay: 1.5
+  solidCollisionLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  collisionSkinWidth: 0.01
+  searchDuration: 4
+  searchRadius: 1.8
+  searchWaypointTolerance: 0.15
+  searchWaypointChangeInterval: 1.2
+  searchWaypointObstacleClearance: 0.45
+  searchWaypointSamplingAttempts: 12
+  investigationDuration: 3
+  investigationWaypointPauseDuration: 0.65
+  investigationTargetRelocationRadius: 1.5
+  investigationRelocationSamplesPerRing: 12
+  recoveryPositionTolerance: 0.15
+  warningFollowDistance: 1.4
+  warningEscalationTime: 4
+  warningDistanceTolerance: 0.15
+  stateIndicatorOffset: {x: 0, y: 1.15}
+  stateIndicatorScale: 0.65
+  hostileIndicatorDuration: 0.7
+  possessionShakeAmount: 0.025
+  possessionShakeSpeed: 45
+  obstacleProbeDistance: 0.75
+  avoidanceAngleStep: 30
+  avoidanceDirectionSteps: 3
+  avoidanceDirectionHoldTime: 0.3
+  wallFollowExitDelay: 0.35
+  cornerStuckDetectionDuration: 0.18
+  cornerEscapeHoldDuration: 0.4
+  cornerEscapeDirectionSamples: 16
+  cornerOscillationWindowDuration: 0.3
+  cornerMinimumProgressRatio: 0.45
+  navigationRefreshInterval: 0.1
+  hostileNavigationRefreshInterval: 0.05
+  navigationDirectionChangeAngle: 12
+  useGridPathfinding: 1
+  gridCellSize: 0.5
+  gridSearchPadding: 5
+  maximumGridDimension: 45
+  gridPathRefreshInterval: 0.35
+  hostileGridPathRefreshInterval: 0.18
+  gridWaypointTolerance: 0.14
+  gridWallClearance: 0.08
+  maximumWallSeparationStep: 0.12
+  preferredGridObstacleDistance: 0.45
+  gridObstacleProximityCost: 2
+  characterSeparationDistance: 0.75
+  characterSeparationStrength: 1.25
+  characterSeparationRefreshInterval: 0.12
+  showNavigationDebug: 1
+  navigationPathColor: {r: 0.15, g: 0.85, b: 1, a: 0.9}
+  navigationTargetColor: {r: 1, g: 0.25, b: 0.75, a: 1}
+  navigationPathWidth: 0.035
+  navigationTargetMarkerSize: 0.18
+  navigationDebugSortingOrder: 200

@@ -1,0 +1,129 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &7009132151339380001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7009132151339380002}
+  - component: {fileID: 7009132151339380003}
+  - component: {fileID: 7009132151339380004}
+  - component: {fileID: 7009132151339380005}
+  m_Layer: 5
+  m_Name: ZeldaHealthHeartsUI
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &7009132151339380002
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7009132151339380001}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0, y: 0}
+--- !u!223 &7009132151339380003
+Canvas:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7009132151339380001}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_RenderMode: 0
+  m_Camera: {fileID: 0}
+  m_PlaneDistance: 100
+  m_PixelPerfect: 1
+  m_ReceivesEvents: 0
+  m_OverrideSorting: 0
+  m_OverridePixelPerfect: 0
+  m_SortingBucketNormalizedSize: 0
+  m_AdditionalShaderChannelsFlag: 25
+  m_SortingLayerID: 0
+  m_SortingOrder: 100
+  m_TargetDisplay: 0
+--- !u!114 &7009132151339380004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7009132151339380001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eb8d5a31392049aa81f419b16d2c976f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  persistBetweenScenes: 1
+  screenOffset: {x: 12, y: 12}
+  permissionScreenOffset: {x: 12, y: 12}
+  possessionEnergyBarSize: {x: 8.8, y: 15.4}
+  possessionEnergySpacing: 3.3
+  possessionEnergyPermissionGap: 9
+  areaPermissionTopOffset: {x: 0, y: 12}
+  areaPermissionDigitScale: 13.2
+  inventoryScreenOffset: {x: 12, y: 12}
+  inventorySlotSize: 32
+  inventorySlotSpacing: 10
+  journalUpdatePopupDuration: 2.8
+  journalUpdatePopupFadeDuration: 0.65
+  journalUpdatePopupSize: {x: 340, y: 72}
+  journalUpdatePopupTopGap: 16
+  pixelScale: 2.2
+  permissionScaleMultiplier: 4
+  heartSpacing: 3.3
+  normalHeartColor: {r: 0.9, g: 0.08, b: 0.08, a: 1}
+  ghostHeartColor: {r: 0.15686275, g: 0.50980395, b: 0.8235294, a: 1}
+  overHealthColor: {r: 1, g: 0.78, b: 0.05, a: 1}
+  attackSwordColor: {r: 0.48, g: 0.27, b: 0.12, a: 1}
+  skillWrenchColor: {r: 0.48, g: 0.5, b: 0.54, a: 1}
+  permissionColor: {r: 0.37254903, g: 0.972549, b: 0.9137255, a: 1}
+  areaPermissionAllowedColor: {r: 0.37254903, g: 0.972549, b: 0.9137255, a: 1}
+  areaPermissionWarningColor: {r: 1, g: 0.78, b: 0.05, a: 1}
+  areaPermissionDeniedColor: {r: 0.9, g: 0.08, b: 0.08, a: 1}
+  permissionLabelFont: {fileID: 12800000, guid: 292af55397c443f6a5d7774297dac481, type: 3}
+  healthShakeDuration: 0.25
+  healthShakeAmount: 3
+  healthShakeSpeed: 70
+  healthFlashDuration: 0.3
+  healthFlashSpeed: 35
+  healthFlashColor: {r: 0.37254903, g: 0.972549, b: 0.9137255, a: 1}
+--- !u!114 &7009132151339380005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7009132151339380001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0cd44c1031e13a943bb63640046fad76, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  m_UiScaleMode: 1
+  m_ReferencePixelsPerUnit: 100
+  m_ScaleFactor: 1
+  m_ReferenceResolution: {x: 1280, y: 720}
+  m_ScreenMatchMode: 0
+  m_MatchWidthOrHeight: 0.5
+  m_PhysicalUnit: 3
+  m_FallbackScreenDPI: 96
+  m_DefaultSpriteDPI: 96
+  m_DynamicPixelsPerUnit: 1
+  m_PresetInfoIsWorld: 0
