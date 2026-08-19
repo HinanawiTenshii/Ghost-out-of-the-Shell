@@ -130,4 +130,3 @@ MonoBehaviour:
   linkedObject: {fileID: 0}
   baseColor: {r: 0.42, g: 0.28, b: 0.16, a: 1}
   leverColor: {r: 0.72, g: 0.12, b: 0.08, a: 1}
-  metalColor: {r: 0.72, g: 0.72, b: 0.68, a: 1}

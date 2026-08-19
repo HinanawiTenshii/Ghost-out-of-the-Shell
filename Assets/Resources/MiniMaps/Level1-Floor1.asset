@@ -201,11 +201,11 @@ MonoBehaviour:
     - {x: 24.264732, y: 35.16746}
     - {x: 20.012886, y: 35.16746}
   - points:
-    - {x: -42.18629, y: 40.89746}
-    - {x: -42.68629, y: 40.89746}
-    - {x: -42.68629, y: 45.76586}
-    - {x: -42.18629, y: 45.76586}
-    - {x: -42.18629, y: 40.89746}
+    - {x: -41.78629, y: 35.66326}
+    - {x: -42.28629, y: 35.66326}
+    - {x: -42.28629, y: 40.531662}
+    - {x: -41.78629, y: 40.531662}
+    - {x: -41.78629, y: 35.66326}
   - points:
     - {x: 23.961933, y: 7.0174594}
     - {x: 23.961933, y: 7.5174594}
@@ -701,10 +701,10 @@ MonoBehaviour:
     - {x: 35.01371, y: 19.509922}
     - {x: 35.01371, y: 18.464}
   transitions:
-  - position: {x: 22.29095, y: 0.022871971}
+  - position: {x: 22.50595, y: -0.117127895}
     targetSceneName: Level1-Floor3
     preservesSceneState: 1
-  - position: {x: -5.6900005, y: 21.279999}
+  - position: {x: -5.8940506, y: 21.279999}
     targetSceneName: Level1-Floor2
     preservesSceneState: 1
   - position: {x: -0.010000229, y: -4.9800005}
@@ -725,9 +725,9 @@ MonoBehaviour:
   - position: {x: 1.2600002, y: 41.8}
     targetSceneName: Level1-Floor-1
     preservesSceneState: 1
-  - position: {x: 6.21095, y: 21.282871}
+  - position: {x: 6.3729496, y: 21.282871}
     targetSceneName: Level1-Floor2
     preservesSceneState: 1
   questTargets:
   - questId: level1.open_monster_cage
-    position: {x: 0.040000916, y: 29.275925}
+    position: {x: -0.07348442, y: 7.5959234}
