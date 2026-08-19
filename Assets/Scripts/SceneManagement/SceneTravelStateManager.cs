@@ -25,6 +25,7 @@ public sealed class SceneTravelStateManager : MonoBehaviour
         public bool moverEnabled;
         public bool hasAi;
         public bool aiEnabled;
+        public ZeldaAiState aiState;
         public bool hasDoor;
         public bool doorLocked;
         public bool doorOpen;
@@ -405,6 +406,7 @@ public sealed class SceneTravelStateManager : MonoBehaviour
                 moverEnabled = mover != null && mover.enabled,
                 hasAi = ai != null,
                 aiEnabled = ai != null && ai.enabled,
+                aiState = ai != null ? ai.CurrentState : ZeldaAiState.Idle,
                 hasDoor = door != null,
                 doorLocked = door != null && door.IsLocked,
                 doorOpen = door != null && door.IsOpen,
@@ -563,6 +565,7 @@ public sealed class SceneTravelStateManager : MonoBehaviour
             if (state.hasAi && ai != null)
             {
                 ai.enabled = state.aiEnabled;
+                ai.RecoverAfterPersistentSceneReturn(state.aiState);
             }
         }
 

@@ -143,8 +143,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0d0fe7bcab4e4b1b8ed241dcda70b6a5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  itemName: "纸箱"
-  itemDescription: "一个结实的纸箱。使用后可套在身上进行伪装，但会持续消耗体力并降低移动速度。"
+  itemName: "\u7EB8\u7BB1"
+  itemDescription: "\u4E00\u4E2A\u770B\u7740\u7ED3\u5B9E\u7684\u7EB8\u7BB1\uFF0C\u4E0A\u9762\u88AB\u65BD\u52A0\u4E86\u53EA\u8981\u9759\u6B62\u4E0D\u52A8\u5C31\u7EDD\u5BF9\u4E0D\u4F1A\u88AB\u6000\u7591\u7684\u5492\u8BED\uFF0C\u4F5C\u4E3A\u7BB1\u5B50\uFF0C\u91CC\u9762\u4E5F\u53EF\u4EE5\u5B58\u653E\u4E00\u4E9B\u9053\u5177\uFF08\u9009\u4E2D\u9053\u5177\u9760\u8FD1\u7EB8\u7BB1\u4F7F\u7528\u5373\u53EF\uFF09\u3002"
   itemId: cardboard_box
   persistentIdentity: {fileID: 0}
   uniqueInstanceId: 

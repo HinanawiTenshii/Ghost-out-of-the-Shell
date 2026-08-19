@@ -227,6 +227,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     private bool retaliationHostile;
     private bool regularHostile;
     private CardboardBoxWearState suspiciousCardboardBox;
+    private ZeldaFourWayMover suspiciousCardboardBoxWearer;
     private CardboardBoxPickupItem suspiciousGroundCardboardBox;
     private float lastSuspiciousCardboardBoxSeenTime = float.NegativeInfinity;
     private bool isInspectingCardboardBox;
@@ -334,6 +335,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         retaliationHostile = false;
         regularHostile = false;
         suspiciousCardboardBox = null;
+        suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
         isInspectingCardboardBox = false;
         inspectedCardboardBoxWearer = null;
@@ -529,6 +531,27 @@ public class ZeldaCharacterAiBase : MonoBehaviour
                (regularHostile || hostileUntilTargetDeath);
     }
 
+    /// <summary>
+    /// Persistent scene snapshots deliberately do not resume a pursuit after
+    /// the player has left and revisited the scene. Return any AI that was in
+    /// a transient response state to the position and facing captured by its
+    /// scene-authored instance in Awake.
+    /// </summary>
+    public void RecoverAfterPersistentSceneReturn(ZeldaAiState capturedState)
+    {
+        if (!isActiveAndEnabled ||
+            mover == null ||
+            mover.enabled ||
+            characterData == null ||
+            characterData.IsDead ||
+            capturedState == ZeldaAiState.Idle)
+        {
+            return;
+        }
+
+        BeginRecovery();
+    }
+
     public bool DoesCurrentPathIntersect(Collider2D targetCollider, float lookAheadDistance)
     {
         if (targetCollider == null || !targetCollider.enabled || targetCollider.isTrigger ||
@@ -594,6 +617,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         retaliationHostile = false;
         regularHostile = false;
         suspiciousCardboardBox = null;
+        suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
         isInspectingCardboardBox = false;
         inspectedCardboardBoxWearer = null;
@@ -921,10 +945,21 @@ public class ZeldaCharacterAiBase : MonoBehaviour
                 return;
             }
 
-            moveDirection = toBox.magnitude > cardboardBoxApproachDistance
-                ? PlanDirectionTo(
-                    suspiciousGroundCardboardBox.WorldCenter,
-                    cardboardBoxApproachDistance)
+            float approachRadius = isInspectingCardboardBox
+                ? Mathf.Max(
+                    gridWaypointTolerance,
+                    attackDistance - gridWaypointTolerance)
+                : cardboardBoxApproachDistance;
+            Vector2 followPosition = ResolveSharedFollowPosition(
+                suspiciousGroundCardboardBox,
+                suspiciousGroundCardboardBox.WorldCenter,
+                approachRadius);
+            float followTolerance = Mathf.Max(
+                gridWaypointTolerance,
+                warningDistanceTolerance);
+            moveDirection = Vector2.Distance(rb.position, followPosition) >
+                    followTolerance
+                ? PlanDirectionTo(followPosition, followTolerance)
                 : Vector2.zero;
             return;
         }
@@ -943,10 +978,21 @@ public class ZeldaCharacterAiBase : MonoBehaviour
                 return;
             }
 
-            moveDirection = toBox.magnitude > cardboardBoxApproachDistance
-                ? PlanDirectionTo(
-                    suspiciousCardboardBox.WorldCenter,
-                    cardboardBoxApproachDistance)
+            float approachRadius = isInspectingCardboardBox
+                ? Mathf.Max(
+                    gridWaypointTolerance,
+                    attackDistance - gridWaypointTolerance)
+                : cardboardBoxApproachDistance;
+            Vector2 followPosition = ResolveSharedFollowPosition(
+                suspiciousCardboardBox,
+                suspiciousCardboardBox.WorldCenter,
+                approachRadius);
+            float followTolerance = Mathf.Max(
+                gridWaypointTolerance,
+                warningDistanceTolerance);
+            moveDirection = Vector2.Distance(rb.position, followPosition) >
+                    followTolerance
+                ? PlanDirectionTo(followPosition, followTolerance)
                 : Vector2.zero;
             return;
         }
@@ -967,23 +1013,20 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             return;
         }
 
-        Vector2 toTarget = (Vector2)targetMover.transform.position - rb.position;
-        float distance = toTarget.magnitude;
+        Vector2 targetPosition = targetMover.transform.position;
+        Vector2 toTarget = targetPosition - rb.position;
         SetFacingDirection(toTarget);
-
-        if (distance > warningFollowDistance + warningDistanceTolerance)
-        {
-            moveDirection = PlanDirectionTo(targetMover.transform.position);
-        }
-        else if (distance < warningFollowDistance - warningDistanceTolerance)
-        {
-            moveDirection = PlanDirectionTo(
-                rb.position - toTarget.normalized * warningFollowDistance);
-        }
-        else
-        {
-            moveDirection = Vector2.zero;
-        }
+        Vector2 followPosition = ResolveSharedFollowPosition(
+            targetMover,
+            targetPosition,
+            warningFollowDistance);
+        float followTolerance = Mathf.Max(
+            gridWaypointTolerance,
+            warningDistanceTolerance);
+        moveDirection = Vector2.Distance(rb.position, followPosition) >
+                followTolerance
+            ? PlanDirectionTo(followPosition, followTolerance)
+            : Vector2.zero;
     }
 
     protected virtual void TickSearch(float deltaTime)
@@ -1095,9 +1138,16 @@ public class ZeldaCharacterAiBase : MonoBehaviour
                 return;
             }
 
-            moveDirection = PlanDirectionTo(
+            float approachRadius = Mathf.Max(
+                gridWaypointTolerance,
+                attackDistance - gridWaypointTolerance);
+            Vector2 followPosition = ResolveSharedFollowPosition(
+                hostileCardboardBox,
                 hostileCardboardBox.WorldCenter,
-                Mathf.Max(0f, attackDistance - gridWaypointTolerance));
+                approachRadius);
+            moveDirection = PlanDirectionTo(
+                followPosition,
+                gridWaypointTolerance);
             return;
         }
 
@@ -1119,9 +1169,128 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             return;
         }
 
-        moveDirection = PlanDirectionTo(
+        float hostileApproachRadius = Mathf.Max(
+            gridWaypointTolerance,
+            attackDistance - gridWaypointTolerance);
+        Vector2 hostileFollowPosition = ResolveSharedFollowPosition(
+            targetMover,
             targetMover.transform.position,
-            Mathf.Max(0f, attackDistance - gridWaypointTolerance));
+            hostileApproachRadius);
+        moveDirection = PlanDirectionTo(
+            hostileFollowPosition,
+            gridWaypointTolerance);
+    }
+
+    private Vector2 ResolveSharedFollowPosition(
+        Object followTarget,
+        Vector2 targetCenter,
+        float baseRadius)
+    {
+        if (followTarget == null)
+        {
+            return targetCenter;
+        }
+
+        int ownInstanceId = GetInstanceID();
+        int followerCount = 0;
+        int followerRank = 0;
+        foreach (ZeldaCharacterAiBase otherAi in
+                 ZeldaRuntimeRegistry.AiCharacters)
+        {
+            if (otherAi == null || !otherAi.isActiveAndEnabled ||
+                otherAi.GetSharedFollowTarget() != followTarget)
+            {
+                continue;
+            }
+
+            followerCount++;
+            if (otherAi.GetInstanceID() < ownInstanceId)
+            {
+                followerRank++;
+            }
+        }
+
+        float radius = Mathf.Max(gridWaypointTolerance, baseRadius);
+        if (followerCount <= 1)
+        {
+            Vector2 radialDirection = rb.position - targetCenter;
+            if (radialDirection.sqrMagnitude <= 0.0001f)
+            {
+                radialDirection = -facingDirection;
+            }
+            return targetCenter + radialDirection.normalized * radius;
+        }
+
+        int remainingRank = followerRank;
+        int ringIndex = 0;
+        int ringCapacity = 6;
+        while (remainingRank >= ringCapacity)
+        {
+            remainingRank -= ringCapacity;
+            ringIndex++;
+            ringCapacity = 6 * (ringIndex + 1);
+        }
+
+        int occupiedSlots = ringIndex == 0 && followerCount <= ringCapacity
+            ? followerCount
+            : ringCapacity;
+        float bodySpacing = bodyCollider != null
+            ? Mathf.Max(
+                bodyCollider.bounds.size.x,
+                bodyCollider.bounds.size.y) +
+              characterAvoidanceClearancePadding
+            : characterSeparationDistance;
+        float ringSpacing = Mathf.Max(
+            characterSeparationDistance,
+            bodySpacing);
+        radius += ringIndex * ringSpacing;
+        float halfSlotAngle = Mathf.PI /
+                              Mathf.Max(2, occupiedSlots);
+        float chordFactor = 2f * Mathf.Sin(halfSlotAngle);
+        if (chordFactor > 0.0001f)
+        {
+            // Ensure adjacent assigned points are separated by at least one
+            // character footprint instead of merely differing numerically.
+            radius = Mathf.Max(radius, ringSpacing / chordFactor);
+        }
+
+        // A target-derived rotation keeps slots deterministic across frames
+        // without forcing every group to align to the same world axes.
+        float targetRotation = Mathf.Repeat(
+            Mathf.Abs(followTarget.GetInstanceID()) * 0.6180339f,
+            1f) * 360f;
+        float angle = targetRotation +
+                      remainingRank * (360f / Mathf.Max(1, occupiedSlots));
+        float radians = angle * Mathf.Deg2Rad;
+        Vector2 direction = new Vector2(
+            Mathf.Cos(radians),
+            Mathf.Sin(radians));
+        return targetCenter + direction * radius;
+    }
+
+    private Object GetSharedFollowTarget()
+    {
+        if (currentState == ZeldaAiState.Suspicious)
+        {
+            if (suspiciousGroundCardboardBox != null)
+            {
+                return suspiciousGroundCardboardBox;
+            }
+            if (suspiciousCardboardBox != null)
+            {
+                return suspiciousCardboardBox;
+            }
+        }
+        else if (currentState == ZeldaAiState.Hostile &&
+                 hostileCardboardBox != null)
+        {
+            return hostileCardboardBox;
+        }
+
+        return currentState == ZeldaAiState.Alert ||
+               currentState == ZeldaAiState.Hostile
+            ? targetMover
+            : null;
     }
 
     protected virtual void OnStateEntered(ZeldaAiState previousState, ZeldaAiState newState) { }
@@ -1197,6 +1366,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         retaliationHostile = true;
         regularHostile = false;
         suspiciousCardboardBox = null;
+        suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
         isInspectingCardboardBox = false;
         inspectedCardboardBoxWearer = null;
@@ -1643,6 +1813,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         retaliationHostile = false;
         regularHostile = true;
         suspiciousCardboardBox = null;
+        suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
         isInspectingCardboardBox = false;
         inspectedCardboardBoxWearer = null;
@@ -1735,6 +1906,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         retaliationHostile = false;
         regularHostile = false;
         suspiciousCardboardBox = null;
+        suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
         isInspectingCardboardBox = false;
         inspectedCardboardBoxWearer = null;
@@ -1762,6 +1934,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         retaliationHostile = false;
         regularHostile = false;
         suspiciousCardboardBox = null;
+        suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
         isInspectingCardboardBox = false;
         inspectedCardboardBoxWearer = null;
@@ -1929,6 +2102,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         retaliationHostile = false;
         regularHostile = false;
         suspiciousCardboardBox = null;
+        suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
         isInspectingCardboardBox = false;
         inspectedCardboardBoxWearer = null;
@@ -1977,6 +2151,11 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             return false;
         }
 
+        if (TryHandleRemovedSuspiciousWornBox())
+        {
+            return true;
+        }
+
         if (isInspectingCardboardBox)
         {
             if (suspiciousGroundCardboardBox != null &&
@@ -2021,6 +2200,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             lastSuspiciousCardboardBoxSeenTime = Time.time;
             suspiciousGroundCardboardBox = null;
             suspiciousCardboardBox = observedBox;
+            suspiciousCardboardBoxWearer = observedBox.WearerMover;
             targetMover = observedBox.WearerMover;
             activePermissionArea = null;
             lastKnownTargetPosition = observedBox.WorldCenter;
@@ -2049,6 +2229,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         {
             lastSuspiciousCardboardBoxSeenTime = Time.time;
             suspiciousCardboardBox = null;
+            suspiciousCardboardBoxWearer = null;
             suspiciousGroundCardboardBox = observedGroundBox;
             targetMover = null;
             activePermissionArea = null;
@@ -2094,12 +2275,20 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         if (suspicionValue <= 0f)
         {
             suspiciousCardboardBox = null;
+            suspiciousCardboardBoxWearer = null;
             suspiciousGroundCardboardBox = null;
             isInspectingCardboardBox = false;
             inspectedCardboardBoxWearer = null;
             if (currentState == ZeldaAiState.Suspicious)
             {
-                ResetPermissionResponse();
+                // A moving box can pull this character well away from its
+                // authored post. Leaving that box-specific suspicion must use
+                // the normal recovery route instead of dropping directly to
+                // Idle at the inspection position. Return handled so the
+                // remaining perception checks cannot overwrite Recovery in
+                // this same frame.
+                BeginRecovery();
+                return true;
             }
             return false;
         }
@@ -2111,12 +2300,81 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         return true;
     }
 
+    private bool TryHandleRemovedSuspiciousWornBox()
+    {
+        ZeldaFourWayMover revealedMover = suspiciousCardboardBoxWearer;
+        if (revealedMover == null)
+        {
+            return false;
+        }
+
+        CardboardBoxWearState activeBox = revealedMover.ActiveCardboardBox;
+        if (suspiciousCardboardBox != null &&
+            activeBox == suspiciousCardboardBox)
+        {
+            return false;
+        }
+
+        suspiciousCardboardBox = null;
+        suspiciousCardboardBoxWearer = null;
+        suspiciousGroundCardboardBox = null;
+        isInspectingCardboardBox = false;
+        inspectedCardboardBoxWearer = null;
+        suspicionValue = 0f;
+        moveDirection = Vector2.zero;
+
+        ZeldaCharacterData revealedData =
+            revealedMover.GetComponent<ZeldaCharacterData>();
+        if (!revealedMover.isActiveAndEnabled || revealedData == null ||
+            revealedData.IsDead || !EnforcesPermissionAreas)
+        {
+            BeginRecovery();
+            return true;
+        }
+
+        PermissionArea permissionArea =
+            FindHighestPermissionArea(revealedMover.transform.position);
+        bool isBelowDefaultPermission =
+            revealedData.PermissionLevel <
+            PermissionArea.DefaultPermissionLevel;
+        if (permissionArea == null && !isBelowDefaultPermission)
+        {
+            BeginRecovery();
+            return true;
+        }
+
+        int requiredPermissionLevel = permissionArea != null
+            ? Mathf.Max(
+                PermissionArea.DefaultPermissionLevel,
+                permissionArea.PermissionLevel)
+            : PermissionArea.DefaultPermissionLevel;
+        int permissionDifference =
+            requiredPermissionLevel - revealedData.PermissionLevel;
+        if (permissionDifference <
+            Mathf.Max(1, MinimumPermissionViolationDifference))
+        {
+            BeginRecovery();
+            return true;
+        }
+
+        // Removing the disguise in an illegal/hostile area should reveal the
+        // same permission violation the AI would normally perceive instead
+        // of making it abandon the incident and walk home.
+        targetMover = revealedMover;
+        activePermissionArea = permissionArea;
+        lastKnownTargetPosition = revealedMover.transform.position;
+        warningTimer = 0f;
+        BeginPermissionResponse(permissionDifference);
+        return true;
+    }
+
     private void CompleteCardboardBoxInspection()
     {
         ZeldaFourWayMover revealedWearer = inspectedCardboardBoxWearer;
         isInspectingCardboardBox = false;
         inspectedCardboardBoxWearer = null;
         suspiciousCardboardBox = null;
+        suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
         suspicionValue = 0f;
         moveDirection = Vector2.zero;
