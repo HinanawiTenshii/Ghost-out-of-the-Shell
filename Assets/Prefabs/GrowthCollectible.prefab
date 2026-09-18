@@ -78,3 +78,6 @@ MonoBehaviour:
   pickupBurstParticleCount: 24
   pickupBurstLifetime: 0.65
   pickupBurstSpeed: 1.25
+  pickupHomingSpeed: 12
+  pickupTrailDuration: 0.02
+  pickupFlashDuration: 0.16

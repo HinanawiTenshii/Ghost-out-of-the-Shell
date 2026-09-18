@@ -155,7 +155,7 @@ MonoBehaviour:
   pickupPromptOffset: {x: 0, y: 0.9}
   restorePreviousTaskOnPickup: 0
   journalChangesOnPickup: []
-  staminaDrainPerSecond: 1
+  staminaDrainPerSecond: 2
   wornMovementSpeedMultiplier: 0.5
   maximumBlockedAttacks: 2
   wornVisualOffset: {x: 0, y: 0.08}

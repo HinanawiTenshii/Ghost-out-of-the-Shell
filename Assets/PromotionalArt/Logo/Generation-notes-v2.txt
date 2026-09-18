@@ -1,0 +1,4 @@
+Tool: built-in image_gen edit.
+Output: Ghost-out-of-the-Shell-Logo-v2.png
+Prompt:
+Transparent background logo PNG. Keep supplied logo unchanged except middle words "out of the" should be same blue #2882D2 as GHOST and SHELL. All lettering blue, tetrahedron and dotted circle remain cyan. Isolate letters and symbol as a transparent-background cutout with genuine alpha transparency. Preserve layout, spacing and size. Return RGBA PNG. Empty space is transparent.

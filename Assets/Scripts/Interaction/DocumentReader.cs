@@ -47,6 +47,9 @@ public sealed class DocumentReader : MonoBehaviour
 
     public static bool IsDocumentOpen => activeDocument != null;
     public static bool IsInputBlocked =>
+        SignpostInteraction.BlocksInput ||
+        SoulMarkRuntime.IsTransferring ||
+        GameSaveSystem.IsLoading || SaveSlotPanel.IsOpen ||
         activeDocument != null ||
         ItemDescriptionWindow.BlocksInput ||
         DoorPasswordPanel.IsOpen ||
@@ -225,6 +228,8 @@ public sealed class DocumentReader : MonoBehaviour
         }
         promptRenderer.sortingLayerID = highestSortingLayerId;
         promptRenderer.sortingOrder = short.MaxValue - 2;
+        ZeldaPossessionProgressBar.ConfigureOverlayRenderer(promptRenderer);
+        ZeldaPossessionProgressBar.ConfigureOverlayRenderer(promptRenderer);
         if (documentFont != null)
         {
             interactionPromptMaterial = new Material(documentFont.material)
@@ -364,6 +369,7 @@ public sealed class DocumentReader : MonoBehaviour
         hintRect.sizeDelta = new Vector2(300f, 32f);
         closeHint.text = "按[E]关闭";
 
+        CRTScreenEffect.RegisterCanvas(readingCanvas);
         readingCanvasObject.SetActive(false);
     }
 

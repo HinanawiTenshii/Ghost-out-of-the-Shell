@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9a2f0b8e4c7d41c6a912fc0e693d45a1, type: 3}
   m_Name: TutorialLevel
   m_EditorClassIdentifier: Assembly-CSharp::RuntimeMiniMapSceneData
-  schemaVersion: 3
+  schemaVersion: 4
   sceneName: TutorialLevel
   displayName: "\u6559\u5B66\u5173\u5361"
   blockPaths:
@@ -189,3 +189,4 @@ MonoBehaviour:
     targetSceneName: Level0
     preservesSceneState: 0
   questTargets: []
+  bridges: []

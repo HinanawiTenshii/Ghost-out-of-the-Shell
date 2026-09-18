@@ -34,12 +34,15 @@ public sealed class NobleZeldaCharacterData : ZeldaCharacterData
     [SerializeField] private Color crownJewelColor =
         new Color(0.22f, 0.72f, 0.92f, 1f);
 
+    private bool visualsDirty = true;
+
     private readonly Sprite[] idleSprites = new Sprite[4];
     private readonly Sprite[] attackSprites = new Sprite[4];
     private readonly Texture2D[] idleTextures = new Texture2D[4];
     private readonly Texture2D[] attackTextures = new Texture2D[4];
 
-    public override bool CanAttack => true;
+    public override bool CanAttack => !IsGhostForm;
+    public override Color GhostFormEyeColor => new Color(0.04f, 0.1f, 0.17f, 1f);
     public override int AttackPower => attackPower;
     public override GameObject AttackPrefab => attackPrefab;
     public override float AttackDuration => attackDuration;
@@ -73,6 +76,14 @@ public sealed class NobleZeldaCharacterData : ZeldaCharacterData
 
     private void EnsureSprites()
     {
+        if (visualsDirty)
+        {
+            // Defer texture/cache destruction until the next render, not OnValidate.
+            var animator = GetComponent<PixelCharacterWalkAnimator>();
+            if (animator != null) animator.InvalidateFrames();
+            ReleaseSprites();
+            visualsDirty = false;
+        }
         if (idleSprites[0] != null)
         {
             return;
@@ -109,195 +120,176 @@ public sealed class NobleZeldaCharacterData : ZeldaCharacterData
         return sprite;
     }
 
+    // Full 16x16 four-way art. Row 4 rests directly on row 5: no neck.
+    private static readonly string[] FrontBody = {
+        "......JJHH......",
+        ".....JHHHHH.....",
+        ".....HFFFFH.....",
+        ".....FEFFEF.....",
+        ".....SFFFFS.....",
+        "....WWTTTTWW....",
+        "....CDTZCTDC....",
+        "....TTTCLTTT....",
+        "....FFTCLTFF....",
+        "....FFTTTTFF....",
+        "....DCTCCTCD....",
+        "....DCTCCTCD....",
+        "....DCTLCTCD....",
+        "....TTTTTTTT....",
+        ".....KK..KK.....",
+        "................",
+    };
+
+    private static readonly string[] BackBody = {
+        "......JJHH......",
+        ".....JHHHHH.....",
+        ".....HHHHHH.....",
+        ".....HHHHHH.....",
+        ".....SSHHSS.....",
+        "....WWTTTTWW....",
+        "....CDDDDDDC....",
+        "....TTCDLCTT....",
+        "....FFCDLCFF....",
+        "....FFCDLCFF....",
+        "....DCCDCCCD....",
+        "....DCCDCCCD....",
+        "....DCCDLCCD....",
+        "....TTTTTTTT....",
+        ".....KK..KK.....",
+        "................",
+    };
+
+    private static readonly string[] LeftBody = {
+        ".....JJHH.......",
+        "....JHHHHH......",
+        "....HFFFHH......",
+        "....FEFFHH......",
+        "....SFFFHS......",
+        ".....WWTTWW.....",
+        ".....TCCCDD.....",
+        ".....TCTTDD.....",
+        ".....TCFFDD.....",
+        ".....TTFFTT.....",
+        "....DTCCCCDD....",
+        "....DTCCCCDD....",
+        "....DTCLCCDD....",
+        "....TTTTTTTT....",
+        ".....KK..KK.....",
+        "................",
+    };
+
+    private static readonly string[] RightBody = {
+        ".......HHJJ.....",
+        "......HHHHHJ....",
+        "......HHFFFH....",
+        "......HHFFEF....",
+        "......SHFFFS....",
+        ".....WWTTWW.....",
+        ".....DDCCCT.....",
+        ".....DDTTCT.....",
+        ".....DDFFCT.....",
+        ".....TTFFTT.....",
+        "....DDCCCCTD....",
+        "....DDCCCCTD....",
+        "....DDCCLCTD....",
+        "....TTTTTTTT....",
+        ".....KK..KK.....",
+        "................",
+    };
+
     private Texture2D CreateTexture(Vector2 facing, bool attacking)
     {
-        const int size = 16;
-        Texture2D texture =
-            new Texture2D(size, size, TextureFormat.RGBA32, false)
-            {
-                name = "Runtime Noble",
-                filterMode = FilterMode.Point,
-                wrapMode = TextureWrapMode.Clamp
-            };
-        FillRect(texture, 0, 0, size, size, Color.clear);
+        string[] rows = facing == Vector2.up ? BackBody :
+            facing == Vector2.left ? LeftBody : facing == Vector2.right ? RightBody : FrontBody;
+        var pixels = new Color[16 * 16];
+        for (int row = 0; row < 16; row++)
+        for (int x = 0; x < 16; x++)
+            pixels[(15 - row) * 16 + x] = PixelColor(rows[row][x]);
 
-        Color robeShadow = Color.Lerp(robeColor, Color.black, 0.34f);
-        Color robeLight = Color.Lerp(robeColor, Color.white, 0.18f);
-        Color trimShadow = Color.Lerp(robeTrimColor, Color.black, 0.22f);
-        Color skinShadow = Color.Lerp(skinColor, Color.black, 0.24f);
-        Color shoeColor = Color.Lerp(robeShadow, Color.black, 0.35f);
-        Color eyeColor = new Color(0.04f, 0.1f, 0.17f, 1f);
+        if (showCrown) DrawCrown(pixels, facing);
 
-        DrawLongRobe(
-            texture,
-            facing,
-            robeShadow,
-            robeLight,
-            trimShadow,
-            shoeColor);
-        DrawSleeves(
-            texture,
-            facing,
-            attacking,
-            robeShadow,
-            skinShadow);
-        DrawHead(texture, facing, skinShadow, eyeColor);
-        if (showCrown)
+        if (attacking)
         {
-            DrawCrown(texture, facing);
+            RestoreBodyBehindAttackingArm(pixels, facing);
+            int startX = facing == Vector2.left ? 2 : facing == Vector2.right ? 10 : 6;
+            int startY = facing == Vector2.up ? 10 : facing == Vector2.down ? 4 : 6;
+            for (int y = startY; y < startY + 3; y++)
+            for (int x = startX; x < startX + 4; x++)
+                pixels[y * 16 + x] = PixelColor(y == startY + 2 ? 'T' : 'C');
+            int handX = facing == Vector2.left ? startX :
+                facing == Vector2.right ? startX + 2 : startX + 1;
+            int handY = facing == Vector2.up ? startY + 1 : startY;
+            for (int y = handY; y < handY + 2; y++)
+            for (int x = handX; x < handX + 2; x++)
+                pixels[y * 16 + x] = PixelColor('F');
         }
 
-        texture.Apply(false, true);
+        var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false)
+        {
+            name = "Noble " + facing + (attacking ? " Attack" : " Idle"),
+            filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        texture.SetPixels(pixels);
+        // Idle pixels remain readable for the shared cached walking frames.
+        texture.Apply(false, attacking);
         return texture;
     }
 
-    private void DrawLongRobe(
-        Texture2D texture,
-        Vector2 facing,
-        Color robeShadow,
-        Color robeLight,
-        Color trimShadow,
-        Color shoeColor)
+    private void RestoreBodyBehindAttackingArm(Color[] pixels, Vector2 facing)
     {
-        // A narrow upper body widening into a floor-length hem.
-        FillRect(texture, 5, 7, 7, 4, robeColor);
-        FillRect(texture, 5, 7, 1, 4, robeShadow);
-        FillRect(texture, 5, 5, 7, 2, robeColor);
-        FillRect(texture, 4, 3, 9, 2, robeColor);
-        FillRect(texture, 4, 2, 9, 1, robeShadow);
-        FillRect(texture, 5, 1, 2, 1, shoeColor);
-        FillRect(texture, 10, 1, 2, 1, shoeColor);
-
-        if (facing == Vector2.up)
+        if (facing == Vector2.down || facing == Vector2.up)
         {
-            FillRect(texture, 6, 8, 5, 2, robeShadow);
-            FillRect(texture, 8, 3, 1, 6, robeLight);
-            texture.SetPixel(8, 2, robeTrimColor);
-            return;
-        }
-
-        if (facing == Vector2.left)
-        {
-            FillRect(texture, 4, 3, 2, 5, robeShadow);
-            FillRect(texture, 6, 4, 1, 6, robeTrimColor);
-            texture.SetPixel(6, 3, trimShadow);
-            return;
-        }
-
-        if (facing == Vector2.right)
-        {
-            FillRect(texture, 11, 3, 2, 5, robeLight);
-            FillRect(texture, 10, 4, 1, 6, robeTrimColor);
-            texture.SetPixel(10, 3, trimShadow);
-            return;
-        }
-
-        // Front-facing collar, long central trim and jeweled clasp.
-        FillRect(texture, 7, 9, 3, 1, robeTrimColor);
-        FillRect(texture, 8, 4, 1, 5, robeTrimColor);
-        texture.SetPixel(8, 3, trimShadow);
-        texture.SetPixel(8, 9, ZeldaUiPalette.Primary);
-        texture.SetPixel(10, 6, robeLight);
-    }
-
-    private void DrawSleeves(
-        Texture2D texture,
-        Vector2 facing,
-        bool attacking,
-        Color robeShadow,
-        Color skinShadow)
-    {
-        if (!attacking)
-        {
-            FillRect(texture, 4, 7, 1, 3, robeShadow);
-            FillRect(texture, 12, 7, 1, 3, robeColor);
-            texture.SetPixel(4, 7, skinShadow);
-            texture.SetPixel(12, 7, skinColor);
-            return;
-        }
-
-        if (facing == Vector2.left)
-        {
-            FillRect(texture, 2, 7, 4, 2, robeColor);
-            FillRect(texture, 1, 7, 2, 2, skinColor);
-            FillRect(texture, 12, 7, 1, 3, robeShadow);
-        }
-        else if (facing == Vector2.right)
-        {
-            FillRect(texture, 11, 7, 4, 2, robeColor);
-            FillRect(texture, 14, 7, 2, 2, skinColor);
-            FillRect(texture, 4, 7, 1, 3, robeShadow);
-        }
-        else if (facing == Vector2.up)
-        {
-            FillRect(texture, 5, 10, 2, 4, robeShadow);
-            FillRect(texture, 10, 10, 2, 4, robeColor);
-            texture.SetPixel(5, 14, skinShadow);
-            texture.SetPixel(11, 14, skinColor);
+            int outerX = facing == Vector2.down ? 4 : 11;
+            int innerX = facing == Vector2.down ? 5 : 10;
+            for (int y = 6; y <= 8; y++)
+            {
+                pixels[y * 16 + outerX] = Color.clear;
+                pixels[y * 16 + innerX] = PixelColor(y == 6 && facing == Vector2.down ? 'T' : 'D');
+            }
         }
         else
         {
-            FillRect(texture, 5, 5, 2, 5, robeShadow);
-            FillRect(texture, 10, 5, 2, 5, robeColor);
-            texture.SetPixel(5, 4, skinShadow);
-            texture.SetPixel(11, 4, skinColor);
+            // Replace the central idle hand with the clothing it was covering.
+            for (int y = 6; y <= 8; y++)
+            for (int x = 7; x <= 8; x++)
+                pixels[y * 16 + x] = PixelColor(y == 6 ? 'T' : 'C');
         }
     }
 
-    private void DrawHead(
-        Texture2D texture,
-        Vector2 facing,
-        Color skinShadow,
-        Color eyeColor)
+    private Color PixelColor(char symbol)
     {
-        if (facing == Vector2.left)
+        switch (symbol)
         {
-            FillRect(texture, 5, 10, 5, 4, skinColor);
-            FillRect(texture, 6, 13, 4, 2, hairColor);
-            FillRect(texture, 9, 11, 1, 3, hairColor);
-            texture.SetPixel(5, 11, eyeColor);
-            texture.SetPixel(5, 10, skinShadow);
-        }
-        else if (facing == Vector2.right)
-        {
-            FillRect(texture, 7, 10, 5, 4, skinColor);
-            FillRect(texture, 7, 13, 4, 2, hairColor);
-            FillRect(texture, 7, 11, 1, 3, hairColor);
-            texture.SetPixel(11, 11, eyeColor);
-            texture.SetPixel(11, 10, skinShadow);
-        }
-        else
-        {
-            FillRect(texture, 6, 10, 5, 4, skinColor);
-            FillRect(texture, 6, 13, 5, 2, hairColor);
-            if (facing == Vector2.up)
-            {
-                FillRect(texture, 6, 11, 5, 3, hairColor);
-            }
-            else
-            {
-                texture.SetPixel(7, 11, eyeColor);
-                texture.SetPixel(9, 11, eyeColor);
-                texture.SetPixel(8, 10, skinShadow);
-            }
+            case 'C': return robeColor;
+            case 'D': return Color.Lerp(robeColor, Color.black, 0.34f);
+            case 'L': return Color.Lerp(robeColor, Color.white, 0.18f);
+            case 'T': return robeTrimColor;
+            case 'W': return showCrown ? new Color(0.80f, 0.77f, 0.66f, 1f) : Color.Lerp(robeTrimColor, Color.white, 0.12f);
+            case 'Z': return crownJewelColor;
+            case 'K': return new Color(0.19f, 0.13f, 0.10f, 1f);
+            case 'F': return skinColor;
+            case 'S': return Color.Lerp(skinColor, Color.black, 0.24f);
+            case 'H': return hairColor;
+            case 'J': return Color.Lerp(hairColor, Color.white, 0.14f);
+            case 'E': return GhostFormEyeColor;
+            default: return Color.clear;
         }
     }
 
-    private void DrawCrown(Texture2D texture, Vector2 facing)
+    private void DrawCrown(Color[] pixels, Vector2 facing)
     {
-        int centerX = facing == Vector2.left
-            ? 7
-            : facing == Vector2.right ? 9 : 8;
-        Color crownShadow = Color.Lerp(crownColor, Color.black, 0.24f);
-
-        // Broad gold band plus three tall points remain readable in every facing.
-        FillRect(texture, centerX - 3, 14, 7, 1, crownShadow);
-        texture.SetPixel(centerX - 3, 15, crownColor);
-        texture.SetPixel(centerX - 2, 14, crownColor);
-        texture.SetPixel(centerX, 15, crownColor);
-        texture.SetPixel(centerX + 2, 14, crownColor);
-        texture.SetPixel(centerX + 3, 15, crownColor);
-        texture.SetPixel(centerX, 14, crownJewelColor);
+        // Three points and a low band fit inside the same canvas as the hair.
+        int left = facing == Vector2.left ? 4 : facing == Vector2.right ? 6 : 5;
+        for (int x = left; x < left + 6; x++)
+        {
+            pixels[15 * 16 + x] = Color.clear;
+            pixels[14 * 16 + x] = crownColor;
+        }
+        pixels[15 * 16 + left] = crownColor;
+        pixels[15 * 16 + left + 2] = crownColor;
+        pixels[15 * 16 + left + 5] = crownColor;
+        pixels[14 * 16 + left + 2] = crownJewelColor;
     }
 
     private static int DirectionIndex(Vector2 direction)
@@ -310,41 +302,34 @@ public sealed class NobleZeldaCharacterData : ZeldaCharacterData
         return direction.y > 0f ? 1 : 0;
     }
 
-    private static void FillRect(
-        Texture2D texture,
-        int x,
-        int y,
-        int width,
-        int height,
-        Color color)
+    private void OnDestroy() => ReleaseSprites();
+
+    private void ReleaseSprites()
     {
-        for (int py = y; py < y + height; py++)
+        for (int i = 0; i < 4; i++)
         {
-            for (int px = x; px < x + width; px++)
-            {
-                if (px >= 0 && px < texture.width &&
-                    py >= 0 && py < texture.height)
-                {
-                    texture.SetPixel(px, py, color);
-                }
-            }
+            ReleaseGenerated(idleSprites[i]);
+            ReleaseGenerated(idleTextures[i]);
+            ReleaseGenerated(attackSprites[i]);
+            ReleaseGenerated(attackTextures[i]);
+            idleSprites[i] = null;
+            idleTextures[i] = null;
+            attackSprites[i] = null;
+            attackTextures[i] = null;
         }
     }
 
-    private void OnDestroy()
+    private void ReleaseGenerated(Object generated)
     {
-        for (int i = 0; i < idleSprites.Length; i++)
-        {
-            if (idleSprites[i] != null) Destroy(idleSprites[i]);
-            if (attackSprites[i] != null) Destroy(attackSprites[i]);
-            if (idleTextures[i] != null) Destroy(idleTextures[i]);
-            if (attackTextures[i] != null) Destroy(attackTextures[i]);
-        }
+        if (generated == null) return;
+        if (Application.isPlaying) Destroy(generated);
+        else DestroyImmediate(generated);
     }
 
     protected override void OnValidate()
     {
         base.OnValidate();
+        visualsDirty = true;
         attackPower = Mathf.Max(0, attackPower);
         attackDuration = Mathf.Max(0f, attackDuration);
         attackSize.x = Mathf.Max(0f, attackSize.x);

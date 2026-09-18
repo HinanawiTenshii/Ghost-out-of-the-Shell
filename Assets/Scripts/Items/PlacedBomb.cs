@@ -5,6 +5,9 @@ using UnityEngine;
 [RequireComponent(typeof(BoxCollider2D))]
 public sealed class PlacedBomb : MonoBehaviour
 {
+    public string SaveSourceItemId { get; set; }
+    public ZeldaCharacterData SaveOwner => owner;
+    public void RestoreSavedOwner(ZeldaCharacterData savedOwner) { owner = savedOwner; }
     private SpriteRenderer bombRenderer;
     private SpriteRenderer highlightRenderer;
     private SpriteRenderer fuseRenderer;
@@ -43,18 +46,14 @@ public sealed class PlacedBomb : MonoBehaviour
         BoxCollider2D attackReceiver = GetComponent<BoxCollider2D>();
         attackReceiver.isTrigger = true;
         attackReceiver.size = Vector2.one;
-        CreateBombSprite();
-        bombRenderer.sprite = bombSprite;
         GameObject highlightObject = new GameObject("Bomb Highlight");
         highlightObject.transform.SetParent(transform, false);
         highlightRenderer = highlightObject.AddComponent<SpriteRenderer>();
-        highlightRenderer.sprite = highlightSprite;
         highlightRenderer.enabled = false;
         GameObject fuseObject = new GameObject("Fuse");
         fuseObject.transform.SetParent(transform, false);
         fuseRenderer = fuseObject.AddComponent<SpriteRenderer>();
-        fuseRenderer.sprite = fuseSprite;
-        fuseRenderer.color = new Color(0.78f, 0.64f, 0.43f, 1f);
+        fuseRenderer.color = Color.white;
     }
 
     public void Configure(
@@ -109,6 +108,7 @@ public sealed class PlacedBomb : MonoBehaviour
         pulseColor = configuredPulseColor;
         effectSortingOrder = configuredSortingOrder;
         owner = configuredOwner;
+        CreateBombSprite();
         bombRenderer.color = bombColor;
         bombRenderer.sortingOrder = effectSortingOrder;
         highlightRenderer.color = highlightColor;
@@ -181,6 +181,15 @@ public sealed class PlacedBomb : MonoBehaviour
         }
 
         Explode();
+    }
+
+    public void DetonateSoulMark(int skillLevel = 1)
+    {
+        attackPower = skillLevel >= 2 ? 5 : 3;
+        if (skillLevel >= 2) explosionSize *= 1.5f;
+        hitboxColor = ZeldaUiPalette.Primary;
+        pulseColor = Color.white;
+        DetonateImmediately();
     }
 
     private void PlayExplosionSound(Vector3 explosionPosition)
@@ -290,131 +299,45 @@ public sealed class PlacedBomb : MonoBehaviour
 
     private void CreateBombSprite()
     {
-        string[] rows =
-        {
-            ".............",
-            ".............",
-            ".............",
-            ".............",
-            ".....####....",
-            "...########..",
-            "..##########.",
-            ".############",
-            ".############",
-            ".############",
-            "..##########.",
-            "...########..",
-            ".....####...."
-        };
+        ReleaseVisualResources();
+        string[] rows = BombPickupItemVisual.GetBombRows(SaveSourceItemId == "purple_bomb");
         int height = rows.Length;
         int width = rows[0].Length;
-        bombTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
-        bombTexture.name = "Placed Bomb Texture";
-        bombTexture.filterMode = FilterMode.Point;
-        bombTexture.wrapMode = TextureWrapMode.Clamp;
-        for (int row = 0; row < height; row++)
-        {
-            for (int x = 0; x < width; x++)
-            {
-                bombTexture.SetPixel(
-                    x,
-                    height - 1 - row,
-                    rows[row][x] == '#' ? Color.white : Color.clear);
-            }
-        }
-        bombTexture.Apply(false, true);
-        bombSprite = Sprite.Create(
-            bombTexture,
-            new Rect(0f, 0f, width, height),
-            new Vector2(0.5f, 0.5f),
-            Mathf.Max(width, height));
-        bombSprite.name = "Placed Pixel Bomb";
-
-        string[] highlightRows =
-        {
-            ".............",
-            ".............",
-            ".............",
-            ".............",
-            "......##.....",
-            ".....###.....",
-            "....##.......",
-            "...##........",
-            "...#.........",
-            ".............",
-            ".............",
-            ".............",
-            "............."
-        };
-        highlightTexture = CreateMaskTexture(
-            highlightRows,
-            "Placed Bomb Highlight Texture");
-        highlightSprite = CreateMaskSprite(
-            highlightTexture,
-            width,
-            height,
-            "Placed Pixel Bomb Highlight");
-
-        string[] fuseRows =
-        {
-            ".........##..",
-            "........##...",
-            ".......##....",
-            "......###....",
-            ".............",
-            ".............",
-            ".............",
-            ".............",
-            ".............",
-            ".............",
-            ".............",
-            ".............",
-            "............."
-        };
-        fuseTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
-        fuseTexture.name = "Placed Bomb Fuse Texture";
-        fuseTexture.filterMode = FilterMode.Point;
-        fuseTexture.wrapMode = TextureWrapMode.Clamp;
-        for (int row = 0; row < height; row++)
-        {
-            for (int x = 0; x < width; x++)
-            {
-                fuseTexture.SetPixel(
-                    x,
-                    height - 1 - row,
-                    fuseRows[row][x] == '#' ? Color.white : Color.clear);
-            }
-        }
-        fuseTexture.Apply(false, true);
-        fuseSprite = Sprite.Create(
-            fuseTexture,
-            new Rect(0f, 0f, width, height),
-            new Vector2(0.5f, 0.5f),
-            Mathf.Max(width, height));
-        fuseSprite.name = "Placed Pixel Bomb Fuse";
+        bombTexture = CreateLayerTexture(rows, 0, "Placed Bomb Body");
+        highlightTexture = CreateLayerTexture(rows, 1, "Placed Bomb Highlight");
+        fuseTexture = CreateLayerTexture(rows, 2, "Placed Bomb Fuse");
+        bombSprite = CreateMaskSprite(bombTexture, width, height, "Placed Pixel Bomb");
+        highlightSprite = CreateMaskSprite(highlightTexture, width, height, "Placed Bomb Highlight");
+        fuseSprite = CreateMaskSprite(fuseTexture, width, height, "Placed Bomb Fuse");
+        bombRenderer.sprite = bombSprite;
+        highlightRenderer.sprite = highlightSprite;
+        fuseRenderer.sprite = fuseSprite;
     }
 
-    private static Texture2D CreateMaskTexture(string[] rows, string textureName)
+    // Body and highlight remain independently tintable for the existing fuse
+    // flash. The neutral collar and tan fuse do not flash with the casing.
+    private static Texture2D CreateLayerTexture(string[] rows, int layer, string textureName)
     {
         int height = rows.Length;
         int width = rows[0].Length;
-        Texture2D texture = new Texture2D(
-            width,
-            height,
-            TextureFormat.RGBA32,
-            false);
-        texture.name = textureName;
-        texture.filterMode = FilterMode.Point;
-        texture.wrapMode = TextureWrapMode.Clamp;
-        for (int row = 0; row < height; row++)
+        var texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
         {
-            for (int x = 0; x < width; x++)
-            {
-                texture.SetPixel(
-                    x,
-                    height - 1 - row,
-                    rows[row][x] == '#' ? Color.white : Color.clear);
-            }
+            name = textureName,
+            filterMode = FilterMode.Point,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        for (int row = 0; row < height; row++)
+        for (int x = 0; x < width; x++)
+        {
+            char symbol = rows[row][x];
+            Color color = Color.clear;
+            if (layer == 0 && (symbol == 'B' || symbol == 'D' || symbol == 'H'))
+                color = BombPickupItemVisual.SamplePixel(symbol, Color.white, false, Color.white, Color.clear);
+            else if (layer == 1 && symbol == 'H') color = Color.white;
+            else if (layer == 2 && (symbol == 'K' || symbol == 'F'))
+                color = BombPickupItemVisual.SamplePixel(symbol, Color.clear, false, Color.clear,
+                    new Color(0.78f, 0.64f, 0.43f, 1f));
+            texture.SetPixel(x, height - 1 - row, color);
         }
         texture.Apply(false, true);
         return texture;
@@ -435,7 +358,9 @@ public sealed class PlacedBomb : MonoBehaviour
         return sprite;
     }
 
-    private void OnDestroy()
+    private void OnDestroy() => ReleaseVisualResources();
+
+    private void ReleaseVisualResources()
     {
         if (bombSprite != null)
         {

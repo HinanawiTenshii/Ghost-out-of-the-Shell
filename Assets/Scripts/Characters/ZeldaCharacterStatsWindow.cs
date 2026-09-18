@@ -15,7 +15,7 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
     private const float FadeDuration = 0.12f;
     private const float WindowDisplayScale = 0.5f;
     private const float DefaultConfiguredScale = 2.2f;
-    private static readonly Vector2 PanelSize = new Vector2(276f, 120f);
+    private static readonly Vector2 PanelSize = new Vector2(276f, 156f);
 
     private static readonly Color SwordBrown = new Color(0.48f, 0.27f, 0.12f, 1f);
     private static readonly Color WrenchGray = new Color(0.48f, 0.5f, 0.54f, 1f);
@@ -32,6 +32,9 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
     private readonly Image[] attackIcons = new Image[MaxIconsPerRow];
     private readonly Image[] skillIcons = new Image[MaxIconsPerRow];
     private readonly Image[] costIcons = new Image[MaxIconsPerRow];
+    private readonly Image[] requirementIcons = new Image[MaxIconsPerRow];
+    private int lastRequirement = int.MinValue;
+    private Vector2 energyIconSize;
     private ZeldaCharacterData data;
     private ZeldaFourWayMover characterMover;
     private Vector2 windowLocalOffset;
@@ -69,7 +72,9 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
         EnsureVisuals();
         UpdateScreenPosition();
         bool isControlledCharacter = characterMover != null && characterMover.isActiveAndEnabled;
-        bool shouldBeVisible = !DocumentReader.IsInputBlocked && !isControlledCharacter &&
+        bool shouldBeVisible = !DocumentReader.IsInputBlocked &&
+                               !ClockworkPuppetRuntime.BlocksCharacterInput &&
+                               !isControlledCharacter &&
                                Input.GetMouseButton(1) &&
                                IsCharacterInsideCameraVision();
         if (shouldBeVisible != isVisible)
@@ -123,9 +128,34 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
         frame.sprite = frameSprite;
         frame.raycastTarget = false;
 
-        CreateRow(attackIcons, "Attack Power", swordSprite, 32f, new Vector2(22f, 22f));
-        CreateRow(skillIcons, "Skill Value", wrenchSprite, 0f, new Vector2(22f, 22f));
-        CreateRow(costIcons, "Possession Cost", rectangleSprite, -32f, new Vector2(16f, 22f));
+        CreateRow(attackIcons, "Attack Power", swordSprite, 50f, new Vector2(22f, 22f));
+        CreateRow(skillIcons, "Skill Value", wrenchSprite, 18f, new Vector2(22f, 22f));
+        Vector2 energySize = ZeldaHealthHeartsUI.Instance != null
+            ? ZeldaHealthHeartsUI.Instance.PossessionEnergyDisplaySize
+            : new Vector2(18.48f, 10.56f);
+        energyIconSize = energySize;
+        CreateRow(costIcons, "Possession Energy", rectangleSprite, -14f, energySize);
+        for (int i = 0; i < costIcons.Length; i++)
+        {
+            costIcons[i].preserveAspect = false;
+            costIcons[i].rectTransform.anchoredPosition = new Vector2(20f + i * (energySize.x + 3.3f), -14f);
+        }
+
+        CreateRow(requirementIcons, "Possession Requirement", ZeldaHealthHeartsUI.GetSpentPossessionEnergyIcon(), -56f, energySize);
+        foreach (Image icon in requirementIcons) icon.preserveAspect = false;
+        GameObject requirementLabel = CreateUiObject("Requirement Label", panelRect, typeof(Text));
+        Text label = requirementLabel.GetComponent<Text>();
+        label.font = ZeldaHealthHeartsUI.Instance != null ? ZeldaHealthHeartsUI.Instance.PermissionLabelFont : null;
+        if (label.font == null) label.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        label.text = "需求：";
+        label.fontSize = 16;
+        label.color = ZeldaUiPalette.Primary;
+        label.alignment = TextAnchor.MiddleLeft;
+        label.raycastTarget = false;
+        label.rectTransform.anchorMin = label.rectTransform.anchorMax = new Vector2(0f, 0.5f);
+        label.rectTransform.pivot = new Vector2(0f, 0.5f);
+        label.rectTransform.anchoredPosition = new Vector2(12f, -56f);
+        label.rectTransform.sizeDelta = new Vector2(50f, 26f);
 
         GameObject permissionObject = CreateUiObject("Permission Level", panelRect, typeof(Image));
         RectTransform permissionRect = permissionObject.GetComponent<RectTransform>();
@@ -135,6 +165,7 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
         permissionImage = permissionObject.GetComponent<Image>();
         permissionImage.preserveAspect = true;
         permissionImage.raycastTarget = false;
+        CRTScreenEffect.RegisterCanvas(overlayCanvas);
     }
 
     private static void ConfigureResponsiveScaling(GameObject canvasObject)
@@ -248,9 +279,22 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
 
     private void Refresh(bool force)
     {
-        int attackPower = Mathf.Clamp(data.AttackPower, 0, MaxIconsPerRow);
+        int attackPower = Mathf.Clamp(data.FinalAttackPower, 0, MaxIconsPerRow);
         int skillValue = Mathf.Clamp(data.SkillValue, 0, MaxIconsPerRow);
-        int possessionCost = Mathf.Clamp(data.PossessionCost, 0, MaxIconsPerRow);
+        int possessionCost = Mathf.Clamp(data.FinalPossessionEnergy, 0, MaxIconsPerRow);
+        int requirement = Mathf.Clamp(data.PossessionCost, 0, MaxIconsPerRow);
+        if (force || requirement != lastRequirement)
+        {
+            SetVisibleCount(requirementIcons, requirement);
+            float scale = requirement > 0 ? Mathf.Min(1f, 142f / (requirement * (energyIconSize.x + 3.3f))) : 1f;
+            for (int i = 0; i < requirementIcons.Length; i++)
+            {
+                requirementIcons[i].rectTransform.sizeDelta = energyIconSize * scale;
+                requirementIcons[i].rectTransform.anchoredPosition = new Vector2(
+                    62f + energyIconSize.x * scale * 0.5f + i * (energyIconSize.x + 3.3f) * scale, -56f);
+            }
+            lastRequirement = requirement;
+        }
         int permissionLevel = data is GhostZeldaCharacterData
             ? 0
             : Mathf.Clamp(
@@ -268,11 +312,10 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
             SetVisibleCount(skillIcons, skillValue);
             lastSkillValue = skillValue;
         }
-        if (force || possessionCost != lastPossessionCost)
-        {
-            SetVisibleCount(costIcons, possessionCost);
-            lastPossessionCost = possessionCost;
-        }
+        SetVisibleCount(costIcons, Mathf.Clamp(data.BaseMaxPossessionEnergy + (data.CrystalEnergyThirds > 0 ? 1 : 0), 0, MaxIconsPerRow));
+        for (int i = 0; i < costIcons.Length; i++)
+            ZeldaHealthHeartsUI.ConfigureEnergyIcon(costIcons[i], i, data);
+        lastPossessionCost = possessionCost;
         if (force || permissionLevel != lastPermissionLevel)
         {
             permissionImage.sprite = GetPermissionDigitSprite(permissionLevel);
@@ -285,6 +328,7 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
         SetRowColor(attackIcons, SwordBrown);
         SetRowColor(skillIcons, WrenchGray);
         SetRowColor(costIcons, ZeldaUiPalette.Primary);
+        SetRowColor(requirementIcons, ZeldaUiPalette.Primary);
     }
 
     private static void SetVisibleCount(Image[] row, int count)
@@ -336,8 +380,8 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
     {
         if (frameSprite != null) return;
         frameSprite = CreateFrameSprite();
-        swordSprite = CreatePatternSprite(new[] { ".#.......", "..#......", "...#.....", ".######..", "....##...", ".....##..", "......##.", ".......##", "........#" }, "World Pixel Sword");
-        wrenchSprite = CreatePatternSprite(new[] { ".##......", ".###.....", "..###....", "...###...", "....###..", ".....###.", "....####.", "...##..##", "...##..##" }, "World Pixel Wrench");
+        swordSprite = ZeldaHealthHeartsUI.CreateStrengthIcon(out _);
+        wrenchSprite = ZeldaHealthHeartsUI.CreateSkillIcon(out _);
         rectangleSprite = CreateSolidSprite();
         for (int level = 0; level < PermissionDigitSprites.Length; level++) PermissionDigitSprites[level] = CreatePermissionDigitSprite(level);
         for (int absoluteValue = 1; absoluteValue <= NegativePermissionDigitSprites.Length; absoluteValue++)
@@ -360,12 +404,12 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
     private static Sprite CreateFrameSprite()
     {
         const int width = 92;
-        const int height = 40;
+        const int height = 52;
         Texture2D texture = NewPixelTexture(width, height, "World Attribute Frame");
         for (int y = 0; y < height; y++)
         for (int x = 0; x < width; x++)
         {
-            bool border = x < 2 || x >= width - 2 || y < 2 || y >= height - 2 || (x >= 70 && x < 72);
+            bool border = x < 2 || x >= width - 2 || y < 2 || y >= height - 2 || (x >= 70 && x < 72) || (x < 70 && y >= 13 && y < 14);
             texture.SetPixel(x, y, border ? Color.white : Color.black);
         }
         return FinishSprite(texture, width, height, 24f, "World Attribute Frame");
@@ -495,6 +539,7 @@ public sealed class ZeldaCharacterWorldDimmer : MonoBehaviour
     {
         bool requested =
             !DocumentReader.IsInputBlocked &&
+            !ClockworkPuppetRuntime.BlocksCharacterInput &&
             Input.GetMouseButton(1);
         float targetAlpha = requested ? MaximumDarkness : 0f;
         currentAlpha = Mathf.MoveTowards(currentAlpha, targetAlpha, Time.unscaledDeltaTime * MaximumDarkness / fadeDuration);
@@ -563,5 +608,6 @@ public sealed class ZeldaCharacterWorldDimmer : MonoBehaviour
         dimmerCanvas.overrideSorting = true;
         dimmerCanvas.sortingOrder = DimmerCanvasSortingOrder;
         dimmerCanvas.enabled = currentAlpha > 0f;
+        CRTScreenEffect.RegisterCanvas(dimmerCanvas);
     }
 }

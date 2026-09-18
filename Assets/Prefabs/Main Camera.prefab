@@ -103,8 +103,7 @@ MonoBehaviour:
   followOffset: {x: 0, y: 0, z: -10}
   smoothFollow: 1
   followSmoothTime: 0.12
-  ghostOrthographicSize: 4
-  characterOrthographicSize: 6
+  puppetOrthographicSize: 3
   cameraSizeSmoothTime: 0.25
   possessionFocusSizeMultiplier: 0.72
 --- !u!114 &2481516793516481742
@@ -120,13 +119,27 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   visionRadius: 13
-  rayCount: 270
+  rayCount: 96
   blockLayers:
     serializedVersion: 2
-    m_Bits: 128
+    m_Bits: 384
   darknessColor: {r: 0.019607844, g: 0.07058824, b: 0.14509805, a: 1}
   blockerSkin: 0.03
   coverPadding: 2
+  visualRaycastFrequency: 25
+  streamingBoundaryRefreshInterval: 0.12
+  visualOriginSmoothTime: 0
+  edgeSoftness: 0.06
+  cornerDepthDiscontinuity: 0.35
+  cornerRefinementIterations: 5
+  teleportRefreshDistance: 0.75
+  visibilityPolygonCircleSegments: 72
+  visibilityCornerRayOffset: 0.04
+  movingVisibilityRefreshRate: 40
+  visibilityRebuildMovementThreshold: 0.02
+  blockerQueryMovementThreshold: 0.4
+  blockerQueryPadding: 0.5
+  maxMovingAdditionalSourceRebuildsPerFrame: 1
 --- !u!114 &2481516793516481737
 MonoBehaviour:
   m_ObjectHideFlags: 0

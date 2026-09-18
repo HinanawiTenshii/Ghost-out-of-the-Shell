@@ -2,6 +2,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 
 /// <summary>
 /// Covers every newly loaded scene in black, then reveals it in horizontal
@@ -13,6 +14,35 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
     [SerializeField, Min(2)] private int revealSteps = 16;
     [SerializeField, Min(0f)] private float blackHoldDuration = 0.08f;
     [SerializeField, Min(0.01f)] private float revealDuration = 0.42f;
+    [SerializeField, Min(0.01f)] private float coverDuration = 0.42f;
+    private bool transitionPending;
+    private bool waitingForSceneLoaded;
+    private EventSystem blockedEventSystem;
+    private bool previousNavigationEvents;
+
+    private void Update()
+    {
+        if (!IsBlockingInput) return;
+        BlockMenuNavigation();
+    }
+
+    private void BlockMenuNavigation()
+    {
+        EventSystem current = EventSystem.current;
+        if (current == blockedEventSystem) return;
+        RestoreMenuNavigation();
+        if (current == null) return;
+        blockedEventSystem = current;
+        previousNavigationEvents = current.sendNavigationEvents;
+        current.sendNavigationEvents = false;
+        current.SetSelectedGameObject(null);
+    }
+
+    private void RestoreMenuNavigation()
+    {
+        if (blockedEventSystem != null) blockedEventSystem.sendNavigationEvents = previousNavigationEvents;
+        blockedEventSystem = null;
+    }
 
     private static RetroSceneLoadReveal instance;
 
@@ -23,6 +53,59 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
     private Coroutine revealRoutine;
 
     public static bool IsBlockingInput { get; private set; }
+
+    public static bool BeginTransition(string sceneName, System.Action loadScene)
+    {
+        CreateBeforeFirstSceneLoad();
+        if (instance.transitionPending || IsBlockingInput) return false;
+        if (!Application.CanStreamedLevelBeLoaded(sceneName))
+        {
+            Debug.LogError("无法加载场景：" + sceneName);
+            return false;
+        }
+        instance.transitionPending = true;
+        SoulMarkRuntime.ClearForSceneTransition();
+        DominoSkillRuntime.ClearForSceneTransition();
+        IsBlockingInput = true;
+        instance.BlockMenuNavigation();
+        instance.StartCoroutine(instance.CoverBeforeLoad(loadScene));
+        return true;
+    }
+
+    private IEnumerator CoverBeforeLoad(System.Action loadScene)
+    {
+        // Stop outgoing music as the first black band appears, rather than
+        // waiting for scene unload. Include disabled components whose sources
+        // may still be playing; new scene players retain their normal startup.
+        foreach (var music in FindObjectsOfType<LoopingBackgroundMusicPlayer>(true))
+        {
+            music.Stop();
+        }
+        canvasObject.SetActive(true);
+        canvasGroup.blocksRaycasts = true;
+        for (int i = 0; i < blackBands.Length; i++) blackBands[i].gameObject.SetActive(false);
+        float stepDuration = coverDuration / blackBands.Length;
+        for (int i = 0; i < blackBands.Length; i++)
+        {
+            blackBands[i].gameObject.SetActive(true);
+            yield return new WaitForSecondsRealtime(stepDuration);
+        }
+        // Present a fully black frame before synchronous loading or state reset.
+        yield return null;
+        waitingForSceneLoaded = true;
+        try { loadScene(); }
+        catch (System.Exception ex)
+        {
+            Debug.LogException(ex);
+        }
+        // Load failures must not leave the old scene permanently covered.
+        yield return null;
+        if (waitingForSceneLoaded)
+        {
+            waitingForSceneLoaded = false;
+            revealRoutine = StartCoroutine(RevealAfterSceneLoad());
+        }
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void CreateBeforeFirstSceneLoad()
@@ -64,6 +147,7 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
     {
         if (instance == this)
         {
+            RestoreMenuNavigation();
             IsBlockingInput = false;
             instance = null;
         }
@@ -71,6 +155,7 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
+        waitingForSceneLoaded = false;
         ShowFullBlack();
         if (revealRoutine != null)
         {
@@ -109,6 +194,14 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         canvasGroup.interactable = true;
         canvasGroup.blocksRaycasts = true;
 
+        var inputShield = new GameObject("Transition Input Shield", typeof(RectTransform), typeof(Image));
+        inputShield.transform.SetParent(canvasObject.transform, false);
+        var shieldRect = (RectTransform)inputShield.transform;
+        shieldRect.anchorMin = Vector2.zero;
+        shieldRect.anchorMax = Vector2.one;
+        shieldRect.offsetMin = shieldRect.offsetMax = Vector2.zero;
+        inputShield.GetComponent<Image>().color = Color.clear;
+
         int stepCount = Mathf.Max(2, revealSteps);
         blackBands = new RectTransform[stepCount];
         for (int index = 0; index < stepCount; index++)
@@ -134,6 +227,8 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
             image.raycastTarget = false;
             blackBands[index] = band;
         }
+
+        CRTScreenEffect.RegisterCanvas(overlayCanvas);
     }
 
     private void ShowFullBlack()
@@ -165,15 +260,17 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         // initialization and persistent-state restoration from flashing onscreen.
         yield return null;
 
-        float restoreWaitDeadline = Time.realtimeSinceStartup + 3f;
         SceneTravelStateManager stateManager = SceneTravelStateManager.Instance;
         while (stateManager != null &&
                (stateManager.IsSceneTravelRestoreInProgress ||
-                stateManager.IsQuickRestartPending) &&
-               Time.realtimeSinceStartup < restoreWaitDeadline)
+                stateManager.IsQuickRestartPending))
         {
             yield return null;
         }
+
+        // Entry snapshots and auto-save must finish before uncovering gameplay.
+        while (GameSaveSystem.IsPreparingSceneSave || GameSaveSystem.IsLoading)
+            yield return null;
 
         if (blackHoldDuration > 0f)
         {
@@ -199,6 +296,8 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         canvasGroup.interactable = false;
         canvasObject.SetActive(false);
         IsBlockingInput = false;
+        transitionPending = false;
+        RestoreMenuNavigation();
         revealRoutine = null;
     }
 
@@ -223,5 +322,6 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         revealSteps = Mathf.Max(2, revealSteps);
         blackHoldDuration = Mathf.Max(0f, blackHoldDuration);
         revealDuration = Mathf.Max(0.01f, revealDuration);
+        coverDuration = Mathf.Max(0.01f, coverDuration);
     }
 }

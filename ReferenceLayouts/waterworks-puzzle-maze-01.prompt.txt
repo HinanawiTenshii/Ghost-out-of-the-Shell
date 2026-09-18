@@ -1,0 +1,34 @@
+Generation mode: built-in image_gen
+
+Use case: infographic-diagram.
+Create a fantasy medieval underground WATERWORKS PUZZLE MAZE schematic map for Unity level blockout. Single floor top-down 2D, landscape canvas, ONLY simple geometric shapes, clear solid flat colors and thick dark walls; absolutely no texture, shadows, perspective, realistic illustration. Readable Chinese labels. Main map left 78 percent and concise puzzle guide right 22 percent, white margins. Title 地下水道 · 闸门机关迷宫.
+Map is a designed playable maze, not random. Use a rectangular footprint, thick dark walls, broad pale gray DRY traversable corridors, blue rectangular water basins/channels, few clearly indicated bridges. An unmistakable central rectangular large pool labelled 中央蓄水池 occupies central 25 percent; dry ring corridor around pool is interrupted by walls to produce two long alternative routes. Two additional outer rectangular corridor loops with 6–8 right-angle turns total and only 2 short dead ends. Clear large nodes, avoid excessive tiny corridors. No corridor can cross a solid wall. All mechanisms accessible from dry corridors. Thick enclosing boundary has exactly entry lower LEFT and exit upper RIGHT, labelled 入口 / 接生活区 and 出口 / 通往炼金工房.
+Entry opens onto dry starting room lower left labelled 起点, with two branches: west outer maintenance route toward upper left valve room labelled A 引水控制室, and inner southern inspection route leading toward central pool south bank labelled B 排水控制台. A is freely reachable from entrance via west route. The path from start toward B is blocked at one narrow threshold by a clearly visible red crossbar door labelled D1 水力门. Place D1 so no alternate dry path bypasses it. A switch shown as orange circle marked A controls D1 via dashed orange thin line along margins, not confused with walkable route. A also opens bypass water channel, narrated in guide.
+Once D1 opens, B is reachable along south inspection corridor. B orange circle on dry bank controls gate G at pool outlet, orange mechanical connector line. G is rectangular gate spanning narrow blue channel heading from bottom of pool toward lower boundary labelled 排水渠.
+Inside central pool show a dashed ochre L-shaped path with dotted edges labelled 退水后通道, connecting south bank near B to east bank chamber containing orange circle C, labelled C 出口绞盘. This submerged low walkway is only passable after pool drains. Show small stair tread symbols at BOTH ends of submerged walkway, indicating local descent into water trough while still same overall dungeon level. In current wet state water overlays the lower walkway except dashed path indicates future route.
+C chamber on east bank connects north via clearly dry corridor to upper-right exit; one red barred doorway D2 出口门 blocks exit corridor. C orange dashed control line connects to D2. C opens D2 and a clearly marked small return shortcut door D3 回程门 linking east bank back to the southern ring near B. No direct accessible route from entry to C or exit before central pool drains. Outer east loop is accessible only after arriving at C, with side dead-end labelled 维修间. West loop has dead-end labelled 旧库房.
+Blue incoming channel top boundary labelled 来水渠 enters upper-left small 分流池 near A. The hydraulic branch shown simply: a blue channel from dividing basin to top of central pool, and a separate narrow bypass blue channel along far-left map boundary down to 排水渠. Keep water separate from main dry western route; use ONE gray bridge across a narrow feeder if necessary. Small blue arrows show incoming downward, main pool feed downward, bypass downward and pool outlet downward. Diagram simplified for game logic rather than plumbing blueprint.
+
+Right sidebar exact text:
+机关流程
+① 抵达 A
+切换旁通，开启 D1
+② 抵达 B
+开启排水闸 G
+中央池水位下降
+③ 穿过退水通道
+抵达 C
+④ 操作 C
+开启 D2 与 D3
+通往出口并形成回环
+
+Bottom legend: 干燥通道 / 水体 / 机关操作点 / 锁闭门 / 退水后通道
+Small footer: 关卡逻辑示意 · 非严格比例
+Prioritize clear spatial lock-and-key relationships and readable maze routes. Use labels only specified, no decoration, no elaborate objects.
+
+Edit this schematic preserving its overall composition, rooms, main water pool, labels and puzzle guide. Make these precise corrections:
+1 Remove ALL shadows, black vignette, glow and gradients. Solid charcoal wall color, solid pale gray dry corridors, solid blue water, WHITE title margin and footer. Title fully legible in black: 地下水道 · 闸门机关迷宫.
+2 The dry corridor immediately below D1 presently lets player bypass D1 from start via a lower U-shaped loop. Place a thick solid charcoal wall across the narrow horizontal corridor just to the RIGHT of the 起点 room, below D1, closing that bypass. Keep start connected north to the western route and A, and to D1's west side. D1 must be the ONLY entry from starting western network into B area.
+3 The upper-right dry maze currently can lead into C from northern network. Close the narrow vertical corridor immediately ABOVE AND LEFT of C room with one thick charcoal wall crossbar, at the spot between central pool upper-right corner and C room upper-left doorway. C remains connected only to the dashed drained pool path on its west side, D2 exit on northeast side, and D3 south side.
+4 Blue bypass water channel at far left currently ends blindly. Extend its lower end as a narrow blue channel horizontally across the BOTTOM of map to connect to 排水渠 at bottom center. Where it crosses entrance path use a simple pale-gray bridge with dark outline, preserving entrance accessibility. Label this new blue bottom segment 旁通排水.
+5 Add a small clear label under A room: 切断主进水 / 开启旁通. Do not change other room geometry or add decorations.

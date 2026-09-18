@@ -126,6 +126,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   targetSceneName: NextScene
   interactKey: 101
-  interactionDistance: 1.2
-  frameColor: {r: 0.22, g: 0.76, b: 1, a: 1}
-  centerColor: {r: 0.08, g: 0.22, b: 0.46, a: 0.85}
+  triggerSize: {x: 1.1, y: 0.75}
+  triggerOffset: {x: 0, y: 0.25}

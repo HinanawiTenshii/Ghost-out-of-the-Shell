@@ -15,10 +15,11 @@ public sealed class PrisonerZeldaCharacterData : ZeldaCharacterData
     [SerializeField] private Color movingTint = Color.white;
     [SerializeField] private Color attackVisualTint = new Color(0.55f, 0.52f, 0.45f, 0.85f);
 
-    private static readonly Sprite[] IdleSprites = new Sprite[4];
-    private static readonly Sprite[] AttackSprites = new Sprite[4];
+    private readonly Sprite[] IdleSprites = new Sprite[4];
+    private readonly Sprite[] AttackSprites = new Sprite[4];
 
-    public override bool CanAttack => true;
+    public override bool CanAttack => !IsGhostForm;
+    public override Color GhostFormEyeColor => new Color(0.05f, 0.12f, 0.22f, 1f);
     public override int AttackPower => attackPower;
     public override GameObject AttackPrefab => attackPrefab;
     public override float AttackDuration => attackDuration;
@@ -36,7 +37,7 @@ public sealed class PrisonerZeldaCharacterData : ZeldaCharacterData
         spriteRenderer.color = GetDamageFeedbackTint(isMoving ? movingTint : idleTint);
     }
 
-    private static void EnsureSprites()
+    private void EnsureSprites()
     {
         if (IdleSprites[0] != null) return;
         Vector2[] directions = { Vector2.down, Vector2.up, Vector2.left, Vector2.right };
@@ -47,115 +48,167 @@ public sealed class PrisonerZeldaCharacterData : ZeldaCharacterData
         }
     }
 
-    private static Sprite CreateSprite(Vector2 facing, bool attacking)
+    private Sprite CreateSprite(Vector2 facing, bool attacking)
     {
-        const int size = 16;
-        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
-        texture.filterMode = FilterMode.Point;
-        texture.wrapMode = TextureWrapMode.Clamp;
-
-        Color clear = new Color(1f, 1f, 1f, 0f);
-        Color shirt = new Color(0.68f, 0.51f, 0.32f, 1f);
-        Color shirtLight = new Color(0.82f, 0.66f, 0.43f, 1f);
-        Color shirtDark = new Color(0.44f, 0.31f, 0.19f, 1f);
-        Color pants = new Color(0.07f, 0.25f, 0.13f, 1f);
-        Color pantsLight = new Color(0.12f, 0.36f, 0.20f, 1f);
-        Color skin = new Color(0.88f, 0.64f, 0.42f, 1f);
-        Color skinShadow = new Color(0.62f, 0.39f, 0.24f, 1f);
-        Color hair = new Color(0.16f, 0.10f, 0.07f, 1f);
-        Color eye = new Color(0.05f, 0.12f, 0.22f, 1f);
-
-        FillRect(texture, 0, 0, size, size, clear);
-        // A broad, compact torso and short legs give the prisoner a chunkier chibi silhouette.
-        FillRect(texture, 6, 3, 2, 3, pants);
-        FillRect(texture, 9, 3, 2, 3, pants);
-        FillRect(texture, 7, 4, 1, 2, pantsLight);
-        FillRect(texture, 10, 4, 1, 2, pantsLight);
-        FillRect(texture, 5, 6, 7, 5, shirt);
-        FillRect(texture, 5, 6, 1, 5, shirtDark);
-        FillRect(texture, 8, 7, 3, 3, shirtLight);
-        FillRect(texture, 5, 6, 7, 1, shirtDark);
-
-        DrawHead(texture, facing, skin, skinShadow, hair, eye);
-        DrawArms(texture, facing, attacking, shirt, shirtDark, skin, skinShadow);
-
-        texture.Apply(false, true);
-        Sprite sprite = Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.25f), 16f);
+        Texture2D texture = CreateTexture(facing, attacking);
+        Sprite sprite = Sprite.Create(texture, new Rect(0f, 0f, 16f, 16f), new Vector2(0.5f, 0.3125f), 16f);
         sprite.name = "Prisoner " + DirectionName(facing) + (attacking ? " Attack" : " Idle");
+        sprite.hideFlags = HideFlags.HideAndDontSave;
         return sprite;
     }
 
-    private static void DrawHead(Texture2D texture, Vector2 facing, Color skin, Color shadow, Color hair, Color eye)
+    // One-pixel shorter boots; a higher texture pivot retains the world-space ground baseline.
+    // Full 16x16 four-way art. Row 4 rests directly on row 5: no neck.
+    private static readonly string[] FrontBody = {
+        "......HHHH......",
+        ".....HFFFFH.....",
+        ".....FFFFFF.....",
+        ".....FEFFEF.....",
+        ".....SSFFSS.....",
+        "....CCDDCCCC....",
+        "....CDLCCCDC....",
+        "....LLCCCPLL....",
+        "....FFCCPPFF....",
+        "....FFBBBBFF....",
+        ".....KKKKKK.....",
+        ".....KK..KK.....",
+        ".....KK..KK.....",
+        "................",
+        "................",
+        "................",
+    };
+
+    private static readonly string[] BackBody = {
+        "......HHHH......",
+        ".....HHHHHH.....",
+        ".....SHHHHS.....",
+        ".....SFFFFS.....",
+        ".....SSFFSS.....",
+        "....CCCCCCCC....",
+        "....CDCCCCDC....",
+        "....LLCDCCLL....",
+        "....FFCDPCFF....",
+        "....FFBBBBFF....",
+        ".....KKKKKK.....",
+        ".....KK..KK.....",
+        ".....KK..KK.....",
+        "................",
+        "................",
+        "................",
+    };
+
+    private static readonly string[] LeftBody = {
+        ".....HHHH.......",
+        "....HFFFFH......",
+        "....FFFFFH......",
+        "....FEFFFS......",
+        "....SFFFSS......",
+        ".....CDCCCC.....",
+        ".....CDLCCC.....",
+        ".....CCLLPC.....",
+        ".....CCFFPC.....",
+        ".....BBFFBB.....",
+        ".....KKKKKK.....",
+        ".....KK..KK.....",
+        ".....KK..KK.....",
+        "................",
+        "................",
+        "................",
+    };
+
+    private static readonly string[] RightBody = {
+        ".......HHHH.....",
+        "......HFFFFH....",
+        "......HFFFFF....",
+        "......SFFFEF....",
+        "......SSFFFS....",
+        ".....CCCCDC.....",
+        ".....CCCLDC.....",
+        ".....CPLLCC.....",
+        ".....CPFFCC.....",
+        ".....BBFFBB.....",
+        ".....KKKKKK.....",
+        ".....KK..KK.....",
+        ".....KK..KK.....",
+        "................",
+        "................",
+        "................",
+    };
+
+    private Texture2D CreateTexture(Vector2 facing, bool attacking)
     {
-        if (facing == Vector2.up)
+        string[] rows = facing == Vector2.up ? BackBody :
+            facing == Vector2.left ? LeftBody : facing == Vector2.right ? RightBody : FrontBody;
+        var pixels = new Color[16 * 16];
+        for (int row = 0; row < 16; row++)
+        for (int x = 0; x < 16; x++)
+            pixels[(15 - row) * 16 + x] = PixelColor(rows[row][x]);
+
+        if (attacking)
         {
-            FillRect(texture, 6, 10, 5, 4, skin);
-            FillRect(texture, 6, 12, 5, 2, hair);
-            FillRect(texture, 6, 10, 1, 3, shadow);
+            RestoreBodyBehindAttackingArm(pixels, facing);
+            int startX = facing == Vector2.left ? 2 : facing == Vector2.right ? 10 : 6;
+            int startY = facing == Vector2.up ? 10 : facing == Vector2.down ? 4 : 6;
+            for (int y = startY; y < startY + 3; y++)
+            for (int x = startX; x < startX + 4; x++)
+                pixels[y * 16 + x] = PixelColor(y == startY + 2 ? 'L' : 'C');
+            int handX = facing == Vector2.left ? startX :
+                facing == Vector2.right ? startX + 2 : startX + 1;
+            int handY = facing == Vector2.up ? startY + 1 : startY;
+            for (int y = handY; y < handY + 2; y++)
+            for (int x = handX; x < handX + 2; x++)
+                pixels[y * 16 + x] = PixelColor('F');
         }
-        else if (facing == Vector2.left)
+
+        var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false)
         {
-            FillRect(texture, 5, 10, 5, 4, skin);
-            FillRect(texture, 6, 13, 4, 1, hair);
-            FillRect(texture, 9, 11, 1, 3, hair);
-            texture.SetPixel(5, 11, eye);
-            texture.SetPixel(5, 10, shadow);
-        }
-        else if (facing == Vector2.right)
+            name = "Prisoner " + facing + (attacking ? " Attack" : " Idle"),
+            filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        texture.SetPixels(pixels);
+        // Idle pixels remain readable for the shared cached walking frames.
+        texture.Apply(false, attacking);
+        return texture;
+    }
+
+    private void RestoreBodyBehindAttackingArm(Color[] pixels, Vector2 facing)
+    {
+        if (facing == Vector2.down || facing == Vector2.up)
         {
-            FillRect(texture, 7, 10, 5, 4, skin);
-            FillRect(texture, 7, 13, 4, 1, hair);
-            FillRect(texture, 7, 11, 1, 3, hair);
-            texture.SetPixel(11, 11, eye);
-            texture.SetPixel(11, 10, shadow);
+            int outerX = facing == Vector2.down ? 4 : 11;
+            int innerX = facing == Vector2.down ? 5 : 10;
+            for (int y = 6; y <= 8; y++)
+            {
+                pixels[y * 16 + outerX] = Color.clear;
+                pixels[y * 16 + innerX] = PixelColor(y == 6 ? 'B' : 'D');
+            }
         }
         else
         {
-            FillRect(texture, 6, 10, 5, 4, skin);
-            FillRect(texture, 6, 13, 5, 1, hair);
-            FillRect(texture, 6, 12, 1, 2, hair);
-            texture.SetPixel(7, 11, eye);
-            texture.SetPixel(9, 11, eye);
-            texture.SetPixel(8, 10, shadow);
+            // Replace the central idle hand with the clothing it was covering.
+            for (int y = 6; y <= 8; y++)
+            for (int x = 7; x <= 8; x++)
+                pixels[y * 16 + x] = PixelColor(y == 6 ? 'B' : 'C');
         }
     }
 
-    private static void DrawArms(Texture2D texture, Vector2 facing, bool attacking, Color shirt, Color shirtDark, Color skin, Color shadow)
+    private Color PixelColor(char symbol)
     {
-        if (!attacking)
+        switch (symbol)
         {
-            FillRect(texture, 4, 7, 1, 4, shirtDark);
-            FillRect(texture, 12, 7, 1, 4, shirt);
-            texture.SetPixel(4, 7, skin);
-            texture.SetPixel(12, 7, skin);
-            return;
-        }
-
-        if (facing == Vector2.left)
-        {
-            FillRect(texture, 2, 7, 4, 2, shirt);
-            FillRect(texture, 1, 7, 2, 2, skin);
-            FillRect(texture, 12, 7, 1, 3, shirtDark);
-        }
-        else if (facing == Vector2.right)
-        {
-            FillRect(texture, 11, 7, 4, 2, shirt);
-            FillRect(texture, 14, 7, 2, 2, skin);
-            FillRect(texture, 4, 7, 1, 3, shirtDark);
-        }
-        else if (facing == Vector2.up)
-        {
-            FillRect(texture, 5, 10, 2, 4, shirtDark);
-            FillRect(texture, 10, 10, 2, 4, shirt);
-            texture.SetPixel(5, 14, skin);
-            texture.SetPixel(11, 14, skin);
-        }
-        else
-        {
-            FillRect(texture, 5, 5, 2, 4, shirtDark);
-            FillRect(texture, 10, 5, 2, 4, shirt);
-            texture.SetPixel(5, 4, shadow);
-            texture.SetPixel(11, 4, skin);
+            case 'C': return new Color(0.68f, 0.51f, 0.32f, 1f);
+            case 'D': return new Color(0.44f, 0.31f, 0.19f, 1f);
+            case 'L': return new Color(0.82f, 0.66f, 0.43f, 1f);
+            case 'P': return new Color(0.44f, 0.42f, 0.33f, 1f);
+            case 'T': return new Color(0.07f, 0.25f, 0.13f, 1f);
+            case 'B': return new Color(0.49f, 0.40f, 0.25f, 1f);
+            case 'K': return new Color(0.25f, 0.19f, 0.13f, 1f);
+            case 'F': return new Color(0.88f, 0.64f, 0.42f, 1f);
+            case 'S': return new Color(0.62f, 0.39f, 0.24f, 1f);
+            case 'H': return new Color(0.16f, 0.10f, 0.07f, 1f);
+            case 'E': return GhostFormEyeColor;
+            default: return Color.clear;
         }
     }
 
@@ -173,10 +226,21 @@ public sealed class PrisonerZeldaCharacterData : ZeldaCharacterData
         return "Down";
     }
 
-    private static void FillRect(Texture2D texture, int x, int y, int width, int height, Color color)
+    private void OnDestroy()
     {
-        for (int py = y; py < y + height; py++)
-        for (int px = x; px < x + width; px++) texture.SetPixel(px, py, color);
+        for (int i = 0; i < 4; i++)
+        {
+            ReleaseSprite(IdleSprites[i]);
+            ReleaseSprite(AttackSprites[i]);
+        }
+    }
+
+    private void ReleaseSprite(Sprite sprite)
+    {
+        if (sprite == null) return;
+        Texture2D texture = sprite.texture;
+        if (Application.isPlaying) { Destroy(sprite); Destroy(texture); }
+        else { DestroyImmediate(sprite); DestroyImmediate(texture); }
     }
 
     protected override void OnValidate()

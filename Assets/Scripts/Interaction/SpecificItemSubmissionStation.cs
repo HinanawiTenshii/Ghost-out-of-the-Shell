@@ -274,6 +274,13 @@ public sealed class SpecificItemSubmissionStation : MonoBehaviour
         string promptMessage = HasAvailableRequiredItem()
             ? $"按[E]提交物品  {SubmittedItemCount}/{RequiredItemCount}"
             : $"缺少指定物品  {SubmittedItemCount}/{RequiredItemCount}";
+        // A missing prompt font must not remove this gameplay candidate.
+        ZeldaInteractionArbiter.OfferInteraction(
+            this,
+            mover,
+            interactKey,
+            transform.position,
+            SetInteractionPromptVisible);
         EnsureInteractionPrompt();
         if (interactionPromptObject == null)
         {
@@ -284,13 +291,6 @@ public sealed class SpecificItemSubmissionStation : MonoBehaviour
         interactionPromptObject.transform.position =
             mover.GetOverheadWorldPosition(interactionPromptOffset);
         interactionPromptObject.transform.rotation = Quaternion.identity;
-        ZeldaInteractionArbiter.OfferInteraction(
-            this,
-            mover,
-            interactKey,
-            transform.position,
-            SetInteractionPromptVisible);
-
         interactionPromptFont.RequestCharactersInTexture(
             promptMessage,
             72,
@@ -344,6 +344,8 @@ public sealed class SpecificItemSubmissionStation : MonoBehaviour
 
         promptRenderer.sortingLayerID = highestSortingLayerId;
         promptRenderer.sortingOrder = short.MaxValue - 2;
+        ZeldaPossessionProgressBar.ConfigureOverlayRenderer(promptRenderer);
+        ZeldaPossessionProgressBar.ConfigureOverlayRenderer(promptRenderer);
         interactionPromptMaterial = new Material(interactionPromptFont.material)
         {
             name = name + " Submission Prompt Font Material",

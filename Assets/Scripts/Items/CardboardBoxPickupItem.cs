@@ -11,7 +11,7 @@ public sealed class CardboardBoxPickupItem : PickupItemBase
         new HashSet<CardboardBoxPickupItem>();
 
     [Header("Worn Box")]
-    [SerializeField, Min(0f)] private float staminaDrainPerSecond = 1f;
+    [SerializeField, Min(0f)] private float staminaDrainPerSecond = 2f;
     [SerializeField, Range(0.1f, 1f)] private float wornMovementSpeedMultiplier = 0.5f;
     [SerializeField, Min(1)] private int maximumBlockedAttacks = 2;
     [SerializeField] private Vector2 wornVisualOffset = new Vector2(0f, 0.08f);
@@ -52,6 +52,28 @@ public sealed class CardboardBoxPickupItem : PickupItemBase
     public float FragmentSpeed => fragmentSpeed;
     public float FragmentScale => fragmentScale;
     public bool HasStoredItem => hasStoredItem;
+    public void PrepareContentsForSave()
+    {
+        if (storedPuppetDriver != null)
+        {
+            storedItemHasCharge = true;
+            storedItemCharge = storedPuppetDriver.RemainingMagic;
+        }
+    }
+    public void RestoreSavedContents(bool wasRemoteControlled)
+    {
+        baseLocalPosition = transform.localPosition;
+        if (!hasStoredItem) return;
+        foreach (var item in SaveGameCatalog.LoadPickupTemplates())
+            if (item.ItemId == storedItemId) { storedItemPrefab = item; break; }
+        var puppet = storedItemPrefab as ClockworkPuppetPickupItem;
+        if (puppet == null) return;
+        storedPuppetDriver = GetComponent<ClockworkPuppetBoxDriver>();
+        if (storedPuppetDriver == null) storedPuppetDriver = gameObject.AddComponent<ClockworkPuppetBoxDriver>();
+        storedPuppetDriver.Configure(this, puppet, storedItemHasCharge ? storedItemCharge : puppet.MaximumMagic,
+            storedItemInstanceId, storedItemName, storedItemDescription, storedItemHasVisualColor, storedItemVisualColor);
+        if (!wasRemoteControlled) ClockworkPuppetBoxDriver.EndActiveRemoteControl();
+    }
     public bool IsDestroyed => isDestroyed;
     public bool IsClockworkPuppetDriven => storedPuppetDriver != null;
     public bool IsClockworkPuppetMoving =>
@@ -115,7 +137,7 @@ public sealed class CardboardBoxPickupItem : PickupItemBase
 
     protected override bool ApplyUseEffect(ZeldaCharacterData user)
     {
-        if (user == null || user is GhostZeldaCharacterData)
+        if (user == null || user.IsGhostLike)
         {
             return false;
         }

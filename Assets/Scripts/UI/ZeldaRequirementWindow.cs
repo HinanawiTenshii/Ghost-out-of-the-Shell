@@ -86,6 +86,7 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
         UpdateScreenPosition();
 
         bool shouldBeVisible = !DocumentReader.IsInputBlocked &&
+                               !ClockworkPuppetRuntime.BlocksCharacterInput &&
                                Input.GetMouseButton(1) &&
                                IsSourceInsideCameraVision();
         if (shouldBeVisible != isVisible)
@@ -181,6 +182,7 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
             icons[i].preserveAspect = true;
             icons[i].raycastTarget = false;
         }
+        CRTScreenEffect.RegisterCanvas(overlayCanvas);
     }
 
     private static void ConfigureResponsiveScaling(GameObject canvasObject)
@@ -447,6 +449,7 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
             highlightImages[i] = image;
         }
 
+        CRTScreenEffect.RegisterCanvas(highlightOverlayCanvas);
         highlightOverlayObject.SetActive(false);
     }
 
@@ -604,16 +607,8 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
         }
 
         frameSprite = CreateFrameSprite();
-        swordSprite = CreatePatternSprite(new[]
-        {
-            ".#.......", "..#......", "...#.....", ".######..", "....##...",
-            ".....##..", "......##.", ".......##", "........#"
-        }, "Requirement Sword");
-        wrenchSprite = CreatePatternSprite(new[]
-        {
-            ".##......", ".###.....", "..###....", "...###...", "....###..",
-            ".....###.", "....####.", "...##..##", "...##..##"
-        }, "Requirement Wrench");
+        swordSprite = ZeldaHealthHeartsUI.CreateStrengthIcon(out _);
+        wrenchSprite = ZeldaHealthHeartsUI.CreateSkillIcon(out _);
         solidSprite = CreateSolidSprite();
     }
 

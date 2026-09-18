@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 /// restores its gameplay objects instead of resetting the level.
 /// </summary>
 [DefaultExecutionOrder(-500)]
-public sealed class SceneTravelStateManager : MonoBehaviour
+public sealed partial class SceneTravelStateManager : MonoBehaviour
 {
     [Serializable]
     private sealed class ObjectState
@@ -26,6 +26,7 @@ public sealed class SceneTravelStateManager : MonoBehaviour
         public bool hasAi;
         public bool aiEnabled;
         public ZeldaAiState aiState;
+        public ZeldaCharacterAiBase.SaveState savedAi;
         public bool hasDoor;
         public bool doorLocked;
         public bool doorOpen;
@@ -33,6 +34,18 @@ public sealed class SceneTravelStateManager : MonoBehaviour
         public bool leverIsOn;
         public bool hasItemSubmissionStation;
         public SpecificItemSubmissionStation.RuntimeState itemSubmissionState;
+        public string pickupId, pickupIdentity;
+        public List<SavedScalarFields.Value> pickupFields;
+        public bool hasPickupColor;
+        public Color pickupColor;
+        public List<SavedScalarFields.Value> documentFields;
+        public List<SavedScalarFields.Value> doorDataFields;
+        public string deviceKind, deviceItemId, leverPath;
+        public bool deviceRemote, deviceAttached;
+        public List<SavedScalarFields.Value> deviceFields;
+        public TimedLeverObjectToggle.SaveState timedToggle;
+        public string deviceOwnerPath;
+        public bool deviceOwnedByPlayer;
     }
 
     private sealed class SceneState
@@ -74,9 +87,46 @@ public sealed class SceneTravelStateManager : MonoBehaviour
         quickRestartSceneState != null &&
         !string.IsNullOrEmpty(quickRestartSceneName);
     public bool IsQuickRestartPending => quickRestartPending;
+    public bool LastQuickRestartRestoreSucceeded { get; private set; }
     public bool IsSceneTravelRestoreInProgress =>
         sceneTravelRestoreInProgress;
     public event Action QuickRestartCompleted;
+
+    public bool TryGetMapDoorState(string sceneName, string objectId, out bool open)
+    {
+        open = false;
+        if (string.IsNullOrEmpty(sceneName) || string.IsNullOrEmpty(objectId) ||
+            !sceneStates.TryGetValue(sceneName, out SceneState scene) ||
+            !scene.objects.TryGetValue(objectId, out ObjectState state) || !state.hasDoor) return false;
+        open = state.doorOpen;
+        return true;
+    }
+
+    // Match the named-hierarchy IDs without adding components to an editor scene.
+    public static string GetMapObjectId(Transform target)
+    {
+        SceneTravelStableId existing = target.GetComponent<SceneTravelStableId>();
+        if (existing != null && !string.IsNullOrEmpty(existing.StableId)) return existing.StableId;
+        int ordinal = 0;
+        if (target.parent != null)
+        {
+            for (int i = 0; i < target.GetSiblingIndex(); i++)
+            {
+                Transform sibling = target.parent.GetChild(i);
+                if (sibling.name == target.name && sibling.gameObject.hideFlags == HideFlags.None) ordinal++;
+            }
+        }
+        else
+        {
+            foreach (GameObject root in target.gameObject.scene.GetRootGameObjects())
+            {
+                if (root == target.gameObject) break;
+                if (root.name == target.name && root.hideFlags == HideFlags.None) ordinal++;
+            }
+        }
+        string segment = BuildStableSegment(target.name, ordinal);
+        return target.parent != null ? GetMapObjectId(target.parent) + "/" + segment : segment;
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void EnsureCreatedBeforeFirstSceneLoads()
@@ -129,6 +179,13 @@ public sealed class SceneTravelStateManager : MonoBehaviour
 
     public void TravelToScene(string targetSceneName, Vector2 arrivalPosition)
     {
+        if (string.IsNullOrWhiteSpace(targetSceneName)) return;
+        RetroSceneLoadReveal.BeginTransition(targetSceneName.Trim(),
+            () => TravelToSceneCovered(targetSceneName, arrivalPosition));
+    }
+
+    private void TravelToSceneCovered(string targetSceneName, Vector2 arrivalPosition)
+    {
         Scene currentScene = SceneManager.GetActiveScene();
         if (!currentScene.IsValid() || string.IsNullOrWhiteSpace(targetSceneName))
         {
@@ -158,6 +215,8 @@ public sealed class SceneTravelStateManager : MonoBehaviour
     /// </summary>
     public void ResetAllSceneStates()
     {
+        if (!GameSaveSystem.IsLoading && GameSaveSystem.Instance != null)
+            GameSaveSystem.Instance.Save(0, false);
         StopAllCoroutines();
         sceneStates.Clear();
 
@@ -228,6 +287,7 @@ public sealed class SceneTravelStateManager : MonoBehaviour
         RestoreScene(scene);
         ReclaimTravelingCharacterControl();
         yield return ApplyArrivalAfterSceneInitialization();
+        if (sceneStates.TryGetValue(scene.name, out var restoredState)) FinalizeRestoredDevices(scene, restoredState);
         sceneTravelRestoreInProgress = false;
     }
 
@@ -407,6 +467,7 @@ public sealed class SceneTravelStateManager : MonoBehaviour
                 hasAi = ai != null,
                 aiEnabled = ai != null && ai.enabled,
                 aiState = ai != null ? ai.CurrentState : ZeldaAiState.Idle,
+                savedAi = ai != null ? ai.CaptureSaveState() : null,
                 hasDoor = door != null,
                 doorLocked = door != null && door.IsLocked,
                 doorOpen = door != null && door.IsOpen,
@@ -418,6 +479,47 @@ public sealed class SceneTravelStateManager : MonoBehaviour
                     : default(SpecificItemSubmissionStation.RuntimeState)
             };
             snapshot.objects[state.path] = state;
+            var pickup = target.GetComponent<PickupItemBase>();
+            if (pickup != null)
+            {
+                var box = pickup as CardboardBoxPickupItem;
+                if (box != null)
+                {
+                    box.PrepareContentsForSave();
+                    var driver = box.GetComponent<ClockworkPuppetBoxDriver>();
+                    state.deviceRemote = driver != null && driver.IsUnderRemoteControl;
+                }
+                state.pickupId = pickup.ItemId;
+                state.pickupIdentity = pickup.UniqueInstanceId;
+                state.pickupFields = SavedScalarFields.Capture(pickup, true);
+                state.hasPickupColor = pickup.ItemVisual != null;
+                if (state.hasPickupColor) state.pickupColor = pickup.ItemVisual.DisplayColor;
+            }
+            var document = target.GetComponent<DocumentReader>();
+            if (document != null) state.documentFields = SavedScalarFields.Capture(document, true);
+            var doorData = target.GetComponent<DoorData>();
+            if (doorData != null) state.doorDataFields = SavedScalarFields.Capture(doorData);
+            var bomb = target.GetComponent<PlacedBomb>();
+            var timedToggle = target.GetComponent<TimedLeverObjectToggle>();
+            if (timedToggle != null) state.timedToggle = timedToggle.CaptureSaveState();
+            if (bomb != null)
+            {
+                state.deviceKind = "bomb"; state.deviceItemId = bomb.SaveSourceItemId;
+                if (bomb.SaveOwner != null)
+                {
+                    state.deviceOwnerPath = BuildPath(bomb.SaveOwner.transform);
+                    state.deviceOwnedByPlayer = bomb.SaveOwner.GetComponent<ZeldaFourWayMover>() == ZeldaRuntimeRegistry.GetControlledMover();
+                }
+                state.deviceFields = SavedScalarFields.Capture(bomb, true);
+            }
+            var puppet = target.GetComponent<ClockworkPuppetRuntime>();
+            if (puppet != null)
+            {
+                state.deviceKind = "puppet"; state.deviceItemId = puppet.SaveSourceItemId;
+                state.deviceRemote = puppet.IsUnderRemoteControl; state.deviceAttached = puppet.SaveAttached;
+                state.leverPath = puppet.SaveTargetLever != null ? BuildPath(puppet.SaveTargetLever.transform) : "";
+                state.deviceFields = SavedScalarFields.Capture(puppet, true);
+            }
         }
 
         for (int i = 0; i < target.childCount; i++)
@@ -485,6 +587,42 @@ public sealed class SceneTravelStateManager : MonoBehaviour
             IndexHierarchy(roots[i].transform, currentObjects);
         }
 
+        // Dropped/produced pickups are runtime roots and do not exist in the authored scene.
+        PickupItemBase[] pickupTemplates = null;
+        foreach (var saved in snapshot.objects.Values)
+        {
+            if (!currentObjects.ContainsKey(saved.path) && !string.IsNullOrEmpty(saved.deviceKind))
+            {
+                if (pickupTemplates == null) pickupTemplates = SaveGameCatalog.LoadPickupTemplates();
+                foreach (var template in pickupTemplates)
+                {
+                    if (template.ItemId != saved.deviceItemId) continue;
+                    Component device = null;
+                    if (saved.deviceKind == "bomb" && template is BombPickupItem bombTemplate)
+                        device = bombTemplate.CreateConfiguredPlacedBomb(saved.localPosition, null);
+                    if (saved.deviceKind == "puppet" && template is ClockworkPuppetPickupItem puppetTemplate)
+                        device = puppetTemplate.DeployPuppet(saved.localPosition, null, null, -1);
+                    if (device == null) break;
+                    device.gameObject.AddComponent<SceneTravelStableId>().Initialize(saved.path);
+                    currentObjects[saved.path] = device.transform;
+                    SavedScalarFields.Apply(device, saved.deviceFields);
+                    break;
+                }
+            }
+            if (currentObjects.ContainsKey(saved.path) || string.IsNullOrEmpty(saved.pickupId)) continue;
+            if (pickupTemplates == null) pickupTemplates = SaveGameCatalog.LoadPickupTemplates();
+            foreach (var template in pickupTemplates)
+            {
+                if (template.ItemId != saved.pickupId) continue;
+                var item = Instantiate(template, saved.localPosition, saved.localRotation);
+                var identity = item.GetComponent<SceneTravelStableId>();
+                if (identity == null) identity = item.gameObject.AddComponent<SceneTravelStableId>();
+                identity.Initialize(saved.path);
+                currentObjects[saved.path] = item.transform;
+                break;
+            }
+        }
+
         int matchingObjectCount = 0;
         foreach (string savedPath in snapshot.objects.Keys)
         {
@@ -521,6 +659,17 @@ public sealed class SceneTravelStateManager : MonoBehaviour
             }
 
             ObjectState state = entry.Value;
+            var pickup = target.GetComponent<PickupItemBase>();
+            if (pickup != null && !string.IsNullOrEmpty(state.pickupId))
+            {
+                SavedScalarFields.Apply(pickup, state.pickupFields);
+                pickup.SetUniqueInstanceId(state.pickupIdentity);
+                if (state.hasPickupColor && pickup.ItemVisual != null) pickup.ItemVisual.SetDisplayColor(state.pickupColor);
+            }
+            var document = target.GetComponent<DocumentReader>();
+            if (document != null) SavedScalarFields.Apply(document, state.documentFields);
+            var doorData = target.GetComponent<DoorData>();
+            if (doorData != null) SavedScalarFields.Apply(doorData, state.doorDataFields);
             target.localPosition = state.localPosition;
             target.localRotation = state.localRotation;
             target.localScale = state.localScale;
@@ -672,21 +821,20 @@ public sealed class SceneTravelStateManager : MonoBehaviour
             return false;
         }
 
-        PersistentInventory inventory = PersistentInventory.Instance;
-        if (inventory != null)
+        return RetroSceneLoadReveal.BeginTransition(quickRestartSceneName, () =>
         {
-            inventory.PreserveForNextSceneLoad();
-        }
-
-        quickRestartPending = true;
-        sceneTravelRestoreInProgress = false;
-        restorePending = false;
-        SceneManager.LoadScene(quickRestartSceneName);
-        return true;
+            PersistentInventory inventory = PersistentInventory.Instance;
+            if (inventory != null) inventory.PreserveForNextSceneLoad();
+            quickRestartPending = true;
+            sceneTravelRestoreInProgress = false;
+            restorePending = false;
+            SceneManager.LoadScene(quickRestartSceneName);
+        });
     }
 
     private IEnumerator RestoreQuickRestartAfterSceneLoad(Scene scene)
     {
+        LastQuickRestartRestoreSucceeded = false;
         // Allow scene Awake/Start, singleton duplicate destruction and dynamic
         // Ghost creation to complete before restoring the entry snapshot.
         yield return null;
@@ -774,6 +922,8 @@ public sealed class SceneTravelStateManager : MonoBehaviour
         }
 
         quickRestartPending = false;
+        FinalizeRestoredDevices(scene, quickRestartSceneState);
+        LastQuickRestartRestoreSucceeded = restartMover != null;
         QuickRestartCompleted?.Invoke();
     }
 
@@ -1043,6 +1193,7 @@ public sealed class SceneTravelStateManager : MonoBehaviour
     private static bool ShouldTrack(GameObject candidate)
     {
         return candidate.GetComponent<Renderer>() != null ||
+               candidate.GetComponent<TimedLeverObjectToggle>() != null ||
                candidate.GetComponent<Collider2D>() != null ||
                candidate.GetComponent<PickupItemBase>() != null ||
                candidate.GetComponent<GrowthCollectible>() != null ||

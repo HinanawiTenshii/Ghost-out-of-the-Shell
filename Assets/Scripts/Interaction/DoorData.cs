@@ -20,8 +20,11 @@ public class DoorData : MonoBehaviour
     [SerializeField] private Color investigationPulseColor = Color.white;
 
     private SpriteRenderer spriteRenderer;
-    private Vector3 baseLocalPosition;
+    private SpriteRenderer shakeVisual;
+    private bool originalForceRenderingOff;
     private float shakeTimer;
+    private float shakeElapsed;
+    private bool isShaking;
     private bool isDestroyed;
     private ZeldaRequirementWindow requirementWindow;
 
@@ -31,11 +34,10 @@ public class DoorData : MonoBehaviour
     private void Awake()
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
-        baseLocalPosition = transform.localPosition;
         EnsureRequirementWindow();
     }
 
-    private void Update()
+    private void LateUpdate()
     {
         UpdateShake();
     }
@@ -61,40 +63,113 @@ public class DoorData : MonoBehaviour
             return;
         }
 
+        if (!isShaking)
+        {
+            if (spriteRenderer == null || spriteRenderer.sprite == null) return;
+            GameObject visual = new GameObject("Door Hit Visual");
+            visual.transform.SetParent(transform, false);
+            shakeVisual = visual.AddComponent<SpriteRenderer>();
+            originalForceRenderingOff = spriteRenderer.forceRenderingOff;
+            spriteRenderer.forceRenderingOff = true;
+        }
         shakeTimer = shakeDuration;
+        shakeElapsed = 0f;
+        isShaking = true;
     }
 
     private void UpdateShake()
     {
-        if (shakeTimer <= 0f)
+        if (!isShaking)
         {
-            transform.localPosition = baseLocalPosition;
             return;
         }
 
         shakeTimer = Mathf.Max(0f, shakeTimer - Time.deltaTime);
-        float shake = Mathf.Sin(Time.time * shakeSpeed) * shakeAmount;
-        transform.localPosition = baseLocalPosition + new Vector3(shake, 0f, 0f);
+        shakeElapsed += Time.deltaTime;
+        // Only offset a visual copy. Door transforms and colliders are also
+        // used by hinge physics, quest markers and saved scene positions.
+        if (shakeVisual != null)
+        {
+            shakeVisual.sprite = spriteRenderer.sprite;
+            shakeVisual.color = spriteRenderer.color;
+            shakeVisual.sharedMaterial = spriteRenderer.sharedMaterial;
+            shakeVisual.sortingLayerID = spriteRenderer.sortingLayerID;
+            shakeVisual.sortingOrder = spriteRenderer.sortingOrder;
+            shakeVisual.flipX = spriteRenderer.flipX;
+            shakeVisual.flipY = spriteRenderer.flipY;
+            shakeVisual.drawMode = spriteRenderer.drawMode;
+            shakeVisual.size = spriteRenderer.size;
+            shakeVisual.maskInteraction = spriteRenderer.maskInteraction;
+            shakeVisual.enabled = spriteRenderer.enabled;
+            shakeVisual.gameObject.layer = gameObject.layer;
+            Vector3 worldOffset = new Vector3(
+                Mathf.Cos(shakeElapsed * shakeSpeed),
+                Mathf.Sin(shakeElapsed * shakeSpeed * 0.83f), 0f) * shakeAmount;
+            shakeVisual.transform.localPosition = transform.InverseTransformVector(worldOffset);
+        }
 
         if (shakeTimer <= 0f)
         {
-            transform.localPosition = baseLocalPosition;
+            StopShake();
         }
+    }
+
+    private void StopShake()
+    {
+        if (isShaking && spriteRenderer != null)
+            spriteRenderer.forceRenderingOff = originalForceRenderingOff;
+        if (shakeVisual != null)
+        {
+            shakeVisual.gameObject.SetActive(false);
+            Destroy(shakeVisual.gameObject);
+            shakeVisual = null;
+        }
+        isShaking = false;
+        shakeTimer = 0f;
+    }
+
+    private void OnDisable()
+    {
+        StopShake();
     }
 
     private void BreakDoor(
         ZeldaCharacterData attackSource,
         bool isDirectCharacterAttack)
     {
+        StopShake();
         isDestroyed = true;
         Vector3 destructionPosition = spriteRenderer != null ? spriteRenderer.bounds.center : transform.position;
         // Destroy is deferred until the end of the frame. Disable the broken
         // object's colliders immediately so it cannot incorrectly block the
         // witness ray cast toward the attacking player.
         Collider2D[] colliders = GetComponentsInChildren<Collider2D>(true);
+        Bounds affectedBounds = default(Bounds);
+        bool hasAffectedBounds = false;
         for (int i = 0; i < colliders.Length; i++)
         {
+            if (colliders[i] == null)
+            {
+                continue;
+            }
+            if (!hasAffectedBounds)
+            {
+                affectedBounds = colliders[i].bounds;
+                hasAffectedBounds = true;
+            }
+            else
+            {
+                affectedBounds.Encapsulate(colliders[i].bounds);
+            }
             colliders[i].enabled = false;
+        }
+        if (hasAffectedBounds)
+        {
+            CameraCircularVision.NotifyBlockersChanged(affectedBounds);
+        }
+        else
+        {
+            CameraCircularVision.NotifyBlockersChanged();
         }
 
         NotifyNearbyAi(

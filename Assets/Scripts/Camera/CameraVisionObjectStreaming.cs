@@ -5,15 +5,15 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// Suspends spatial scene objects outside CameraCircularVision and restores
-/// them when their stored bounds enter visible space again.
+/// Suspends spatial scene objects outside the camera viewport plus a preload
+/// margin. Character vision/occlusion remains independent of object streaming.
 /// </summary>
 [DefaultExecutionOrder(1000)]
 [RequireComponent(typeof(Camera), typeof(CameraCircularVision))]
 public sealed class CameraVisionObjectStreaming : MonoBehaviour
 {
     [Header("Streaming Toggle")]
-    [SerializeField, Tooltip("Enable objects to unload outside the camera vision mask.")]
+    [SerializeField, Tooltip("Unload objects outside the camera viewport and its preload margin.")]
     private bool enableVisionStreaming = true;
 
     [Header("Streaming Settings")]
@@ -21,14 +21,16 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
     [SerializeField, Min(0f)] private float unloadDelay = 0.3f;
     [SerializeField, Min(0.1f)] private float sceneRescanInterval = 1f;
     [SerializeField] private bool restoreObjectsWhenDisabled = true;
-    [SerializeField, Min(0f), Tooltip("Extra radius retained for Blocks objects to prevent boundary flicker.")]
+    [SerializeField, Min(0f), Tooltip("Additional world-space retention margin for active Blocks objects to prevent boundary flicker.")]
     private float blockVisibilityHysteresis = 0.6f;
     [SerializeField, Min(1), Tooltip("Maximum registered objects whose visibility is evaluated per frame.")]
     private int visibilityChecksPerFrame = 48;
-    [SerializeField, Min(1), Tooltip("Maximum objects enabled in one frame. Lower values reduce loading spikes.")]
+    [SerializeField, Min(1), Tooltip("Background preload activations per frame. Objects close to or inside the viewport are restored immediately to avoid pop-in.")]
     private int maximumActivationsPerFrame = 1;
-    [SerializeField, Min(0f), Tooltip("Objects begin loading this far before entering the visible mask.")]
+    [SerializeField, Min(0f), Tooltip("Minimum world-space preload margin outside every camera edge.")]
     private float activationPreloadPadding = 1.25f;
+    [SerializeField, Range(0f, 0.5f), Tooltip("Preload margin as a fraction of the shorter orthographic camera dimension. The larger of this and the minimum margin is used.")]
+    private float viewportPreloadFraction = 0.1f;
     [SerializeField, Min(0.1f), Tooltip("Maximum real-time milliseconds spent activating objects in one frame. One object is always allowed so loading cannot stall.")]
     private float activationTimeBudgetMilliseconds = 1.5f;
     [SerializeField, Min(1), Tooltip("Maximum objects disabled in one frame.")]
@@ -45,6 +47,7 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
         public bool containsVisionBlockLayer;
         public bool containsLever;
         public ZeldaFourWayMover[] movers;
+        public ZeldaCharacterAiBase[] aiCharacters;
         public float lastVisibilityCheckTime;
         public bool queuedForActivation;
     }
@@ -57,12 +60,21 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
 
     private CameraCircularVision circularVision;
     private Camera streamingCamera;
+    private readonly Plane[] streamingPlanes = new Plane[6];
+    private bool hasStreamingPlanes;
+    private float currentPreloadPadding;
     private float sceneRescanTimer;
     private bool streamingWasEnabled;
     private bool puppetHighlightWasActive;
     private int visibilityCursor;
 
     public bool StreamingEnabled => enableVisionStreaming;
+    public void PrepareSoulTransferView()
+    {
+        // A one-off restore while fully covered avoids showing budgeted activation in progress.
+        RestoreAllObjects();
+        if (circularVision != null) circularVision.RefreshSceneCameraSettings();
+    }
 
     public void RefreshSceneCameraSettings()
     {
@@ -160,7 +172,9 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
             BeginDiscoveryScan();
         }
 
+        RefreshStreamingViewport();
         ProcessDiscoveryScan();
+        RestoreObjectsNearViewport();
         QueueLeverHighlightsWhenSelectionStarts();
         UpdateStreaming();
         ProcessActivationQueue();
@@ -287,6 +301,7 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
                     containsLever =
                         candidate.GetComponentInChildren<LeverData>(true) != null,
                     movers = candidate.GetComponentsInChildren<ZeldaFourWayMover>(true),
+                    aiCharacters = candidate.GetComponentsInChildren<ZeldaCharacterAiBase>(true),
                     lastVisibilityCheckTime = Time.unscaledTime - visibilityCheckInterval
                 };
                 managedObjects.Add(managedObject);
@@ -341,8 +356,10 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
             // A character may become player-controlled after it was originally
             // registered as an AI object. Never suspend the current player,
             // even during rapid camera movement or possession transitions.
-            if (ContainsActivePlayer(managedObject.movers) ||
-                HasActivePlayerAncestor(target.transform))
+            if (HasRuntimeStreamingExemption(target.transform) ||
+                ContainsActivePlayer(managedObject.movers) ||
+                HasActivePlayerAncestor(target.transform) ||
+                ContainsStreamingRetainedAi(managedObject.aiCharacters))
             {
                 managedObject.outsideTimer = 0f;
                 if (managedObject.suspendedByManager)
@@ -393,6 +410,18 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
 
     private void ProcessActivationQueue()
     {
+        // The viewport safety pass may have already restored queued objects.
+        // Discard them without consuming the background activation budget.
+        for (int i = activationQueue.Count - 1; i >= 0; i--)
+        {
+            ManagedObject pending = activationQueue[i];
+            if (pending == null || pending.gameObject == null || !pending.suspendedByManager)
+            {
+                if (pending != null) pending.queuedForActivation = false;
+                activationQueue.RemoveAt(i);
+            }
+        }
+
         int remainingBudget = Mathf.Max(1, maximumActivationsPerFrame);
         float activationStartTime = Time.realtimeSinceStartup;
         int activatedThisFrame = 0;
@@ -422,8 +451,10 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
 
             bool stillVisible = IsInsideStreamingRetentionRange(managedObject);
             if (!stillVisible &&
+                !HasRuntimeStreamingExemption(target.transform) &&
                 !ContainsActivePlayer(managedObject.movers) &&
-                !HasActivePlayerAncestor(target.transform))
+                !HasActivePlayerAncestor(target.transform) &&
+                !ContainsStreamingRetainedAi(managedObject.aiCharacters))
             {
                 continue;
             }
@@ -473,102 +504,96 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
         Bounds worldBounds = TransformLocalBoundsToWorld(
             target,
             managedObject.localBounds);
-        if (circularVision.IsWorldBoundsInsideAdditionalReveal(worldBounds))
+        if (circularVision != null &&
+            circularVision.IsWorldBoundsInsideAdditionalReveal(worldBounds))
         {
             // Puppet reveal areas are part of the visible world. Apply this
             // before the Blocks-specific retention branch so walls and large
             // scene objects wake together with ordinary renderers.
             return true;
         }
-        if (managedObject.containsLever &&
-            ClockworkPuppetLeverHighlighter.IsHighlightModeActive &&
-            IsBoundsInsideCameraViewport(target, managedObject.localBounds))
+        float padding = currentPreloadPadding;
+        if (managedObject.containsVisionBlockLayer && !managedObject.suspendedByManager)
         {
-            // Lever outlines are an inventory targeting aid. Keep levers in
-            // the camera rectangle loaded while that aid is selected, even
-            // when walls or the circular vision mask would normally suspend
-            // their hierarchy.
-            return true;
+            padding += blockVisibilityHysteresis;
         }
-        if (managedObject.containsVisionBlockLayer)
-        {
-            return IsBlockBoundsNearVision(
-                target,
-                managedObject.localBounds,
-                managedObject.suspendedByManager);
-        }
-
-        // Exact mask intersection remains the primary test. The surrounding
-        // preload band wakes nearby objects before they become visible and
-        // retains them there, preventing activate/deactivate thrashing.
-        return IsBoundsVisible(target, managedObject.localBounds) ||
-               IsBoundsWithinPreloadRange(target, managedObject.localBounds);
+        return !hasStreamingPlanes || IntersectsStreamingViewport(
+            worldBounds, streamingPlanes, padding);
     }
 
-    private bool IsBoundsInsideCameraViewport(
-        Transform target,
-        Bounds localBounds)
+    private void RefreshStreamingViewport()
     {
         if (streamingCamera == null)
         {
             streamingCamera = GetComponent<Camera>();
         }
-        if (streamingCamera == null)
+        hasStreamingPlanes = streamingCamera != null;
+        if (!hasStreamingPlanes) return;
+
+        // Executed after camera follow/zoom, every frame, with no per-frame
+        // plane array allocation. Also handles aspect, rotation and projection changes.
+        GeometryUtility.CalculateFrustumPlanes(streamingCamera, streamingPlanes);
+        currentPreloadPadding = Mathf.Max(0f, activationPreloadPadding);
+        if (streamingCamera.orthographic)
         {
-            return false;
+            float shorterDimension = 2f * streamingCamera.orthographicSize *
+                                     Mathf.Min(1f, streamingCamera.aspect);
+            currentPreloadPadding = Mathf.Max(currentPreloadPadding,
+                shorterDimension * viewportPreloadFraction);
         }
-
-        Bounds worldBounds = TransformLocalBoundsToWorld(target, localBounds);
-        Vector3 viewportMin = streamingCamera.WorldToViewportPoint(
-            worldBounds.min);
-        Vector3 viewportMax = streamingCamera.WorldToViewportPoint(
-            worldBounds.max);
-        float minX = Mathf.Min(viewportMin.x, viewportMax.x);
-        float maxX = Mathf.Max(viewportMin.x, viewportMax.x);
-        float minY = Mathf.Min(viewportMin.y, viewportMax.y);
-        float maxY = Mathf.Max(viewportMin.y, viewportMax.y);
-        return viewportMax.z >= 0f && maxX >= 0f && minX <= 1f &&
-               maxY >= 0f && minY <= 1f;
     }
 
-    private bool IsBoundsWithinPreloadRange(Transform target, Bounds localBounds)
+    private bool IsBoundsInsideCameraViewport(Transform target, Bounds localBounds)
     {
-        Bounds worldBounds = TransformLocalBoundsToWorld(target, localBounds);
-        Vector3 cameraPoint = transform.position;
-        cameraPoint.z = worldBounds.center.z;
-        float radius = Mathf.Max(
-            0.1f,
-            circularVision.VisionMaskRadius + activationPreloadPadding);
-        return worldBounds.SqrDistance(cameraPoint) <= radius * radius;
+        return !hasStreamingPlanes || IntersectsStreamingViewport(
+            TransformLocalBoundsToWorld(target, localBounds), streamingPlanes, 0f);
     }
 
-    private bool IsBoundsVisible(Transform target, Bounds localBounds)
+    private static bool IntersectsStreamingViewport(
+        Bounds worldBounds, Plane[] planes, float padding)
     {
-        Bounds worldBounds = TransformLocalBoundsToWorld(target, localBounds);
-        return circularVision.IsWorldBoundsVisible(worldBounds, target);
+        Vector3 extents = worldBounds.extents;
+        for (int i = 0; i < 6; i++)
+        {
+            Vector3 normal = planes[i].normal;
+            float projectedExtent = Mathf.Abs(normal.x) * extents.x +
+                                    Mathf.Abs(normal.y) * extents.y +
+                                    Mathf.Abs(normal.z) * extents.z;
+            // Unity orders the side planes first, followed by near/far planes.
+            // Expand all four edges, including corners, but not the depth range.
+            float margin = i < 4 ? padding : 0f;
+            if (planes[i].GetDistanceToPoint(worldBounds.center) +
+                projectedExtent + margin < 0f)
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
-    private bool IsBlockBoundsNearVision(
-        Transform target,
-        Bounds localBounds,
-        bool currentlySuspended)
+    private void RestoreObjectsNearViewport()
     {
-        Bounds worldBounds = TransformLocalBoundsToWorld(target, localBounds);
-        Vector3 cameraPoint = transform.position;
-        cameraPoint.z = worldBounds.center.z;
+        // A cheap bounds-only safety pass must not wait for the round-robin
+        // visibility checks or one-object activation budget. The inner half
+        // of the preload band provides headroom even on fast pans/zoom-outs.
+        // Outer-band loading and all unloading retain their normal budgets.
+        float urgentPadding = currentPreloadPadding * 0.5f;
+        for (int i = 0; i < managedObjects.Count; i++)
+        {
+            ManagedObject managedObject = managedObjects[i];
+            if (!managedObject.suspendedByManager || managedObject.gameObject == null)
+                continue;
 
-        // A smaller threshold is used to wake a suspended block and a larger
-        // one to retain an active block. This dead band prevents repeated
-        // toggling when a large collider sits on the vision boundary.
-        float wakePadding =
-            blockVisibilityHysteresis * 0.35f + activationPreloadPadding;
-        float padding = currentlySuspended
-            ? wakePadding
-            : Mathf.Max(blockVisibilityHysteresis, wakePadding);
-        float radius = Mathf.Max(
-            0.1f,
-            circularVision.VisionMaskRadius + padding);
-        return worldBounds.SqrDistance(cameraPoint) <= radius * radius;
+            Bounds worldBounds = TransformLocalBoundsToWorld(
+                managedObject.gameObject.transform, managedObject.localBounds);
+            if (hasStreamingPlanes &&
+                !IntersectsStreamingViewport(worldBounds, streamingPlanes, urgentPadding))
+                continue;
+
+            managedObject.gameObject.SetActive(true);
+            managedObject.suspendedByManager = false;
+            managedObject.outsideTimer = 0f;
+        }
     }
 
     private static Bounds TransformLocalBoundsToWorld(Transform target, Bounds localBounds)
@@ -653,6 +678,26 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
         return false;
     }
 
+    private static bool ContainsStreamingRetainedAi(
+        ZeldaCharacterAiBase[] aiCharacters)
+    {
+        if (aiCharacters == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < aiCharacters.Length; i++)
+        {
+            ZeldaCharacterAiBase ai = aiCharacters[i];
+            if (ai != null && ai.RequiresVisionStreamingRetention)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool HasActivePlayerAncestor(Transform candidate)
     {
         Transform current = candidate != null ? candidate.parent : null;
@@ -669,6 +714,21 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
         }
 
         return false;
+    }
+
+    private static bool HasRuntimeStreamingExemption(Transform candidate)
+    {
+        // Soul/domino marks also add this at runtime. It is not exclusive to
+        // remote puppet control: linked characters must keep simulating.
+        if (candidate == null)
+        {
+            return false;
+        }
+
+        return candidate.GetComponentInParent<
+                   CameraVisionStreamingExempt>(true) != null ||
+               candidate.GetComponentInChildren<
+                   CameraVisionStreamingExempt>(true) != null;
     }
 
     private static bool IsPersistentObject(GameObject candidate)
@@ -830,6 +890,7 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
         visibilityChecksPerFrame = Mathf.Max(1, visibilityChecksPerFrame);
         maximumActivationsPerFrame = Mathf.Max(1, maximumActivationsPerFrame);
         activationPreloadPadding = Mathf.Max(0f, activationPreloadPadding);
+        viewportPreloadFraction = Mathf.Clamp(viewportPreloadFraction, 0f, 0.5f);
         activationTimeBudgetMilliseconds =
             Mathf.Max(0.1f, activationTimeBudgetMilliseconds);
         maximumSuspensionsPerFrame = Mathf.Max(1, maximumSuspensionsPerFrame);

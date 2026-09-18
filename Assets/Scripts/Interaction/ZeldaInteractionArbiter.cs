@@ -36,6 +36,10 @@ public static class ZeldaInteractionArbiter
     private static Component selectedOwner;
     private static ZeldaFourWayMover selectedMover;
     private static KeyCode selectedKey;
+    private static bool IsGhostFormInteraction(ZeldaFourWayMover mover, KeyCode key)
+    {
+        return key != KeyCode.F && mover != null && mover.GetComponent<ZeldaCharacterData>() != null && mover.GetComponent<ZeldaCharacterData>().IsGhostForm;
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStatics()
@@ -60,7 +64,8 @@ public static class ZeldaInteractionArbiter
         Vector2 interactionPosition,
         Action action)
     {
-        if (owner == null || mover == null || action == null ||
+        if (IsGhostFormInteraction(mover, key) || ClockworkPuppetRuntime.BlocksCharacterInput ||
+            owner == null || mover == null || action == null ||
             !owner.gameObject.activeInHierarchy || !mover.isActiveAndEnabled)
         {
             return;
@@ -85,6 +90,12 @@ public static class ZeldaInteractionArbiter
         Vector2 interactionPosition,
         Action<bool> setPromptVisible)
     {
+        if (IsGhostFormInteraction(mover, key) || ClockworkPuppetRuntime.BlocksCharacterInput)
+        {
+            setPromptVisible?.Invoke(false);
+            return;
+        }
+
         if (owner == null || mover == null || setPromptVisible == null ||
             !owner.gameObject.activeInHierarchy || !mover.isActiveAndEnabled)
         {
@@ -116,6 +127,20 @@ public static class ZeldaInteractionArbiter
     internal static void ResolveCurrentFrame()
     {
         int frame = Time.frameCount;
+        if (ClockworkPuppetRuntime.BlocksCharacterInput || SignpostInteraction.BlocksInput)
+        {
+            for (int i = 0; i < Offers.Count; i++)
+            {
+                Offers[i].setPromptVisible?.Invoke(false);
+            }
+            Offers.Clear();
+            Requests.Clear();
+            selectedOwner = null;
+            selectedMover = null;
+            selectedKey = KeyCode.None;
+            return;
+        }
+
         Offers.RemoveAll(offer => offer.frame < frame);
         Requests.RemoveAll(request => request.frame < frame);
         int bestIndex = -1;
@@ -126,7 +151,7 @@ public static class ZeldaInteractionArbiter
         for (int i = 0; i < Offers.Count; i++)
         {
             Offer offer = Offers[i];
-            if (offer.frame != frame || offer.owner == null ||
+            if (IsGhostFormInteraction(offer.mover, offer.key) || offer.frame != frame || offer.owner == null ||
                 offer.mover == null ||
                 !offer.owner.gameObject.activeInHierarchy ||
                 !offer.mover.isActiveAndEnabled)

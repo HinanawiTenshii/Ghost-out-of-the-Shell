@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 7832618691216883885}
   - component: {fileID: 7832618691216883886}
   - component: {fileID: 4657559875753840611}
+  - component: {fileID: 7832618691216883900}
   m_Layer: 0
   m_Name: LegendaryGuardian
   m_TagString: Untagged
@@ -22,6 +23,18 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &7832618691216883900
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7832618691216883880}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a9d123410a2e4b9f94aa58755e741002, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
 --- !u!4 &7832618691216883889
 Transform:
   m_ObjectHideFlags: 0
@@ -148,6 +161,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6d0b8d13d21746a8ba6b4ceaf2eec3a7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  cameraOrthographicSize: 7
+  playerVisionRadius: 13
+  sceneCameraOverrides: []
   health: 9
   skillValue: 2
   permissionLevel: 3
@@ -203,13 +219,13 @@ MonoBehaviour:
   collisionSkinWidth: 0.01
   deathGhostPrefab: {fileID: 4527040845616928534, guid: 3686e58a077f8534bbf32cc6244eab34, type: 3}
   sprintKey: 32
-  sprintSpeedMultiplier: 1.55
-  maximumStamina: 9
+  sprintSpeedMultiplier: 2
+  maximumStamina: 15
   staminaConsumptionPerSecond: 1
   staminaRecoveryDelay: 1.25
-  staminaRecoveryPerSecond: 1.4
+  staminaRecoveryPerSecond: 1.5
   exhaustedResumeThreshold: 0.25
-  staminaProgressOffset: {x: 0, y: 1.25}
+  staminaProgressOffset: {x: 0, y: 1.3}
   staminaProgressScale: 0.8
   staminaProgressColor: {r: 0.22, g: 0.86, b: 0.4, a: 1}
 --- !u!114 &4657559875753840611
@@ -240,7 +256,7 @@ MonoBehaviour:
   attackDistance: 1.1
   attackFacingTolerance: 15
   attackCooldown: 0.35
-  regularHostileLoseSightDelay: 1.5
+  regularHostileLoseSightDelay: 7
   solidCollisionLayers:
     serializedVersion: 2
     m_Bits: 4294967295

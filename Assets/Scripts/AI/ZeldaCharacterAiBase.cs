@@ -8,7 +8,8 @@ public enum ZeldaAiState
     Alert,
     Search,
     Recovery,
-    Hostile
+    Hostile,
+    Stunned
 }
 
 [RequireComponent(typeof(Rigidbody2D))]
@@ -39,6 +40,8 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     [SerializeField, Range(4, 180)] private int visionRayCount = 48;
     [SerializeField] private LayerMask visionObstacleLayers = ~0;
     [SerializeField] private Color visionColor = new Color(0.45f, 0.8f, 1f, 0.22f);
+    [Tooltip("Visual-only vision mesh refresh interval. Perception checks remain fully responsive.")]
+    [SerializeField, Min(0.02f)] private float visionVisualRefreshInterval = 0.08f;
 
     [Header("Suspicion")]
     [SerializeField, Min(0f)] private float immediateResponseDistance = 2f;
@@ -56,7 +59,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     [SerializeField, Min(0f)] private float attackDistance = 1.1f;
     [SerializeField, Range(0f, 180f)] private float attackFacingTolerance = 20f;
     [SerializeField, Min(0f)] private float attackCooldown = 0.35f;
-    [SerializeField, Min(0f)] private float regularHostileLoseSightDelay = 1.5f;
+    [SerializeField, Min(0f)] private float regularHostileLoseSightDelay = 7f;
     [SerializeField] private LayerMask solidCollisionLayers = ~0;
     [SerializeField, Min(0f)] private float collisionSkinWidth = 0.01f;
 
@@ -147,6 +150,12 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     [SerializeField, Min(0.2f)] private float gridPathMaintenanceInterval = 1.25f;
     [Tooltip("Maximum number of complete A* builds shared by all AI characters in one frame. This spreads expensive physics-grid scans across frames.")]
     [SerializeField, Range(1, 8)] private int maximumAStarBuildsPerFrame = 1;
+    [Tooltip("Minimum real-time spacing between complete A* builds shared by every AI. The spacing grows automatically when many NPCs are hostile.")]
+    [SerializeField, Min(0.01f)] private float globalAStarBuildInterval = 0.04f;
+    [Tooltip("Minimum spacing between the large/fine fallback A* passes shared by every AI.")]
+    [SerializeField, Min(0.05f)] private float expensiveGridFallbackInterval = 0.5f;
+    [Tooltip("How often an existing A* path checks and simplifies its upcoming physics segments.")]
+    [SerializeField, Min(0.02f)] private float gridPathValidationInterval = 0.12f;
     [SerializeField, Min(0.02f)] private float gridWaypointTolerance = 0.14f;
     [Tooltip("Extra space kept between AI grid paths and solid walls.")]
     [SerializeField, Min(0f)] private float gridWallClearance = 0.16f;
@@ -170,6 +179,8 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     [SerializeField, Range(0.1f, 1f)] private float characterYieldSpeedMultiplier = 0.62f;
     [Tooltip("Seconds between nearby-character separation scans.")]
     [SerializeField, Min(0.01f)] private float characterSeparationRefreshInterval = 0.12f;
+    [Tooltip("Minimum delay before a sharp direction change may force another nearby-character scan.")]
+    [SerializeField, Min(0.01f)] private float characterSeparationForcedRefreshInterval = 0.05f;
 
     [Header("Navigation Debug")]
     [SerializeField] private bool showNavigationDebug = true;
@@ -202,6 +213,8 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     private int cachedVisionRayCount = -1;
     private MeshRenderer visionRenderer;
     private Material visionMaterial;
+    private float nextVisionVisualRefreshTime;
+    private bool hasBuiltVisionMesh;
     private ZeldaAiStateIndicator stateIndicator;
     private ZeldaAiState currentState = ZeldaAiState.Idle;
     private ZeldaFourWayMover targetMover;
@@ -222,6 +235,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     private float cornerOscillationElapsed;
     private float cornerOscillationTravelDistance;
     private PermissionArea activePermissionArea;
+    private ZeldaFourWayMover recognizedPermissionTarget;
     private float warningTimer;
     private bool hostileUntilTargetDeath;
     private bool retaliationHostile;
@@ -230,6 +244,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     private ZeldaFourWayMover suspiciousCardboardBoxWearer;
     private CardboardBoxPickupItem suspiciousGroundCardboardBox;
     private float lastSuspiciousCardboardBoxSeenTime = float.NegativeInfinity;
+    private bool hasCardboardBoxAttractionTarget;
     private bool isInspectingCardboardBox;
     private ZeldaFourWayMover inspectedCardboardBoxWearer;
     private CardboardBoxPickupItem hostileCardboardBox;
@@ -261,6 +276,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     private float cachedCharacterYieldWeight;
     private Vector2 lastSeparationDesiredDirection;
     private float nextSeparationRefreshTime;
+    private float lastSeparationRefreshTime;
     private float[] gridCosts;
     private int[] gridParents;
     private byte[] gridStates;
@@ -283,6 +299,9 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     private int gridPathIndex;
     private float nextGridPathRefreshTime;
     private float nextGridPathMaintenanceTime;
+    private float nextGridPathValidationTime;
+    private bool retainLoadedUntilIdle;
+    private bool hasConsumedUnawareFirstHit;
     private LineRenderer navigationDebugLine;
     private SpriteRenderer navigationDebugTarget;
     private Material navigationDebugMaterial;
@@ -295,8 +314,159 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     private static int nextIncidentAssignmentSlot;
     private static int aStarBudgetFrame = -1;
     private static int aStarBuildsThisFrame;
+    private static float nextGlobalAStarBuildTime;
+    private static float nextExpensiveGridFallbackTime;
+    private static int hostileCountCacheFrame = -1;
+    private static int hostileCountCache;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetNavigationPerformanceState()
+    {
+        aStarBudgetFrame = -1;
+        aStarBuildsThisFrame = 0;
+        nextGlobalAStarBuildTime = 0f;
+        nextExpensiveGridFallbackTime = 0f;
+        hostileCountCacheFrame = -1;
+        hostileCountCache = 0;
+    }
 
     public ZeldaAiState CurrentState => currentState;
+    private ZeldaAiState stateBeforeStun;
+    private float stunRemaining;
+    public bool IsStunned => currentState == ZeldaAiState.Stunned;
+    private float royalCommandRemaining;
+    private ZeldaPossessionProgressBar royalCommandBar;
+    public bool IsIgnoringPlayer => royalCommandRemaining > 0f;
+    public bool CanReceiveRoyalCommand(ZeldaFourWayMover player)
+    {
+        return isActiveAndEnabled && characterData != null && !characterData.IsDead &&
+            !mover.isActiveAndEnabled && targetMover == player &&
+            (currentState == ZeldaAiState.Alert || currentState == ZeldaAiState.Hostile);
+    }
+    public void ReceiveRoyalCommand()
+    {
+        mover.CancelAttackForStun();
+        rb.velocity = Vector2.zero;
+        BeginRecovery();
+        royalCommandRemaining = 5f;
+        UpdateRoyalCommandBar();
+    }
+    private void UpdateRoyalCommandBar()
+    {
+        if (!IsIgnoringPlayer || characterData.IsDead || mover.isActiveAndEnabled)
+        {
+            if (royalCommandBar != null) royalCommandBar.Hide();
+            return;
+        }
+        if (royalCommandBar == null)
+        {
+            royalCommandBar = new GameObject("Royal Command Timer").AddComponent<ZeldaPossessionProgressBar>();
+            royalCommandBar.transform.SetParent(transform, false);
+        }
+        royalCommandBar.transform.localPosition = (Vector3)stateIndicatorOffset + Vector3.up * 0.25f;
+        royalCommandBar.SetProgress(royalCommandRemaining / 5f, new Color(1f, 0.85f, 0.08f));
+    }
+    public float StunRemaining => IsStunned ? stunRemaining : 0f;
+
+    /// <summary>UnityEvent-friendly entry point. Reapplying refreshes the three-second duration.</summary>
+    [ContextMenu("Stun (3 seconds)")]
+    public void Stun()
+    {
+        StunForDuration(3f);
+    }
+
+    public void StunForDuration(float duration)
+    {
+        if (duration <= 0f) return;
+        if (!isActiveAndEnabled || characterData == null || characterData.IsDead || mover.isActiveAndEnabled) return;
+        if (!IsStunned)
+        {
+            stateBeforeStun = currentState;
+            // Suspend, rather than exit/re-enter, so existing state timers and patrol progress survive.
+            currentState = ZeldaAiState.Stunned;
+        }
+        stunRemaining = Mathf.Max(stunRemaining, duration);
+        moveDirection = Vector2.zero;
+        rb.velocity = Vector2.zero;
+        rb.angularVelocity = 0f;
+        mover.CancelAttackForStun();
+        UpdateCharacterVisual();
+        UpdateStateIndicator();
+    }
+
+    private void FinishStun()
+    {
+        currentState = stateBeforeStun;
+        stunRemaining = 0f;
+        InvalidateNavigationPlan();
+        bool reactive = currentState == ZeldaAiState.Suspicious || currentState == ZeldaAiState.Alert || currentState == ZeldaAiState.Hostile;
+        if (reactive)
+        {
+            bool visible = targetMover != null && CanSeePlayer(targetMover);
+            if (suspiciousCardboardBox != null) visible |= CanSeeWornCardboardBox(suspiciousCardboardBox, false);
+            if (suspiciousGroundCardboardBox != null) visible |= CanSeeDrivenGroundCardboardBox(suspiciousGroundCardboardBox, false);
+            if (hostileCardboardBox != null && !hostileCardboardBox.IsDestroyed && hostileCardboardBox.isActiveAndEnabled)
+                visible |= CanSeeWorldPoint(hostileCardboardBox.WorldCenter, hostileCardboardBox.transform);
+            if (!visible)
+            {
+                if (currentState == ZeldaAiState.Hostile) BeginSearch();
+                else BeginRecovery();
+            }
+        }
+        UpdateStateIndicator();
+    }
+    [System.Serializable]
+    public sealed class SaveState
+    {
+        public ZeldaAiState state;
+        public ZeldaAiState stateBeforeStun;
+        public float stunRemaining;
+        public float royalCommandRemaining;
+        public Vector2 facing, home, homeFacing, lastKnownTarget, searchCenter, searchWaypoint;
+        public float suspicion, warning, lostSight, searchTime, attackCooldown;
+        public bool targetsPlayer, retaliation, regular, untilDeath, retained;
+    }
+    public SaveState CaptureSaveState()
+    {
+        return new SaveState {
+            state = currentState, facing = facingDirection, home = initialScenePosition,
+            stateBeforeStun = stateBeforeStun, stunRemaining = stunRemaining,
+            royalCommandRemaining = royalCommandRemaining,
+            homeFacing = initialSceneFacingDirection, lastKnownTarget = lastKnownTargetPosition,
+            searchCenter = searchCenter, searchWaypoint = searchWaypoint,
+            suspicion = suspicionValue, warning = warningTimer, lostSight = regularHostileLostSightTimer,
+            searchTime = searchTimer, attackCooldown = attackCooldownTimer,
+            targetsPlayer = targetMover != null && targetMover == ZeldaRuntimeRegistry.GetControlledMover(),
+            retaliation = retaliationHostile, regular = regularHostile,
+            untilDeath = hostileUntilTargetDeath, retained = retainLoadedUntilIdle
+        };
+    }
+    public void ApplySaveState(SaveState state)
+    {
+        if (state == null) return;
+        royalCommandRemaining = Mathf.Clamp(state.royalCommandRemaining, 0f, 5f);
+        if (IsStunned) currentState = stateBeforeStun;
+        ChangeState(state.state);
+        stateBeforeStun = state.stateBeforeStun == ZeldaAiState.Stunned ? ZeldaAiState.Idle : state.stateBeforeStun;
+        stunRemaining = Mathf.Max(0f, state.stunRemaining);
+        facingDirection = state.facing; initialScenePosition = state.home;
+        initialSceneFacingDirection = state.homeFacing; lastKnownTargetPosition = state.lastKnownTarget;
+        searchCenter = state.searchCenter; searchWaypoint = state.searchWaypoint;
+        suspicionValue = state.suspicion; warningTimer = state.warning;
+        regularHostileLostSightTimer = state.lostSight; searchTimer = state.searchTime;
+        attackCooldownTimer = state.attackCooldown; retaliationHostile = state.retaliation;
+        regularHostile = state.regular; hostileUntilTargetDeath = state.untilDeath;
+        retainLoadedUntilIdle = state.retained;
+        targetMover = state.targetsPlayer ? ZeldaRuntimeRegistry.GetControlledMover() : null;
+        moveDirection = Vector2.zero;
+        InvalidateNavigationPlan();
+        UpdateStateIndicator();
+    }
+    // Read the live state rather than the legacy hostility latch, so suspicion,
+    // alerts, searches and recovery also finish while outside camera range.
+    // Do not gate on isActiveAndEnabled: streaming may need to reactivate a
+    // suspended/restored character that already has a non-idle state.
+    public bool RequiresVisionStreamingRetention => currentState != ZeldaAiState.Idle || IsIgnoringPlayer;
     public Vector2 FacingDirection => facingDirection;
     public ZeldaFourWayMover CurrentTarget => targetMover;
     public float SuspicionValue => suspicionValue;
@@ -311,6 +481,31 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     protected virtual float AiMovementSpeedMultiplier => 1f;
     protected virtual bool EnforcesPermissionAreas => true;
     protected virtual int MinimumPermissionViolationDifference => 1;
+
+    /// <summary>
+    /// Applies the surprise-hit bonus before this AI has become suspicious,
+    /// alerted or hostile. The bonus can only be consumed once during the
+    /// current awareness cycle and is restored after the AI fully returns to
+    /// Idle.
+    /// </summary>
+    public int ResolveIncomingAttackDamage(int baseDamage)
+    {
+        ZeldaAiState awarenessState = IsStunned ? stateBeforeStun : currentState;
+        if (baseDamage <= 0 || !isActiveAndEnabled ||
+            mover == null || mover.isActiveAndEnabled ||
+            hasConsumedUnawareFirstHit ||
+            awarenessState == ZeldaAiState.Suspicious ||
+            awarenessState == ZeldaAiState.Alert ||
+            awarenessState == ZeldaAiState.Hostile)
+        {
+            return baseDamage;
+        }
+
+        hasConsumedUnawareFirstHit = true;
+        return baseDamage > int.MaxValue / 3
+            ? int.MaxValue
+            : baseDamage * 3;
+    }
     protected Vector2 AiMoveDirection
     {
         get => moveDirection;
@@ -324,6 +519,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
     public virtual void InvestigatePosition(Vector2 investigationPosition)
     {
+        if (IsStunned) return;
         if (!isActiveAndEnabled || characterData == null || characterData.IsDead || possessionLocked)
         {
             return;
@@ -331,12 +527,14 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
         targetMover = null;
         activePermissionArea = null;
+        recognizedPermissionTarget = null;
         hostileUntilTargetDeath = false;
         retaliationHostile = false;
         regularHostile = false;
         suspiciousCardboardBox = null;
         suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
+        hasCardboardBoxAttractionTarget = false;
         isInspectingCardboardBox = false;
         inspectedCardboardBoxWearer = null;
         hostileCardboardBox = null;
@@ -503,6 +701,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         ZeldaFourWayMover possessingMover,
         ZeldaFourWayMover newControlledMover)
     {
+        if (IsStunned) return;
         if (!isActiveAndEnabled || possessionLocked || possessingMover == null ||
             newControlledMover == null || possessingMover == mover)
         {
@@ -511,8 +710,8 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
         ZeldaCharacterData possessingData = possessingMover.GetComponent<ZeldaCharacterData>();
         ZeldaCharacterData controlledData = newControlledMover.GetComponent<ZeldaCharacterData>();
-        if (possessingData == null || possessingData is GhostZeldaCharacterData ||
-            controlledData == null || controlledData is GhostZeldaCharacterData)
+        if (possessingData == null || possessingData.IsGhostLike ||
+            controlledData == null || controlledData.IsGhostLike)
         {
             return;
         }
@@ -549,6 +748,9 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             return;
         }
 
+        retainLoadedUntilIdle = capturedState == ZeldaAiState.Hostile ||
+            capturedState == ZeldaAiState.Search ||
+            capturedState == ZeldaAiState.Recovery;
         BeginRecovery();
     }
 
@@ -611,14 +813,22 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void OnEnable()
     {
+        // Normal activation initializes AI afresh; save restoration reapplies
+        // the suspended state and remaining duration through ApplySaveState.
+        if (IsStunned) currentState = stateBeforeStun;
+        stunRemaining = 0f;
+        retainLoadedUntilIdle = false;
+        hasConsumedUnawareFirstHit = false;
         targetMover = null;
         activePermissionArea = null;
+        recognizedPermissionTarget = null;
         hostileUntilTargetDeath = false;
         retaliationHostile = false;
         regularHostile = false;
         suspiciousCardboardBox = null;
         suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
+        hasCardboardBoxAttractionTarget = false;
         isInspectingCardboardBox = false;
         inspectedCardboardBoxWearer = null;
         hostileCardboardBox = null;
@@ -639,6 +849,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void OnDisable()
     {
+        if (royalCommandBar != null) royalCommandBar.Hide();
         moveDirection = Vector2.zero;
         SetPossessionLock(false);
         SetNavigationDebugVisible(false);
@@ -648,6 +859,19 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void Update()
     {
+        royalCommandRemaining = Mathf.Max(0f, royalCommandRemaining - Time.deltaTime);
+        UpdateRoyalCommandBar();
+        if (IsStunned)
+        {
+            moveDirection = Vector2.zero;
+            if (characterData.IsDead) return;
+            float elapsed = Mathf.Min(stunRemaining, Time.deltaTime);
+            // This memory uses an absolute timestamp rather than a delta-time counter.
+            lastSuspiciousCardboardBoxSeenTime += elapsed;
+            stunRemaining -= elapsed;
+            if (stunRemaining <= 0f) FinishStun();
+            return;
+        }
         if (characterData.IsDead)
         {
             moveDirection = Vector2.zero;
@@ -678,6 +902,13 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void FixedUpdate()
     {
+        if (IsStunned)
+        {
+            rb.velocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+            previousFixedPosition = rb.position;
+            return;
+        }
         if (characterData.IsDead || mover.IsAttacking || possessionLocked)
         {
             previousFixedPosition = rb.position;
@@ -898,6 +1129,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             if (overlap == null || overlap == bodyCollider || overlap.isTrigger ||
                 overlap.transform.IsChildOf(transform) ||
                 IsUnlockedDoorCollider(overlap) ||
+                IsNonParticipatingCharacterCollider(overlap) ||
                 overlap.GetComponentInParent<ZeldaCharacterData>() != null)
             {
                 continue;
@@ -921,7 +1153,30 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void LateUpdate()
     {
+        if (IsStunned) return;
+        if (Time.time < nextVisionVisualRefreshTime)
+        {
+            return;
+        }
+
+        float stagger = Mathf.Lerp(
+            0.85f,
+            1.15f,
+            Mathf.Abs(GetInstanceID() % 19) / 19f);
+        nextVisionVisualRefreshTime = Time.time +
+            Mathf.Max(0.02f, visionVisualRefreshInterval) * stagger;
+
+        if (hasBuiltVisionMesh && visionRenderer != null &&
+            !visionRenderer.isVisible)
+        {
+            // Retained hostile/recovering NPCs can be far outside every
+            // camera. Their visual cone has no consumer there; perception is
+            // evaluated separately and is intentionally not skipped.
+            return;
+        }
+
         UpdateVisionMesh();
+        hasBuiltVisionMesh = true;
     }
 
     protected virtual void TickIdle(float deltaTime)
@@ -1298,6 +1553,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual bool CanSeePlayer(ZeldaFourWayMover candidate)
     {
+        if (IsIgnoringPlayer) return false;
         if (candidate == null || !candidate.isActiveAndEnabled || candidate.gameObject == gameObject)
         {
             return false;
@@ -1310,7 +1566,9 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         }
 
         CardboardBoxWearState wornBox = candidate.ActiveCardboardBox;
-        if (wornBox != null && !IsActivelyHostileTo(candidate))
+        if (wornBox != null &&
+            !IsActivelyHostileTo(candidate) &&
+            !IsRecognizedPermissionTarget(candidate))
         {
             return false;
         }
@@ -1330,6 +1588,13 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         return !IsVisionBlocked(origin, toTarget.normalized, toTarget.magnitude, candidate.transform);
     }
 
+    private bool IsRecognizedPermissionTarget(ZeldaFourWayMover candidate)
+    {
+        return candidate != null &&
+            candidate == targetMover &&
+            candidate == recognizedPermissionTarget;
+    }
+
     protected virtual void TryAttackTarget(Vector2 toTarget)
     {
         if (attackCooldownTimer > 0f || !characterData.CanAttack)
@@ -1345,6 +1610,8 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
     public virtual void OnCharacterDamagedBy(ZeldaCharacterData attacker)
     {
+        if (IsIgnoringPlayer) return;
+        if (IsStunned) return;
         if (!isActiveAndEnabled || possessionLocked || attacker == null ||
             attacker == characterData || attacker.IsDead)
         {
@@ -1359,6 +1626,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
         targetMover = attackerMover;
         activePermissionArea = FindHighestPermissionArea(attacker.transform.position);
+        recognizedPermissionTarget = null;
         lastKnownTargetPosition = attacker.transform.position;
         suspicionValue = 0f;
         warningTimer = 0f;
@@ -1368,6 +1636,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         suspiciousCardboardBox = null;
         suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
+        hasCardboardBoxAttractionTarget = false;
         isInspectingCardboardBox = false;
         inspectedCardboardBoxWearer = null;
         hostileCardboardBox = null;
@@ -1385,6 +1654,8 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     /// </summary>
     public virtual bool OnPlayerDestroyedDoor(ZeldaCharacterData attacker)
     {
+        if (IsIgnoringPlayer) return false;
+        if (IsStunned) return false;
         if (!isActiveAndEnabled || possessionLocked || attacker == null ||
             attacker == characterData || attacker.IsDead)
         {
@@ -1402,7 +1673,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         ZeldaCharacterData attackerData =
             attackerMover.GetComponent<ZeldaCharacterData>();
         if (attackerData == null || attackerData.IsDead ||
-            attackerData is GhostZeldaCharacterData)
+            attackerData.IsGhostLike)
         {
             return false;
         }
@@ -1483,6 +1754,8 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
     protected void ChangeState(ZeldaAiState newState)
     {
+        if (IsIgnoringPlayer && (newState == ZeldaAiState.Suspicious || newState == ZeldaAiState.Alert || newState == ZeldaAiState.Hostile)) return;
+        if (IsStunned) return;
         if (currentState == newState)
         {
             return;
@@ -1491,6 +1764,15 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         ZeldaAiState previousState = currentState;
         OnStateExited(previousState, newState);
         currentState = newState;
+        if (newState == ZeldaAiState.Hostile)
+        {
+            retainLoadedUntilIdle = true;
+        }
+        else if (newState == ZeldaAiState.Idle)
+        {
+            retainLoadedUntilIdle = false;
+            hasConsumedUnawareFirstHit = false;
+        }
         InvalidateNavigationPlan();
         if (newState == ZeldaAiState.Hostile)
         {
@@ -1517,6 +1799,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
     private void UpdateTargetAndState(float deltaTime)
     {
+        if (IsIgnoringPlayer) return;
         ZeldaFourWayMover visiblePossessingPlayer = FindVisiblePossessingPlayer();
         if (visiblePossessingPlayer != null)
         {
@@ -1670,7 +1953,8 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             CardboardBoxWearState targetBox = targetMover != null
                 ? targetMover.ActiveCardboardBox
                 : null;
-            if (targetBox != null && targetBox.IsStationary)
+            if (targetBox != null && targetBox.IsStationary &&
+                !IsRecognizedPermissionTarget(targetMover))
             {
                 BeginRecovery();
                 return;
@@ -1747,6 +2031,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
         targetMover = visiblePlayer;
         activePermissionArea = permissionArea;
+        recognizedPermissionTarget = visiblePlayer;
         lastKnownTargetPosition = visiblePlayer.transform.position;
 
         float targetDistance = Vector2.Distance(rb.position, visiblePlayer.transform.position);
@@ -1775,7 +2060,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         }
 
         ZeldaCharacterData candidateData = candidate.GetComponent<ZeldaCharacterData>();
-        if (candidateData == null || candidateData is GhostZeldaCharacterData)
+        if (candidateData == null || candidateData.IsGhostLike)
         {
             return false;
         }
@@ -1801,7 +2086,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
         ZeldaCharacterData targetData = hostileTarget.GetComponent<ZeldaCharacterData>();
         if (targetData == null || targetData.IsDead ||
-            (!allowGhostTarget && targetData is GhostZeldaCharacterData))
+            (!allowGhostTarget && targetData.IsGhostLike))
         {
             return;
         }
@@ -1809,12 +2094,14 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         targetMover = hostileTarget;
         lastKnownTargetPosition = hostileTarget.transform.position;
         activePermissionArea = null;
+        recognizedPermissionTarget = null;
         hostileUntilTargetDeath = false;
         retaliationHostile = false;
         regularHostile = true;
         suspiciousCardboardBox = null;
         suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
+        hasCardboardBoxAttractionTarget = false;
         isInspectingCardboardBox = false;
         inspectedCardboardBoxWearer = null;
         hostileCardboardBox = null;
@@ -1851,6 +2138,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
     private bool CanSeePossessingPlayer(ZeldaFourWayMover candidate)
     {
+        if (IsIgnoringPlayer) return false;
         if (candidate == null || !candidate.isActiveAndEnabled || !candidate.IsPossessionInProgress ||
             candidate.gameObject == gameObject)
         {
@@ -1858,7 +2146,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         }
 
         ZeldaCharacterData candidateData = candidate.GetComponent<ZeldaCharacterData>();
-        if (candidateData == null || candidateData.IsDead || candidateData is GhostZeldaCharacterData)
+        if (candidateData == null || candidateData.IsDead || candidateData.IsGhostLike)
         {
             return false;
         }
@@ -1886,6 +2174,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
     private void BeginPermissionResponse(int permissionDifference)
     {
+        recognizedPermissionTarget = targetMover;
         if (permissionDifference >= 2)
         {
             hostileUntilTargetDeath = false;
@@ -1908,11 +2197,13 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         suspiciousCardboardBox = null;
         suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
+        hasCardboardBoxAttractionTarget = false;
         isInspectingCardboardBox = false;
         inspectedCardboardBoxWearer = null;
         hostileCardboardBox = null;
         regularHostileLostSightTimer = 0f;
         activePermissionArea = null;
+        recognizedPermissionTarget = null;
         warningTimer = 0f;
         suspicionValue = 0f;
         searchTimer = 0f;
@@ -1930,12 +2221,14 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     {
         targetMover = null;
         activePermissionArea = null;
+        recognizedPermissionTarget = null;
         hostileUntilTargetDeath = false;
         retaliationHostile = false;
         regularHostile = false;
         suspiciousCardboardBox = null;
         suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
+        hasCardboardBoxAttractionTarget = false;
         isInspectingCardboardBox = false;
         inspectedCardboardBoxWearer = null;
         hostileCardboardBox = null;
@@ -2098,12 +2391,14 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     {
         targetMover = null;
         activePermissionArea = null;
+        recognizedPermissionTarget = null;
         hostileUntilTargetDeath = false;
         retaliationHostile = false;
         regularHostile = false;
         suspiciousCardboardBox = null;
         suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
+        hasCardboardBoxAttractionTarget = false;
         isInspectingCardboardBox = false;
         inspectedCardboardBoxWearer = null;
         hostileCardboardBox = null;
@@ -2146,13 +2441,34 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     private bool UpdateCardboardBoxSuspicion(float deltaTime)
     {
         if (currentState == ZeldaAiState.Hostile || regularHostile ||
-            hostileUntilTargetDeath)
+            hostileUntilTargetDeath ||
+            IsRecognizedPermissionTarget(targetMover))
         {
             return false;
         }
 
         if (TryHandleRemovedSuspiciousWornBox())
         {
+            return true;
+        }
+
+        bool trackedGroundBoxUnavailable =
+            suspiciousGroundCardboardBox != null &&
+            (!suspiciousGroundCardboardBox.isActiveAndEnabled ||
+             suspiciousGroundCardboardBox.IsDestroyed ||
+             !suspiciousGroundCardboardBox.IsClockworkPuppetDriven);
+        bool trackedBoxReferenceWasLost =
+            suspiciousGroundCardboardBox == null &&
+            suspiciousCardboardBox == null &&
+            suspiciousCardboardBoxWearer == null;
+        if (currentState == ZeldaAiState.Suspicious &&
+            hasCardboardBoxAttractionTarget &&
+            (trackedGroundBoxUnavailable || trackedBoxReferenceWasLost))
+        {
+            // Unity's destroyed-object null semantics previously bypassed the
+            // normal suspicion decay branch. A vanished attraction source
+            // must still send this AI home from wherever it followed the box.
+            BeginRecovery();
             return true;
         }
 
@@ -2201,8 +2517,10 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             suspiciousGroundCardboardBox = null;
             suspiciousCardboardBox = observedBox;
             suspiciousCardboardBoxWearer = observedBox.WearerMover;
+            hasCardboardBoxAttractionTarget = true;
             targetMover = observedBox.WearerMover;
             activePermissionArea = null;
+            recognizedPermissionTarget = null;
             lastKnownTargetPosition = observedBox.WorldCenter;
             suspicionValue = Mathf.Min(
                 maximumSuspicion,
@@ -2231,8 +2549,10 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             suspiciousCardboardBox = null;
             suspiciousCardboardBoxWearer = null;
             suspiciousGroundCardboardBox = observedGroundBox;
+            hasCardboardBoxAttractionTarget = true;
             targetMover = null;
             activePermissionArea = null;
+            recognizedPermissionTarget = null;
             lastKnownTargetPosition = observedGroundBox.WorldCenter;
             suspicionValue = Mathf.Min(
                 maximumSuspicion,
@@ -2260,8 +2580,8 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         {
             // Keep the current suspicion and target during momentary raycast,
             // corner or vision-cone interruptions. This is particularly
-            // important for the autonomously moving puppet box, which often
-            // passes behind narrow level geometry for a few physics frames.
+            // important for a moving puppet box, which can pass behind
+            // narrow level geometry for a few physics frames.
             targetMover = suspiciousCardboardBox != null
                 ? suspiciousCardboardBox.WearerMover
                 : null;
@@ -2277,6 +2597,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             suspiciousCardboardBox = null;
             suspiciousCardboardBoxWearer = null;
             suspiciousGroundCardboardBox = null;
+            hasCardboardBoxAttractionTarget = false;
             isInspectingCardboardBox = false;
             inspectedCardboardBoxWearer = null;
             if (currentState == ZeldaAiState.Suspicious)
@@ -2318,6 +2639,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         suspiciousCardboardBox = null;
         suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
+        hasCardboardBoxAttractionTarget = false;
         isInspectingCardboardBox = false;
         inspectedCardboardBoxWearer = null;
         suspicionValue = 0f;
@@ -2376,6 +2698,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         suspiciousCardboardBox = null;
         suspiciousCardboardBoxWearer = null;
         suspiciousGroundCardboardBox = null;
+        hasCardboardBoxAttractionTarget = false;
         suspicionValue = 0f;
         moveDirection = Vector2.zero;
 
@@ -2662,6 +2985,11 @@ public class ZeldaCharacterAiBase : MonoBehaviour
                 continue;
             }
 
+            if (IsNonParticipatingCharacterCollider(hitCollider))
+            {
+                continue;
+            }
+
             if (IsUnlockedDoorCollider(hitCollider))
             {
                 continue;
@@ -2711,7 +3039,8 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             return PlanDirectionAroundObstacles(directOffset.normalized);
         }
 
-        float targetChangeThreshold = gridCellSize * 0.65f;
+        float targetChangeThreshold = gridCellSize *
+            (currentState == ZeldaAiState.Hostile ? 1.35f : 0.65f);
         // Compare against the target used by the last real A* build rather
         // than the previous frame. This both ignores harmless jitter and
         // still detects small changes once they accumulate far enough.
@@ -2738,7 +3067,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         {
             if (TryAcquireAStarBuildBudget())
             {
-                BuildGridPath(
+                bool pathBuilt = BuildGridPath(
                     rb.position,
                     worldTarget,
                     gridPathStoppingDistance);
@@ -2754,6 +3083,16 @@ public class ZeldaCharacterAiBase : MonoBehaviour
                     refreshInterval = Mathf.Max(
                         refreshInterval,
                         movingTargetGridRepathInterval);
+                }
+
+                refreshInterval *= GetHostileCrowdIntervalMultiplier();
+                if (!pathBuilt)
+                {
+                    // Failed graphs otherwise make every waiting NPC request
+                    // another complete physics grid as soon as possible.
+                    refreshInterval = Mathf.Max(
+                        refreshInterval,
+                        globalAStarBuildInterval * 2f);
                 }
 
                 float stagger = Mathf.Abs(GetInstanceID() % 13) / 13f;
@@ -2800,35 +3139,46 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             return GetSafeGridFallbackDirection(worldTarget, directOffset);
         }
 
-        // Remove grid stair-stepping when several upcoming nodes have a clear
-        // body-sized line between them.
-        int furthestVisibleIndex = gridPathIndex;
-        int lookAheadEnd = Mathf.Min(gridPath.Count - 1, gridPathIndex + 4);
-        for (int i = lookAheadEnd; i > gridPathIndex; i--)
+        if (Time.time >= nextGridPathValidationTime)
         {
-            if (IsBodyPathSegmentClear(
-                rb.position,
-                gridPath[i],
-                activeGridClearance))
+            float validationStagger = Mathf.Lerp(
+                0.9f,
+                1.1f,
+                Mathf.Abs(GetInstanceID() % 17) / 17f);
+            nextGridPathValidationTime = Time.time +
+                gridPathValidationInterval * validationStagger;
+
+            // Static walls do not need four BoxCasts per NPC every frame.
+            // Validate and simplify at a staggered interval; FixedUpdate's
+            // displacement cast remains the final per-step collision guard.
+            int furthestVisibleIndex = gridPathIndex;
+            int lookAheadEnd = Mathf.Min(gridPath.Count - 1, gridPathIndex + 4);
+            for (int i = lookAheadEnd; i > gridPathIndex; i--)
             {
-                furthestVisibleIndex = i;
-                break;
+                if (IsBodyPathSegmentClear(
+                    rb.position,
+                    gridPath[i],
+                    activeGridClearance))
+                {
+                    furthestVisibleIndex = i;
+                    break;
+                }
+            }
+            gridPathIndex = furthestVisibleIndex;
+
+            if (!IsBodyPathSegmentClear(
+                    rb.position,
+                    gridPath[gridPathIndex],
+                    0f))
+            {
+                ClearGridPath();
+                nextGridPathRefreshTime = Time.time +
+                    Mathf.Max(0.02f, globalAStarBuildInterval);
+                return Vector2.zero;
             }
         }
-        gridPathIndex = furthestVisibleIndex;
 
         Vector2 waypointOffset = gridPath[gridPathIndex] - rb.position;
-        if (!IsBodyPathSegmentClear(
-                rb.position,
-                gridPath[gridPathIndex],
-                0f))
-        {
-            // Never follow a stale or over-smoothed segment through solid
-            // geometry. Rebuild from the real position on the next update.
-            ClearGridPath();
-            nextGridPathRefreshTime = 0f;
-            return Vector2.zero;
-        }
 
         if (waypointOffset.sqrMagnitude <= 0.0001f)
         {
@@ -2859,8 +3209,52 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             return false;
         }
 
+        if (Time.time < nextGlobalAStarBuildTime)
+        {
+            return false;
+        }
+
         aStarBuildsThisFrame++;
+        nextGlobalAStarBuildTime = Time.time +
+            Mathf.Max(0.01f, globalAStarBuildInterval) *
+            GetHostileCrowdIntervalMultiplier();
         return true;
+    }
+
+    private bool TryAcquireExpensiveGridFallbackBudget()
+    {
+        if (Time.time < nextExpensiveGridFallbackTime)
+        {
+            return false;
+        }
+
+        nextExpensiveGridFallbackTime = Time.time +
+            Mathf.Max(0.05f, expensiveGridFallbackInterval) *
+            GetHostileCrowdIntervalMultiplier();
+        return true;
+    }
+
+    private static float GetHostileCrowdIntervalMultiplier()
+    {
+        int frame = Time.frameCount;
+        if (hostileCountCacheFrame != frame)
+        {
+            hostileCountCacheFrame = frame;
+            hostileCountCache = 0;
+            foreach (ZeldaCharacterAiBase ai in ZeldaRuntimeRegistry.AiCharacters)
+            {
+                if (ai != null && ai.isActiveAndEnabled &&
+                    ai.currentState == ZeldaAiState.Hostile)
+                {
+                    hostileCountCache++;
+                }
+            }
+        }
+
+        return 1f + Mathf.Clamp(
+            Mathf.Max(0, hostileCountCache - 4) * 0.08f,
+            0f,
+            1.5f);
     }
 
     private Vector2 GetSafeGridFallbackDirection(
@@ -2990,6 +3384,11 @@ public class ZeldaCharacterAiBase : MonoBehaviour
                 false))
         {
             return true;
+        }
+
+        if (!TryAcquireExpensiveGridFallbackBudget())
+        {
+            return false;
         }
 
         if (fallbackDimension > normalDimension &&
@@ -3706,6 +4105,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     {
         gridPath.Clear();
         gridPathIndex = 0;
+        nextGridPathValidationTime = 0f;
     }
 
     private Vector2 PlanDirectionAroundObstacles(Vector2 desiredDirection)
@@ -3863,7 +4263,11 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     private void InvalidateNavigationPlan()
     {
         nextNavigationRefreshTime = 0f;
-        nextSeparationRefreshTime = 0f;
+        float separationStagger =
+            Mathf.Abs(GetInstanceID() % 11) / 11f *
+            Mathf.Max(0.01f, characterSeparationRefreshInterval);
+        nextSeparationRefreshTime = Time.time + separationStagger;
+        lastSeparationRefreshTime = Time.time + separationStagger;
         cachedPlannedDirection = Vector2.zero;
         lastRequestedNavigationDirection = Vector2.zero;
         cachedSeparation = Vector2.zero;
@@ -3895,11 +4299,21 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             lastSeparationDesiredDirection.sqrMagnitude <= 0f ||
             Vector2.Dot(lastSeparationDesiredDirection, normalizedDesiredDirection) <
             Mathf.Cos(navigationDirectionChangeAngle * Mathf.Deg2Rad);
-        if (Time.time >= nextSeparationRefreshTime || separationDirectionChanged)
+        float separationCrowdMultiplier = Mathf.Min(
+            2f,
+            GetHostileCrowdIntervalMultiplier());
+        bool forcedRefreshReady = separationDirectionChanged &&
+            Time.time >= lastSeparationRefreshTime +
+            Mathf.Max(0.01f, characterSeparationForcedRefreshInterval) *
+            separationCrowdMultiplier;
+        if (Time.time >= nextSeparationRefreshTime || forcedRefreshReady)
         {
             cachedSeparation = Vector2.zero;
             cachedCharacterYieldWeight = 0f;
-            nextSeparationRefreshTime = Time.time + characterSeparationRefreshInterval;
+            nextSeparationRefreshTime = Time.time +
+                characterSeparationRefreshInterval *
+                separationCrowdMultiplier;
+            lastSeparationRefreshTime = Time.time;
             lastSeparationDesiredDirection = normalizedDesiredDirection;
             float avoidanceDistance = Mathf.Max(
                 characterSeparationDistance,
@@ -4252,8 +4666,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
                 continue;
             }
 
-            if (hitCharacter != null &&
-                (!characterData.ParticipatesInCharacterCollision || !hitCharacter.ParticipatesInCharacterCollision))
+            if (IsNonParticipatingCharacterCollider(hitCollider))
             {
                 continue;
             }
@@ -4278,6 +4691,35 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         }
 
         return clearance;
+    }
+
+    private bool IsNonParticipatingCharacterCollider(Collider2D candidate)
+    {
+        if (candidate == null)
+        {
+            return false;
+        }
+
+        ZeldaCharacterData otherCharacter =
+            candidate.GetComponentInParent<ZeldaCharacterData>();
+        if (otherCharacter == null ||
+            (characterData.ParticipatesInCharacterCollision &&
+             otherCharacter.ParticipatesInCharacterCollision))
+        {
+            return false;
+        }
+
+        // Establish the physics-layer exception as soon as a movement probe
+        // encounters a non-colliding character. This removes the brief frame
+        // where a newly spawned ghost could still stop a kinematic AI before
+        // the ghost's periodic collision refresh runs.
+        if (bodyCollider != null && candidate != bodyCollider &&
+            !Physics2D.GetIgnoreCollision(bodyCollider, candidate))
+        {
+            Physics2D.IgnoreCollision(bodyCollider, candidate, true);
+        }
+
+        return true;
     }
 
     private bool IsMovingAwayFromCharacter(Collider2D hitCollider, Vector2 movementDirection)
@@ -4541,7 +4983,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             characterRenderer = activeRenderer;
         }
 
-        characterData.ApplyCharacterVisual(characterRenderer, facingDirection,
+        characterData.ApplyCharacterVisualWithMovement(characterRenderer, facingDirection,
             moveDirection.sqrMagnitude > 0f, mover.IsAttacking);
     }
 
@@ -4696,6 +5138,8 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         peripheralVisionRadius = Mathf.Max(0.1f, peripheralVisionRadius);
         peripheralVisionAngle = Mathf.Max(visionAngle, peripheralVisionAngle);
         visionRayCount = Mathf.Clamp(visionRayCount, 4, 180);
+        visionVisualRefreshInterval =
+            Mathf.Max(0.02f, visionVisualRefreshInterval);
         cardboardBoxApproachDistance =
             Mathf.Max(0.1f, cardboardBoxApproachDistance);
         cardboardBoxSightMemoryDuration =
@@ -4769,6 +5213,11 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             1f);
         characterSeparationRefreshInterval =
             Mathf.Max(0.01f, characterSeparationRefreshInterval);
+        characterSeparationForcedRefreshInterval =
+            Mathf.Clamp(
+                characterSeparationForcedRefreshInterval,
+                0.01f,
+                characterSeparationRefreshInterval);
         gridCellSize = Mathf.Max(0.2f, gridCellSize);
         gridSearchPadding = Mathf.Clamp(gridSearchPadding, 2, 12);
         maximumGridDimension = Mathf.Clamp(maximumGridDimension, 15, 81);
@@ -4790,6 +5239,12 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             Mathf.Max(movingTargetGridRepathInterval, gridPathMaintenanceInterval));
         maximumAStarBuildsPerFrame =
             Mathf.Clamp(maximumAStarBuildsPerFrame, 1, 8);
+        globalAStarBuildInterval =
+            Mathf.Max(0.01f, globalAStarBuildInterval);
+        expensiveGridFallbackInterval =
+            Mathf.Max(0.05f, expensiveGridFallbackInterval);
+        gridPathValidationInterval =
+            Mathf.Max(0.02f, gridPathValidationInterval);
         gridWaypointTolerance = Mathf.Max(0.02f, gridWaypointTolerance);
         gridWallClearance = Mathf.Max(0f, gridWallClearance);
         maximumWallSeparationStep =

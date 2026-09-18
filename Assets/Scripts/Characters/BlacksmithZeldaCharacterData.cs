@@ -32,12 +32,15 @@ public sealed class BlacksmithZeldaCharacterData : ZeldaCharacterData
     [SerializeField] private Color attackVisualTint =
         new Color(0.72f, 0.76f, 0.8f, 0.82f);
 
+    private bool visualsDirty = true;
+
     private readonly Sprite[] idleSprites = new Sprite[4];
     private readonly Sprite[] attackSprites = new Sprite[4];
     private readonly Texture2D[] idleTextures = new Texture2D[4];
     private readonly Texture2D[] attackTextures = new Texture2D[4];
 
-    public override bool CanAttack => true;
+    public override bool CanAttack => !IsGhostForm;
+    public override Color GhostFormEyeColor => new Color(0.04f, 0.1f, 0.16f, 1f);
     public override int AttackPower => attackPower;
     public override GameObject AttackPrefab => attackPrefab;
     public override float AttackDuration => attackDuration;
@@ -71,6 +74,13 @@ public sealed class BlacksmithZeldaCharacterData : ZeldaCharacterData
 
     private void EnsureSprites()
     {
+        if (visualsDirty)
+        {
+            var animator = GetComponent<PixelCharacterWalkAnimator>();
+            if (animator != null) animator.InvalidateFrames();
+            ReleaseSprites();
+            visualsDirty = false;
+        }
         if (idleSprites[0] != null)
         {
             return;
@@ -107,167 +117,196 @@ public sealed class BlacksmithZeldaCharacterData : ZeldaCharacterData
         return sprite;
     }
 
+    // Four-way compact silhouettes: head touches shoulders, no neck.
+    // Two-pixel legs; profile hands sit in the middle of the torso.
+    private static readonly string[] FrontBody = {
+        "......HHHH......",
+        ".....HHHHHH.....",
+        ".....HFFFFH.....",
+        ".....FEFFEF.....",
+        ".....SHHHHS.....",
+        "....CCAAAACC....",
+        "....CDALLADC....",
+        "....UUAAAAUU....",
+        "....GGADLAGG....",
+        "....GGBBBBGG....",
+        ".....DAAAAD.....",
+        ".....PP..PP.....",
+        ".....PP..PP.....",
+        "................",
+        "................",
+        "................",
+    };
+
+    private static readonly string[] BackBody = {
+        "......HHHH......",
+        ".....HHHHHH.....",
+        ".....HHHHHH.....",
+        ".....HHHHHH.....",
+        ".....SSHHSS.....",
+        "....CCACCACC....",
+        "....CDCAACDC....",
+        "....UUCAACUU....",
+        "....GGCCCCGG....",
+        "....GGBBBBGG....",
+        ".....DCCCCD.....",
+        ".....PP..PP.....",
+        ".....PP..PP.....",
+        "................",
+        "................",
+        "................",
+    };
+
+    private static readonly string[] LeftBody = {
+        ".....HHHH.......",
+        "....HHHHHH......",
+        "....HFFFHH......",
+        "....FEFFHH......",
+        "....SHHHHS......",
+        ".....AACCCC.....",
+        ".....ALCCCD.....",
+        ".....AAUUCD.....",
+        ".....AAGGCD.....",
+        ".....BBGGBB.....",
+        ".....AACCCD.....",
+        ".....PP..PP.....",
+        ".....PP..PP.....",
+        "................",
+        "................",
+        "................",
+    };
+
+    private static readonly string[] RightBody = {
+        ".......HHHH.....",
+        "......HHHHHH....",
+        "......HHFFFH....",
+        "......HHFFEF....",
+        "......SHHHHS....",
+        ".....CCCCAA.....",
+        ".....DCCCLA.....",
+        ".....DCUUAA.....",
+        ".....DCGGAA.....",
+        ".....BBGGBB.....",
+        ".....DCCCAA.....",
+        ".....PP..PP.....",
+        ".....PP..PP.....",
+        "................",
+        "................",
+        "................",
+    };
+
     private Texture2D CreateTexture(Vector2 facing, bool attacking)
     {
         const int size = 16;
-        Texture2D texture =
-            new Texture2D(size, size, TextureFormat.RGBA32, false)
-            {
-                name = "Runtime Blacksmith",
-                filterMode = FilterMode.Point,
-                wrapMode = TextureWrapMode.Clamp
-            };
-        FillRect(texture, 0, 0, size, size, Color.clear);
+        string[] rows = facing == Vector2.up ? BackBody :
+            facing == Vector2.left ? LeftBody : facing == Vector2.right ? RightBody : FrontBody;
+        var pixels = new Color[size * size];
+        for (int row = 0; row < size; row++)
+        for (int x = 0; x < size; x++)
+            pixels[(size - 1 - row) * size + x] = PixelColor(rows[row][x]);
 
-        Color shirtShadow = Color.Lerp(shirtColor, Color.black, 0.32f);
-        Color apronShadow = Color.Lerp(apronColor, Color.black, 0.3f);
-        Color apronLight = Color.Lerp(apronColor, Color.white, 0.18f);
-        Color skinShadow = Color.Lerp(skinColor, Color.black, 0.24f);
-        Color handleColor = new Color(0.29f, 0.16f, 0.08f, 1f);
-        Color hammerLight = Color.Lerp(hammerColor, Color.white, 0.22f);
-        Color eyeColor = new Color(0.04f, 0.1f, 0.16f, 1f);
+        if (attacking)
+        {
+            RestoreBodyBehindAttackingArm(pixels, facing);
+            int startX = facing == Vector2.left ? 2 : facing == Vector2.right ? 10 : 6;
+            int startY = facing == Vector2.up ? 10 : facing == Vector2.down ? 4 : 6;
+            Paint(pixels, startX, startY, 4, 3, 'C');
+            int handX = facing == Vector2.left ? startX : facing == Vector2.right ? startX + 2 : startX + 1;
+            int handY = facing == Vector2.up ? startY + 1 : startY;
+            Paint(pixels, handX, handY, 2, 2, 'G');
+        }
+        DrawHammer(pixels, facing, attacking);
 
-        // Compact civilian silhouette with a broad leather work apron.
-        FillRect(texture, 6, 6, 5, 5, shirtColor);
-        FillRect(texture, 6, 6, 1, 5, shirtShadow);
-        FillRect(texture, 7, 6, 3, 5, apronColor);
-        FillRect(texture, 7, 6, 1, 5, apronShadow);
-        FillRect(texture, 8, 9, 1, 2, apronLight);
-        texture.SetPixel(9, 7, apronLight);
-
-        FillRect(texture, 6, 3, 2, 3, trousersColor);
-        FillRect(texture, 9, 3, 2, 3, trousersColor);
-        DrawArms(
-            texture,
-            facing,
-            attacking,
-            shirtShadow,
-            apronShadow,
-            skinShadow);
-        DrawHead(texture, facing, skinShadow, eyeColor);
-        DrawHammer(
-            texture,
-            facing,
-            attacking,
-            handleColor,
-            hammerColor,
-            hammerLight);
-
-        texture.Apply(false, true);
+        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        {
+            name = "Blacksmith " + facing + (attacking ? " Attack" : " Idle"),
+            filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        texture.SetPixels(pixels);
+        texture.Apply(false, attacking);
         return texture;
     }
 
-    private void DrawArms(
-        Texture2D texture,
-        Vector2 facing,
-        bool attacking,
-        Color shirtShadow,
-        Color gloveShadow,
-        Color skinShadow)
+    private void RestoreBodyBehindAttackingArm(Color[] pixels, Vector2 facing)
     {
-        if (!attacking)
+        if (facing == Vector2.down || facing == Vector2.up)
         {
-            FillRect(texture, 5, 7, 1, 3, shirtShadow);
-            FillRect(texture, 11, 7, 1, 3, shirtColor);
-            texture.SetPixel(5, 7, gloveShadow);
-            texture.SetPixel(11, 7, apronColor);
-            return;
-        }
-
-        if (facing == Vector2.left)
-        {
-            FillRect(texture, 2, 8, 4, 2, shirtColor);
-            FillRect(texture, 1, 8, 2, 2, apronColor);
-        }
-        else if (facing == Vector2.right)
-        {
-            FillRect(texture, 11, 8, 4, 2, shirtColor);
-            FillRect(texture, 14, 8, 2, 2, apronColor);
+            // Hammer-bearing arm is on the right in front, left from the back.
+            int outerX = facing == Vector2.down ? 11 : 4;
+            int innerX = facing == Vector2.down ? 10 : 5;
+            for (int y = 6; y <= 8; y++)
+            {
+                pixels[y * 16 + outerX] = Color.clear;
+                pixels[y * 16 + innerX] = PixelColor(y == 6 ? 'B' : 'D');
+            }
         }
         else
         {
-            FillRect(texture, 5, 9, 2, 3, shirtShadow);
-            FillRect(texture, 10, 9, 2, 3, shirtColor);
-            texture.SetPixel(5, 12, skinShadow);
-            texture.SetPixel(11, 12, skinColor);
+            for (int y = 6; y <= 8; y++)
+            for (int x = 7; x <= 8; x++)
+                pixels[y * 16 + x] = PixelColor(y == 6 ? 'B' : 'C');
         }
     }
 
-    private void DrawHead(
-        Texture2D texture,
-        Vector2 facing,
-        Color skinShadow,
-        Color eyeColor)
+    private void Paint(Color[] pixels, int x, int y, int width, int height, char symbol)
     {
-        if (facing == Vector2.left)
+        for (int py = y; py < y + height; py++)
+        for (int px = x; px < x + width; px++)
+            pixels[py * 16 + px] = PixelColor(symbol);
+    }
+
+    private Color PixelColor(char symbol)
+    {
+        switch (symbol)
         {
-            FillRect(texture, 5, 10, 5, 4, skinColor);
-            FillRect(texture, 6, 13, 4, 1, hairColor);
-            FillRect(texture, 9, 11, 1, 3, hairColor);
-            texture.SetPixel(5, 11, eyeColor);
-            FillRect(texture, 5, 10, 2, 1, hairColor);
-        }
-        else if (facing == Vector2.right)
-        {
-            FillRect(texture, 7, 10, 5, 4, skinColor);
-            FillRect(texture, 7, 13, 4, 1, hairColor);
-            FillRect(texture, 7, 11, 1, 3, hairColor);
-            texture.SetPixel(11, 11, eyeColor);
-            FillRect(texture, 10, 10, 2, 1, hairColor);
-        }
-        else
-        {
-            FillRect(texture, 6, 10, 5, 4, skinColor);
-            FillRect(texture, 6, 13, 5, 1, hairColor);
-            if (facing == Vector2.up)
-            {
-                FillRect(texture, 6, 12, 5, 2, hairColor);
-            }
-            else
-            {
-                texture.SetPixel(7, 11, eyeColor);
-                texture.SetPixel(9, 11, eyeColor);
-                FillRect(texture, 7, 10, 3, 1, hairColor);
-                texture.SetPixel(8, 9, skinShadow);
-            }
+            case 'C': return shirtColor;
+            case 'D': return Color.Lerp(shirtColor, Color.black, 0.32f);
+            case 'U': return Color.Lerp(shirtColor, Color.white, 0.16f);
+            case 'A': return apronColor;
+            case 'L': return Color.Lerp(apronColor, Color.white, 0.18f);
+            case 'B': return Color.Lerp(apronColor, Color.black, 0.3f);
+            case 'G': return apronColor;
+            case 'P': return trousersColor;
+            case 'F': return skinColor;
+            case 'S': return Color.Lerp(skinColor, Color.black, 0.24f);
+            case 'H': return hairColor;
+            case 'E': return GhostFormEyeColor;
+            case 'R': return new Color(0.29f, 0.16f, 0.08f, 1f);
+            case 'M': return hammerColor;
+            case 'N': return Color.Lerp(hammerColor, Color.white, 0.22f);
+            default: return Color.clear;
         }
     }
 
-    private static void DrawHammer(
-        Texture2D texture,
-        Vector2 facing,
-        bool attacking,
-        Color handle,
-        Color metal,
-        Color metalLight)
+    private void DrawHammer(Color[] pixels, Vector2 facing, bool attacking)
     {
         if (attacking)
         {
-            if (facing == Vector2.left)
+            if (facing == Vector2.left || facing == Vector2.right)
             {
-                FillRect(texture, 0, 8, 5, 1, handle);
-                FillRect(texture, 0, 6, 2, 4, metal);
-                texture.SetPixel(0, 9, metalLight);
-            }
-            else if (facing == Vector2.right)
-            {
-                FillRect(texture, 11, 8, 5, 1, handle);
-                FillRect(texture, 14, 6, 2, 4, metal);
-                texture.SetPixel(15, 9, metalLight);
+                bool left = facing == Vector2.left;
+                Paint(pixels, left ? 1 : 10, 8, 5, 1, 'R');
+                Paint(pixels, left ? 0 : 14, 6, 2, 4, 'M');
+                Paint(pixels, left ? 0 : 15, 9, 1, 1, 'N');
             }
             else
             {
-                FillRect(texture, 8, 10, 1, 6, handle);
-                FillRect(texture, 6, 14, 5, 2, metal);
-                FillRect(texture, 7, 15, 3, 1, metalLight);
+                bool up = facing == Vector2.up;
+                Paint(pixels, 7, up ? 10 : 3, 1, 5, 'R');
+                Paint(pixels, 6, up ? 14 : 2, 4, 2, 'M');
+                Paint(pixels, 6, up ? 15 : 3, 3, 1, 'N');
             }
             return;
         }
 
-        // Hammer rests beside the apron while idle.
-        FillRect(texture, 12, 5, 1, 5, handle);
-        FillRect(texture, 11, 9, 3, 2, metal);
-        texture.SetPixel(12, 10, metalLight);
+        // The handle touches the glove, not a floating decoration at a fixed side.
+        int handleX = facing == Vector2.down ? 12 : facing == Vector2.up ? 3 :
+            facing == Vector2.left ? 6 : 9;
+        int headY = facing == Vector2.down || facing == Vector2.up ? 9 : 8;
+        Paint(pixels, handleX, 5, 1, headY - 4, 'R');
+        Paint(pixels, handleX - 1, headY, 3, 2, 'M');
+        Paint(pixels, handleX, headY + 1, 1, 1, 'N');
     }
 
     private static int DirectionIndex(Vector2 direction)
@@ -279,41 +318,30 @@ public sealed class BlacksmithZeldaCharacterData : ZeldaCharacterData
         return direction.y > 0f ? 1 : 0;
     }
 
-    private static void FillRect(
-        Texture2D texture,
-        int x,
-        int y,
-        int width,
-        int height,
-        Color color)
+    private void OnDestroy() => ReleaseSprites();
+
+    private void ReleaseSprites()
     {
-        for (int py = y; py < y + height; py++)
+        for (int i = 0; i < 4; i++)
         {
-            for (int px = x; px < x + width; px++)
-            {
-                if (px >= 0 && px < texture.width &&
-                    py >= 0 && py < texture.height)
-                {
-                    texture.SetPixel(px, py, color);
-                }
-            }
+            ReleaseGenerated(idleSprites[i]); ReleaseGenerated(idleTextures[i]);
+            ReleaseGenerated(attackSprites[i]); ReleaseGenerated(attackTextures[i]);
+            idleSprites[i] = null; idleTextures[i] = null;
+            attackSprites[i] = null; attackTextures[i] = null;
         }
     }
 
-    private void OnDestroy()
+    private void ReleaseGenerated(Object generated)
     {
-        for (int i = 0; i < idleSprites.Length; i++)
-        {
-            if (idleSprites[i] != null) Destroy(idleSprites[i]);
-            if (attackSprites[i] != null) Destroy(attackSprites[i]);
-            if (idleTextures[i] != null) Destroy(idleTextures[i]);
-            if (attackTextures[i] != null) Destroy(attackTextures[i]);
-        }
+        if (generated == null) return;
+        if (Application.isPlaying) Destroy(generated);
+        else DestroyImmediate(generated);
     }
 
     protected override void OnValidate()
     {
         base.OnValidate();
+        visualsDirty = true;
         attackPower = Mathf.Max(0, attackPower);
         attackDuration = Mathf.Max(0f, attackDuration);
         attackSize.x = Mathf.Max(0f, attackSize.x);

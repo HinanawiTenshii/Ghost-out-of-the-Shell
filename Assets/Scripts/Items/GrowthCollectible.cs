@@ -27,13 +27,53 @@ public sealed class GrowthCollectible : MonoBehaviour
 
     [Header("Pickup Burst")]
     [SerializeField, Range(8, 64)] private int pickupBurstParticleCount = 24;
+    [Tooltip("Time spent scattering before all particles start homing.")]
     [SerializeField, Min(0.1f)] private float pickupBurstLifetime = 0.65f;
     [SerializeField, Min(0.1f)] private float pickupBurstSpeed = 1.25f;
+    [SerializeField, Min(0.1f)] private float pickupHomingSpeed = 12f;
+    [SerializeField, Range(0.005f, 0.6f)] private float pickupTrailDuration = 0.02f;
+    [SerializeField, Range(0.05f, 0.5f)] private float pickupFlashDuration = 0.16f;
+
+    private bool collected;
 
     private static Sprite circleSprite;
     private static Sprite glowSprite;
     private static Material lineMaterial;
     private static Material particleMaterial;
+
+    public static readonly Vector3[] IconVertices =
+    {
+        new Vector3(-0.12f, 0.62f, 0f), new Vector3(-0.55f, -0.34f, 0f),
+        new Vector3(0.58f, -0.08f, 0f), new Vector3(0.12f, -0.55f, 0f)
+    };
+    public struct IconAppearance
+    {
+        public int pointCount;
+        public float radius, pointSize, rotationSpeed, lineWidth;
+        public float glowSize, glowOpacity, pulseSpeed, pulseAmount;
+        public Sprite circle, glow;
+    }
+
+    public static IconAppearance GetIconAppearance()
+    {
+        EnsureSharedVisualAssets();
+        // Include streamed-out collectibles. Fall back to the shipped prefab's
+        // appearance when all collectibles have already been picked up.
+        var source = FindObjectOfType<GrowthCollectible>(true);
+        return new IconAppearance
+        {
+            pointCount = source != null ? Mathf.Clamp(source.orbitPointCount, 4, 24) : 24,
+            radius = source != null ? source.orbitRadius : 0.9f,
+            pointSize = source != null ? source.orbitPointSize : 0.14f,
+            rotationSpeed = source != null ? source.orbitRotationSpeed : 12f,
+            lineWidth = source != null ? source.tetrahedronLineWidth : 0.045f,
+            glowSize = source != null ? source.glowSize : 1.8f,
+            glowOpacity = source != null ? source.glowOpacity : 0.42f,
+            pulseSpeed = source != null ? source.glowPulseSpeed : 1.35f,
+            pulseAmount = source != null ? source.glowPulseAmount : 0.12f,
+            circle = circleSprite, glow = glowSprite
+        };
+    }
 
     private Transform orbitRoot;
     private Transform glowTransform;
@@ -107,6 +147,7 @@ public sealed class GrowthCollectible : MonoBehaviour
 
     public bool TryCollect()
     {
+        if (collected) return false;
         ZeldaFourWayMover controlledMover = FindControlledMover();
         if (PickupItemBase.IsGhostControlledMover(controlledMover))
         {
@@ -122,6 +163,8 @@ public sealed class GrowthCollectible : MonoBehaviour
             return false;
         }
 
+        collected = true;
+        SetPromptVisible(false, null);
         growth.AddCollectibles(Mathf.Max(1, collectibleAmount));
         PlayPickupBurst();
         Destroy(gameObject);
@@ -132,73 +175,16 @@ public sealed class GrowthCollectible : MonoBehaviour
     {
         EnsureSharedVisualAssets();
         GameObject burstObject = new GameObject(name + " Pickup Light Burst");
-        burstObject.transform.position = transform.position;
         burstObject.SetActive(false);
-
-        ParticleSystem particles = burstObject.AddComponent<ParticleSystem>();
-        particles.Stop(
-            true,
-            ParticleSystemStopBehavior.StopEmittingAndClear);
-        ParticleSystem.MainModule main = particles.main;
-        main.loop = false;
-        main.playOnAwake = false;
-        main.duration = 0.1f;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(
-            pickupBurstLifetime * 0.75f,
-            pickupBurstLifetime);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(
-            pickupBurstSpeed * 0.7f,
-            pickupBurstSpeed * 1.25f);
-        main.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.16f);
-        main.startColor = Color.white;
-        main.simulationSpace = ParticleSystemSimulationSpace.World;
-        main.gravityModifier = 0f;
-        main.maxParticles = Mathf.Max(8, pickupBurstParticleCount);
-        main.stopAction = ParticleSystemStopAction.Destroy;
-
-        ParticleSystem.EmissionModule emission = particles.emission;
-        emission.enabled = true;
-        emission.rateOverTime = 0f;
-        emission.SetBursts(new[]
-        {
-            new ParticleSystem.Burst(
-                0f,
-                (short)Mathf.Clamp(pickupBurstParticleCount, 8, 64))
-        });
-
-        ParticleSystem.ShapeModule shape = particles.shape;
-        shape.enabled = true;
-        shape.shapeType = ParticleSystemShapeType.Circle;
-        shape.radius = 0.18f;
-        shape.radiusThickness = 1f;
-        shape.arc = 360f;
-
-        ParticleSystem.ColorOverLifetimeModule colorOverLifetime =
-            particles.colorOverLifetime;
-        colorOverLifetime.enabled = true;
-        Gradient fadeGradient = new Gradient();
-        fadeGradient.SetKeys(
-            new[]
-            {
-                new GradientColorKey(Color.white, 0f),
-                new GradientColorKey(Color.white, 1f)
-            },
-            new[]
-            {
-                new GradientAlphaKey(1f, 0f),
-                new GradientAlphaKey(0.85f, 0.35f),
-                new GradientAlphaKey(0f, 1f)
-            });
-        colorOverLifetime.color = fadeGradient;
-
-        ParticleSystemRenderer particleRenderer =
-            burstObject.GetComponent<ParticleSystemRenderer>();
-        particleRenderer.renderMode = ParticleSystemRenderMode.Billboard;
-        particleRenderer.sortingOrder = baseSortingOrder + 2;
-        particleRenderer.sharedMaterial = particleMaterial;
-
+        burstObject.transform.position = transform.position;
+        UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(burstObject, gameObject.scene);
+        burstObject.AddComponent<CameraVisionStreamingExempt>();
+        var effect = burstObject.AddComponent<GrowthCollectiblePickupEffect>();
+        effect.Initialize(pickupBurstParticleCount, pickupBurstLifetime, pickupBurstSpeed,
+            pickupHomingSpeed, pickupTrailDuration, pickupFlashDuration,
+            baseSortingOrder + 2, particleMaterial, lineMaterial, glowSprite.texture);
         burstObject.SetActive(true);
-        particles.Play();
+        effect.Begin();
     }
 
     private void BuildVisual()
@@ -226,13 +212,7 @@ public sealed class GrowthCollectible : MonoBehaviour
         Transform edgeRoot = new GameObject("White Tetrahedron").transform;
         edgeRoot.SetParent(transform, false);
 
-        Vector3[] vertices =
-        {
-            new Vector3(-0.12f, 0.62f, 0f),
-            new Vector3(-0.55f, -0.34f, 0f),
-            new Vector3(0.58f, -0.08f, 0f),
-            new Vector3(0.12f, -0.55f, 0f)
-        };
+        Vector3[] vertices = IconVertices;
         int[,] edges =
         {
             { 0, 1 }, { 0, 2 }, { 0, 3 },
@@ -327,6 +307,7 @@ public sealed class GrowthCollectible : MonoBehaviour
 
         MeshRenderer renderer = promptObject.GetComponent<MeshRenderer>();
         renderer.sortingOrder = short.MaxValue - 2;
+        ZeldaPossessionProgressBar.ConfigureOverlayRenderer(renderer);
         promptMaterial = new Material(promptFont.material)
         {
             name = name + " Growth Collectible Prompt Material",
@@ -432,6 +413,9 @@ public sealed class GrowthCollectible : MonoBehaviour
         pickupBurstParticleCount = Mathf.Clamp(pickupBurstParticleCount, 8, 64);
         pickupBurstLifetime = Mathf.Max(0.1f, pickupBurstLifetime);
         pickupBurstSpeed = Mathf.Max(0.1f, pickupBurstSpeed);
+        pickupHomingSpeed = Mathf.Max(0.1f, pickupHomingSpeed);
+        pickupTrailDuration = Mathf.Clamp(pickupTrailDuration, 0.005f, 0.6f);
+        pickupFlashDuration = Mathf.Clamp(pickupFlashDuration, 0.05f, 0.5f);
     }
 #endif
 }

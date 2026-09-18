@@ -44,11 +44,25 @@ public sealed class TabJournalMenuController : MonoBehaviour
 
     private GameObject menuRoot;
     private Canvas menuCanvas;
-    private readonly Image[] tabBackgrounds = new Image[3];
-    private readonly Image[] tabBottomEdges = new Image[3];
-    private readonly Button[] tabButtons = new Button[3];
-    private readonly Text[] tabLabels = new Text[3];
-    private readonly GameObject[] contentPages = new GameObject[3];
+    private readonly Image[] tabBackgrounds = new Image[4];
+    private readonly Image[] tabBottomEdges = new Image[4];
+    private readonly Button[] tabButtons = new Button[4];
+    private readonly Text[] tabLabels = new Text[4];
+    private readonly GameObject[] contentPages = new GameObject[4];
+    private RectTransform panelTopLeft, panelTopRight;
+    private readonly SkillPageArt[] availableAbilityIcons = new SkillPageArt[25];
+    private readonly Text[] availableAbilityNames = new Text[25];
+    private readonly string[] availableAbilityIds = new string[25];
+    private readonly Image[] availableAbilityBackgrounds = new Image[25];
+    private static readonly Color AbilitySlotBackground = new Color(0.015f, 0.04f, 0.06f, 0.85f);
+    private static readonly Color AbilitySlotHighlight = new Color(0.06f, 0.16f, 0.22f, 0.85f);
+    private Vector3 equipmentOriginalScale;
+    private readonly RectTransform[] equipmentSlots = new RectTransform[5];
+    private readonly Image[] equipmentIcons = new Image[5];
+    private RectTransform abilityPage, abilityRight;
+    private GameObject equipmentOverlay;
+    private int equipmentSelection = -1;
+    private bool previousNavigation;
     private Text mapAreaNameText;
     private RuntimeMiniMapGraphic miniMapGraphic;
     private RectTransform mapSceneListContent;
@@ -129,6 +143,11 @@ public sealed class TabJournalMenuController : MonoBehaviour
 
     private void Update()
     {
+        if (equipmentSelection >= 0)
+        {
+            if (Input.GetMouseButtonDown(1)) EndEquipmentSelection();
+            return;
+        }
         bool tabPressed = Input.GetKeyDown(KeyCode.Tab);
         bool escapePressed = Input.GetKeyDown(KeyCode.Escape);
 
@@ -155,11 +174,11 @@ public sealed class TabJournalMenuController : MonoBehaviour
             Scene activeScene = SceneManager.GetActiveScene();
             if (selectedTab == 0 &&
                 miniMapGraphic != null &&
-                Camera.main != null &&
                 selectedMapSceneName == activeScene.name &&
                 ZeldaRuntimeRegistry.GetControlledMover() != null)
             {
-                miniMapGraphic.SetCameraPosition(Camera.main.transform.position);
+                miniMapGraphic.SetCameraPosition(
+                    ZeldaRuntimeRegistry.GetControlledMover().transform.position);
             }
 
             if (selectedTab == 0)
@@ -193,6 +212,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
 
     public void CloseMenu()
     {
+        EndEquipmentSelection();
         if (!IsOpen)
         {
             return;
@@ -228,6 +248,11 @@ public sealed class TabJournalMenuController : MonoBehaviour
         panelImage.color = PanelBlue;
         panelImage.raycastTarget = true;
         CreateBorder(panelRect, GhostBlue, 3f, out _);
+        // Split the top border so the active bookmark opens into the content panel.
+        panelTopLeft = panelRect.Find("Top").GetComponent<RectTransform>();
+        panelTopRight = CreateBorderEdge(panelRect, "Top Right Segment", GhostBlue,
+            new Vector2(0f, 1f), new Vector2(1f, 1f),
+            new Vector2(0f, -3f), Vector2.zero).rectTransform;
 
         for (int index = 0; index < contentPages.Length; index++)
         {
@@ -243,17 +268,219 @@ public sealed class TabJournalMenuController : MonoBehaviour
 
         BuildMiniMapPage(contentPages[0].GetComponent<RectTransform>());
         BuildQuestJournalPage(contentPages[1].GetComponent<RectTransform>());
+        contentPages[2].AddComponent<CharacterSkillPage>().Build(menuFont);
+        BuildAbilitySelectionPage(contentPages[3].GetComponent<RectTransform>());
 
         string[] labels =
         {
-            "小地图",
+            "地图",
             "任务日志",
-            "角色能力（尚未开放）"
+            "角色能力",
+            "能力选择"
         };
-        float[] horizontalPositions = { -360f, 0f, 360f };
+        float[] horizontalPositions = { -390f, -130f, 130f, 390f };
         for (int index = 0; index < labels.Length; index++)
         {
             CreateTab(rootRect, labels[index], horizontalPositions[index], index);
+        }
+    }
+
+    private void BuildAbilitySelectionPage(RectTransform page)
+    {
+        abilityPage = page;
+        // Five placeholders correspond to HUD skill slots 1-5; abilities are assigned later.
+        var left = CreateUiObject("Ability Selection List", page, typeof(Image));
+        var leftRect = left.GetComponent<RectTransform>();
+        leftRect.anchorMin = Vector2.zero;
+        leftRect.anchorMax = new Vector2(0.5f, 1f);
+        leftRect.offsetMin = Vector2.zero;
+        leftRect.offsetMax = new Vector2(-282f, 0f);
+        var background = left.GetComponent<Image>();
+        background.color = new Color(0.015f, 0.045f, 0.075f, 0.72f);
+        background.raycastTarget = false;
+        CreateBorderEdge(page, "Ability Selection Column Divider", GhostBlue,
+            new Vector2(0.5f, 0f), new Vector2(0.5f, 1f),
+            new Vector2(-271f, 0f), new Vector2(-269f, 0f));
+        const float slotSize = 64f;
+        const float slotPitch = 88f;
+        for (int index = 0; index < 5; index++)
+        {
+            var slot = CreateUiObject("Ability Slot " + (index + 1), page, typeof(Image));
+            var slotRect = slot.GetComponent<RectTransform>();
+            slotRect.anchorMin = slotRect.anchorMax = new Vector2(0.5f, 0.5f);
+            slotRect.anchoredPosition = new Vector2(-405f, (2 - index) * slotPitch);
+            slotRect.sizeDelta = Vector2.one * slotSize;
+            slot.GetComponent<Image>().color = new Color(0.015f, 0.04f, 0.06f, 0.85f);
+            slot.GetComponent<Image>().raycastTarget = false;
+            CreateBorder(slotRect, GhostBlue, 2.5f, out _);
+            equipmentSlots[index] = slotRect;
+            var selectButton = slot.AddComponent<Button>();
+            slot.GetComponent<Image>().raycastTarget = true;
+            selectButton.targetGraphic = slot.GetComponent<Image>();
+            selectButton.transition = Selectable.Transition.None;
+            selectButton.navigation = new Navigation { mode = Navigation.Mode.None };
+            int slotIndex = index;
+            selectButton.onClick.AddListener(() => BeginEquipmentSelection(slotIndex));
+            var equippedIcon = CreateUiObject("Equipped Icon", slotRect, typeof(Image)).GetComponent<Image>();
+            equippedIcon.rectTransform.sizeDelta = new Vector2(38f, 38f);
+            equippedIcon.raycastTarget = false;
+            equippedIcon.preserveAspect = true;
+            equippedIcon.enabled = false;
+            equipmentIcons[index] = equippedIcon;
+
+            var number = CreateUiObject("Shortcut Number", slotRect, typeof(Text)).GetComponent<Text>();
+            var numberRect = number.rectTransform;
+            numberRect.anchorMin = numberRect.anchorMax = new Vector2(0f, 1f);
+            numberRect.pivot = new Vector2(0f, 1f);
+            numberRect.anchoredPosition = new Vector2(6f, -4f);
+            numberRect.sizeDelta = new Vector2(24f, 24f);
+            number.font = menuFont;
+            number.fontSize = 18;
+            number.alignment = TextAnchor.UpperLeft;
+            number.text = (index + 1).ToString();
+            number.color = GhostBlue;
+            number.raycastTarget = false;
+        }
+        var right = CreateUiObject("Ability Selection Details", page, typeof(Image)).GetComponent<RectTransform>();
+        right.anchorMin = right.anchorMax = new Vector2(0.5f, 0.5f);
+        right.anchoredPosition = new Vector2(135f, 0f);
+        right.sizeDelta = new Vector2(750f, 480f);
+        abilityRight = right;
+        right.GetComponent<Image>().color = new Color(0.015f, 0.045f, 0.075f, 0.97f);
+        right.GetComponent<Image>().raycastTarget = false;
+        CreateBorder(right, GhostBlue, 2f, out _);
+
+        // Equal cells distribute the 5x5 grid evenly across the framed area.
+        for (int row = 0; row < 5; row++)
+        {
+            for (int column = 0; column < 5; column++)
+            {
+                var slot = CreateUiObject("Available Ability " + (row * 5 + column + 1), right, typeof(Image));
+                var slotRect = slot.GetComponent<RectTransform>();
+                slotRect.anchorMin = slotRect.anchorMax = new Vector2(0.5f, 0.5f);
+                slotRect.anchoredPosition = new Vector2((column - 2) * 150f, (2 - row) * 92f);
+                slotRect.sizeDelta = Vector2.one * slotSize;
+                slot.GetComponent<Image>().color = new Color(0.015f, 0.04f, 0.06f, 0.85f);
+                slot.GetComponent<Image>().raycastTarget = false;
+                CreateBorder(slotRect, GhostBlue, 2.5f, out _);
+                var icon = CreateUiObject("Ability Icon", slotRect, typeof(CanvasRenderer), typeof(SkillPageArt));
+                var iconRect = icon.GetComponent<RectTransform>();
+                iconRect.anchorMin = iconRect.anchorMax = new Vector2(0.5f, 0.5f);
+                iconRect.sizeDelta = new Vector2(44f, 44f);
+                var art = icon.GetComponent<SkillPageArt>();
+                art.raycastTarget = false;
+                availableAbilityIcons[row * 5 + column] = art;
+                icon.SetActive(false);
+                int abilityIndex = row * 5 + column;
+                var chooseButton = slot.AddComponent<Button>();
+                slot.GetComponent<Image>().raycastTarget = true;
+                chooseButton.targetGraphic = slot.GetComponent<Image>();
+                chooseButton.transition = Selectable.Transition.None;
+                availableAbilityBackgrounds[abilityIndex] = slot.GetComponent<Image>();
+                var hover = slot.AddComponent<EventTrigger>();
+                var enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+                enter.callback.AddListener(_ => {
+                    if (equipmentSelection >= 0 && !string.IsNullOrEmpty(availableAbilityIds[abilityIndex]))
+                        availableAbilityBackgrounds[abilityIndex].color = AbilitySlotHighlight;
+                });
+                hover.triggers.Add(enter);
+                var exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
+                exit.callback.AddListener(_ => availableAbilityBackgrounds[abilityIndex].color = AbilitySlotBackground);
+                hover.triggers.Add(exit);
+                chooseButton.navigation = new Navigation { mode = Navigation.Mode.None };
+                chooseButton.onClick.AddListener(() => {
+                    if (equipmentSelection < 0 || string.IsNullOrEmpty(availableAbilityIds[abilityIndex])) return;
+                    if (PlayerGrowthAttributes.Instance != null && PlayerGrowthAttributes.Instance.ToggleEquippedSkill(equipmentSelection, availableAbilityIds[abilityIndex]))
+                    { EndEquipmentSelection(); RefreshAvailableAbilities(); }
+                });
+                var name = CreateUiObject("Skill Name", slotRect, typeof(Text)).GetComponent<Text>();
+                name.rectTransform.anchoredPosition = new Vector2(0f, -42f);
+                name.rectTransform.sizeDelta = new Vector2(142f, 20f);
+                name.font = menuFont; name.fontSize = 16;
+                name.alignment = TextAnchor.MiddleCenter; name.color = GhostBlue; name.raycastTarget = false;
+                availableAbilityNames[abilityIndex] = name;
+            }
+        }
+    }
+
+    private void RefreshAvailableAbilities()
+    {
+        var growth = PlayerGrowthAttributes.Instance;
+        for (int i = 0; i < 5; i++)
+        {
+            equipmentIcons[i].sprite = SkillPageArt.GetAbilitySprite(growth != null ? growth.GetEquippedSkill(i) : null);
+            equipmentIcons[i].enabled = equipmentIcons[i].sprite != null;
+            equipmentIcons[i].color = GhostBlue;
+        }
+        int index = 0;
+        foreach (var skill in PlayerGrowthAttributes.Skills)
+        {
+            if (skill.locked || skill.type != PlayerGrowthAttributes.SkillType.Active ||
+                growth == null || !growth.HasSkill(skill.id) || growth.GetEffectiveSkillId(skill.id) != skill.id) continue;
+            if (index >= availableAbilityIcons.Length) break;
+            availableAbilityNames[index].text = skill.title;
+            availableAbilityIds[index] = skill.id;
+            var art = availableAbilityIcons[index++];
+            art.soulMark = PlayerGrowthAttributes.IsSoulMarkSkill(skill.id);
+            art.domino = PlayerGrowthAttributes.IsDominoSkill(skill.id);
+            art.ghostForm = PlayerGrowthAttributes.IsGhostFormSkill(skill.id);
+            art.combatExpertise = PlayerGrowthAttributes.IsCombatExpertiseSkill(skill.id);
+            art.fearRoar = PlayerGrowthAttributes.IsFearRoarSkill(skill.id);
+            art.royalCommand = PlayerGrowthAttributes.IsRoyalCommandSkill(skill.id);
+            art.royalCommandLevel = skill.id == "royal_command_2" ? 2 : 1;
+            art.fearRoarLevel = skill.id == "fear_roar_3" ? 3 : skill.id == "fear_roar_2" ? 2 : 1;
+            art.combatExpertiseLevel = skill.id == "combat_expertise_2" ? 2 : 1;
+            art.ghostFormLevel = skill.id == "ghost_form_3" ? 3 : skill.id == "ghost_form_2" ? 2 : 1;
+            art.dominoLevel = skill.id == "domino_3" ? 3 : skill.id == "domino_2" ? 2 : 1;
+            art.soulMarkLevel = skill.id == "soul_mark_3" ? 3 : skill.id == "soul_mark_2" ? 2 : 1;
+            art.gameObject.name = skill.title;
+            art.gameObject.SetActive(true);
+            art.SetAllDirty();
+        }
+        for (; index < availableAbilityIcons.Length; index++)
+        {
+            availableAbilityIcons[index].gameObject.SetActive(false);
+            availableAbilityNames[index].text = "";
+            availableAbilityIds[index] = null;
+        }
+    }
+
+    private void BeginEquipmentSelection(int slot)
+    {
+        if (equipmentSelection >= 0) return;
+        equipmentSelection = slot;
+        if (EventSystem.current != null)
+        {
+            previousNavigation = EventSystem.current.sendNavigationEvents;
+            EventSystem.current.sendNavigationEvents = false;
+            EventSystem.current.SetSelectedGameObject(null);
+        }
+        equipmentOverlay = CreateUiObject("Equipment Selection Dimmer", menuRoot.transform, typeof(Image));
+        Stretch(equipmentOverlay.GetComponent<RectTransform>());
+        equipmentOverlay.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.7f);
+        // Only these controls render and receive clicks above the input-blocking dimmer.
+        abilityRight.SetParent(equipmentOverlay.transform, true);
+        equipmentSlots[slot].SetParent(equipmentOverlay.transform, true);
+        equipmentOriginalScale = equipmentSlots[slot].localScale;
+        equipmentSlots[slot].localScale = equipmentOriginalScale * 1.12f;
+        equipmentSlots[slot].GetComponent<Image>().color = AbilitySlotHighlight;
+    }
+
+    private void EndEquipmentSelection()
+    {
+        if (equipmentSelection < 0) return;
+        equipmentSlots[equipmentSelection].localScale = equipmentOriginalScale;
+        equipmentSlots[equipmentSelection].GetComponent<Image>().color = AbilitySlotBackground;
+        foreach (var background in availableAbilityBackgrounds)
+            if (background != null) background.color = AbilitySlotBackground;
+        abilityRight.SetParent(abilityPage, true);
+        equipmentSlots[equipmentSelection].SetParent(abilityPage, true);
+        equipmentSelection = -1;
+        if (equipmentOverlay != null) { equipmentOverlay.SetActive(false); Destroy(equipmentOverlay); }
+        if (EventSystem.current != null)
+        {
+            EventSystem.current.SetSelectedGameObject(null);
+            EventSystem.current.sendNavigationEvents = previousNavigation;
         }
     }
 
@@ -493,7 +720,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
         scrollbarRect.offsetMin = offsetMin;
         scrollbarRect.offsetMax = offsetMax;
         Image background = scrollbarObject.GetComponent<Image>();
-        background.color = DisabledBlue;
+        background.color = new Color(0.035f, 0.12f, 0.2f, 1f);
 
         GameObject handleObject = CreateUiObject(
             "Handle",
@@ -510,17 +737,21 @@ public sealed class TabJournalMenuController : MonoBehaviour
         scrollbar.direction = direction;
         scrollbar.value = 0.5f;
         scrollbar.size = 1f;
-        ColorBlock colors = scrollbar.colors;
-        colors.normalColor = GhostBlue;
-        colors.highlightedColor = Color.Lerp(GhostBlue, Color.white, 0.22f);
-        colors.pressedColor = Color.Lerp(GhostBlue, Color.white, 0.38f);
-        colors.selectedColor = colors.highlightedColor;
-        colors.fadeDuration = 0.08f;
-        scrollbar.colors = colors;
+        ApplySkillScrollbarStyle(scrollbar);
         return scrollbar;
     }
 
-    private void CreateMapZoomButton(
+    internal static void ApplySkillScrollbarStyle(Scrollbar scrollbar)
+    {
+        var track = scrollbar.GetComponent<Image>();
+        if (track != null) track.color = new Color(0.035f, 0.12f, 0.2f, 1f);
+        if (scrollbar.targetGraphic != null) scrollbar.targetGraphic.color = GhostBlue;
+        // Match the skill tree's standard interaction tint, without multiplying blue by blue.
+        scrollbar.transition = Selectable.Transition.ColorTint;
+        scrollbar.colors = ColorBlock.defaultColorBlock;
+    }
+
+    internal static void CreateMapZoomButton(
         RectTransform parent,
         string objectName,
         string symbol,
@@ -677,6 +908,8 @@ public sealed class TabJournalMenuController : MonoBehaviour
                 ZeldaRuntimeRegistry.GetControlledMover();
             if (controlledMover != null)
             {
+                miniMapGraphic.SetCameraPosition(
+                    controlledMover.transform.position);
                 miniMapGraphic.CenterOnWorldPosition(
                     controlledMover.transform.position);
             }
@@ -849,7 +1082,8 @@ public sealed class TabJournalMenuController : MonoBehaviour
             iconObject.GetComponent<MapPointOfInterestUiInteraction>().Configure(
                 point.Id,
                 ShowMapPointTooltip,
-                HideMapPointTooltip);
+                HideMapPointTooltip,
+                point.IconShape == MapPointIconShape.Lever);
             mapPointIcons.Add(new MiniMapPointIcon
             {
                 pointId = point.Id,
@@ -907,10 +1141,12 @@ public sealed class TabJournalMenuController : MonoBehaviour
         }
 
         hoveredMapPointId = pointId;
-        mapPointTooltipText.text = string.IsNullOrWhiteSpace(point.Description)
-            ? point.Title
-            : point.Title + "\n" + point.Description;
-        Vector2 position = iconRect.anchoredPosition + new Vector2(126f, 36f);
+        bool isLever = point.IconShape == MapPointIconShape.Lever;
+        mapPointTooltipText.text = point.TooltipText;
+        mapPointTooltipRect.sizeDelta = isLever ? new Vector2(76f, 32f) : new Vector2(230f, 84f);
+        mapPointTooltipText.alignment = isLever ? TextAnchor.MiddleCenter : TextAnchor.UpperLeft;
+        Vector2 position = iconRect.anchoredPosition +
+            (isLever ? new Vector2(55f, 25f) : new Vector2(126f, 36f));
         Rect viewport = mapPointLayer.rect;
         Vector2 half = mapPointTooltipRect.sizeDelta * 0.5f;
         position.x = Mathf.Clamp(
@@ -976,6 +1212,31 @@ public sealed class TabJournalMenuController : MonoBehaviour
     private static List<string> GetMapSceneNames(string activeSceneName)
     {
         List<string> result = new List<string>();
+        if (LevelSceneGroup.TryGetLevelForScene(
+                activeSceneName,
+                out LevelSceneGroup.Definition configuredLevel))
+        {
+            for (int index = 0;
+                 index < configuredLevel.SceneNames.Count;
+                 index++)
+            {
+                string sceneName = configuredLevel.SceneNames[index];
+                if (!string.IsNullOrWhiteSpace(sceneName) &&
+                    !ContainsSceneName(result, sceneName))
+                {
+                    result.Add(sceneName);
+                }
+            }
+
+            if (!ContainsSceneName(result, activeSceneName))
+            {
+                result.Insert(0, activeSceneName);
+            }
+            return result;
+        }
+
+        // Backward-compatible fallback for existing scenes that have not yet
+        // been assigned a LevelSceneGroup component.
         bool multiSceneLevel = activeSceneName.StartsWith(
             "Level1",
             StringComparison.OrdinalIgnoreCase);
@@ -1425,22 +1686,22 @@ public sealed class TabJournalMenuController : MonoBehaviour
         rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.pivot = new Vector2(0.5f, 0f);
         rect.anchoredPosition = new Vector2(horizontalPosition, 238f);
-        rect.sizeDelta = new Vector2(300f, 76f);
+        rect.sizeDelta = new Vector2(240f, 76f);
 
         Image background = tabObject.GetComponent<Image>();
-        background.color = index == 2 ? DisabledBlue : TabBlue;
+        background.color = TabBlue;
         tabBackgrounds[index] = background;
 
         CreateBorder(
             rect,
-            index == 2 ? DisabledText : GhostBlue,
+            GhostBlue,
             3f,
             out Image bottomEdge);
         tabBottomEdges[index] = bottomEdge;
 
         Button button = tabObject.GetComponent<Button>();
         button.targetGraphic = background;
-        button.interactable = index != 2;
+        button.interactable = true;
         button.transition = Selectable.Transition.ColorTint;
         int selectedIndex = index;
         button.onClick.AddListener(() => SetSelectedTab(selectedIndex));
@@ -1454,10 +1715,10 @@ public sealed class TabJournalMenuController : MonoBehaviour
         Text text = labelObject.GetComponent<Text>();
         text.text = label;
         text.font = menuFont;
-        text.fontSize = index == 2 ? 18 : 22;
+        text.fontSize = 22;
         text.fontStyle = FontStyle.Normal;
         text.alignment = TextAnchor.MiddleCenter;
-        text.color = index == 2 ? DisabledText : GhostBlue;
+        text.color = GhostBlue;
         text.raycastTarget = false;
         tabLabels[index] = text;
     }
@@ -1471,6 +1732,14 @@ public sealed class TabJournalMenuController : MonoBehaviour
         }
 
         selectedTab = index;
+        if (selectedTab == 3) RefreshAvailableAbilities();
+        var selectedRect = tabButtons[index].GetComponent<RectTransform>();
+        float halfPanelWidth = ((RectTransform)panelTopLeft.parent).rect.width * 0.5f;
+        float left = selectedRect.anchoredPosition.x - selectedRect.rect.width * 0.5f;
+        float right = selectedRect.anchoredPosition.x + selectedRect.rect.width * 0.5f;
+        // Overlap the side strokes by their thickness to form closed corners.
+        panelTopLeft.offsetMax = new Vector2(left - halfPanelWidth + 3f, 0f);
+        panelTopRight.offsetMin = new Vector2(right + halfPanelWidth - 3f, -3f);
         if (selectedTab == 0 && IsOpen)
         {
             RefreshMiniMap();
@@ -1486,11 +1755,17 @@ public sealed class TabJournalMenuController : MonoBehaviour
         for (int tabIndex = 0; tabIndex < tabButtons.Length; tabIndex++)
         {
             bool selected = tabIndex == selectedTab;
-            bool enabled = tabIndex != 2;
+            bool enabled = true;
             tabBackgrounds[tabIndex].color = enabled
                 ? selected ? selectedColor : TabBlue
                 : DisabledBlue;
             tabBottomEdges[tabIndex].gameObject.SetActive(!selected);
+            // The panel top stroke lies below the tab's bottom edge. Extend the
+            // active tab's sides through that stroke instead of leaving a gap.
+            var leftEdge = tabButtons[tabIndex].transform.Find("Left").GetComponent<RectTransform>();
+            var rightEdge = tabButtons[tabIndex].transform.Find("Right").GetComponent<RectTransform>();
+            leftEdge.offsetMin = new Vector2(leftEdge.offsetMin.x, selected ? -3f : 0f);
+            rightEdge.offsetMin = new Vector2(rightEdge.offsetMin.x, selected ? -3f : 0f);
             contentPages[tabIndex].SetActive(selected);
 
             ColorBlock colors = tabButtons[tabIndex].colors;
@@ -1527,6 +1802,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
             menuCanvas.worldCamera = uiCamera;
             menuCanvas.planeDistance = uiCamera.nearClipPlane + 0.01f;
         }
+        CRTScreenEffect.RegisterCanvas(menuCanvas);
     }
 
     private static void CreateBorder(
@@ -1664,5 +1940,578 @@ public sealed class TabJournalMenuController : MonoBehaviour
     private void OnValidate()
     {
         backgroundDimOpacity = Mathf.Clamp01(backgroundDimOpacity);
+    }
+}
+
+/// <summary>Paused skill-tree UI. Nodes are driven by PlayerGrowthAttributes.Skills.</summary>
+public sealed class CharacterSkillPage : MonoBehaviour
+{
+    private Font font;
+    private Text count, title, description, upgradeText, percentage;
+    private RectTransform collectibleIconRect;
+    private Image upgradeFill;
+    private Button upgradeButton;
+    private SkillTreeScroll tree;
+    private GameObject titleDivider;
+    private string selectedId;
+    private bool holding;
+    private float holdTime;
+    private PlayerGrowthAttributes observedGrowth;
+    private readonly Dictionary<string, Image> nodes = new Dictionary<string, Image>();
+    private static Color Ink => ZeldaUiPalette.Ghost;
+    private static readonly Color Dark = new Color(0.035f, 0.12f, 0.2f, 1f);
+    private static readonly Color Locked = new Color(0.055f, 0.085f, 0.12f, 1f);
+
+    public void Build(Font menuFont)
+    {
+        font = menuFont;
+        // Center between the menu's outer left border (-540) and divider (-270).
+        RectTransform left = Rect("Skill Details", transform, new Vector2(-405, 0), new Vector2(270, 480));
+        Stroke(left, new Vector2(135, 0), new Vector2(2, 480));
+        var collectible = Rect("Collectible Icon", left, new Vector2(-82, 202), new Vector2(42, 42));
+        collectibleIconRect = collectible;
+        collectible.gameObject.AddComponent<CanvasRenderer>();
+        collectible.gameObject.AddComponent<SkillPageArt>().collectibleIcon = true;
+        count = Label(left, "", new Vector2(20, 202), new Vector2(156, 40), 23);
+        count.alignment = TextAnchor.MiddleLeft;
+        Stroke(left, new Vector2(0, 164), new Vector2(236, 2));
+        title = Label(left, "", new Vector2(0, 124), new Vector2(220, 40), 26);
+        var divider = Rect("Skill Title Divider", left, new Vector2(0, 92), new Vector2(206, 2));
+        var dividerImage = divider.gameObject.AddComponent<Image>();
+        dividerImage.color = Ink; dividerImage.raycastTarget = false;
+        titleDivider = divider.gameObject;
+        description = Label(left, "", new Vector2(0, -46), new Vector2(206, 260), 20);
+        description.alignment = TextAnchor.UpperCenter;
+        upgradeButton = Button(left, "升级", new Vector2(0, -202), new Vector2(206, 42), null);
+        upgradeText = upgradeButton.GetComponentInChildren<Text>();
+        upgradeFill = Rect("Hold Progress", upgradeButton.transform, Vector2.zero, Vector2.zero).gameObject.AddComponent<Image>();
+        upgradeFill.color = new Color(0.28f, 0.75f, 0.86f, 0.65f);
+        upgradeFill.raycastTarget = false;
+        upgradeFill.rectTransform.anchorMin = new Vector2(0, 0);
+        upgradeFill.rectTransform.anchorMax = new Vector2(0, 1);
+        upgradeFill.rectTransform.offsetMin = upgradeFill.rectTransform.offsetMax = Vector2.zero;
+        upgradeFill.transform.SetSiblingIndex(0);
+        var trigger = upgradeButton.gameObject.AddComponent<EventTrigger>();
+        var down = new EventTrigger.Entry { eventID = EventTriggerType.PointerDown };
+        down.callback.AddListener(e => {
+            if (((PointerEventData)e).button == PointerEventData.InputButton.Left && upgradeButton.interactable)
+            { holding = true; holdTime = 0; }
+        });
+        trigger.triggers.Add(down);
+        foreach (var kind in new[] { EventTriggerType.PointerUp, EventTriggerType.PointerExit })
+        {
+            var entry = new EventTrigger.Entry { eventID = kind };
+            entry.callback.AddListener(e => CancelHold());
+            trigger.triggers.Add(entry);
+        }
+
+        var frame = Rect("Skill Tree Frame", transform, new Vector2(135, 0), new Vector2(750, 480));
+        frame.gameObject.AddComponent<Image>().color = new Color(0.015f, 0.045f, 0.075f, 0.97f);
+        Border(frame);
+        var viewport = Rect("Tree Viewport", frame, new Vector2(-5, 14), new Vector2(730, 436));
+        viewport.gameObject.AddComponent<Image>().color = Color.clear;
+        viewport.gameObject.AddComponent<RectMask2D>();
+        tree = viewport.gameObject.AddComponent<SkillTreeScroll>();
+        tree.viewport = viewport;
+        tree.content = Rect("Tree Content", viewport, Vector2.zero, new Vector2(1200, 600));
+        tree.movementType = ScrollRect.MovementType.Clamped;
+        tree.inertia = false;
+        foreach (var skill in PlayerGrowthAttributes.Skills)
+        {
+            if (!string.IsNullOrEmpty(skill.parentId))
+            {
+                var parent = Array.Find(PlayerGrowthAttributes.Skills, s => s.id == skill.parentId);
+                if (parent != null)
+                {
+                    if (Mathf.Approximately(parent.position.x, skill.position.x))
+                    {
+                        Vector2 start = parent.position + Vector2.down * 54f;
+                        Vector2 end = skill.position + Vector2.up * 49f;
+                        Segment(tree.content, start, end);
+                        Segment(tree.content, end, end + new Vector2(-6, 8));
+                        Segment(tree.content, end, end + new Vector2(6, 8));
+                        continue;
+                    }
+                    Vector2 from = parent.position + new Vector2(54, 0);
+                    Vector2 to = skill.position - new Vector2(49, 0);
+                    float mid = (from.x + to.x) / 2;
+                    Segment(tree.content, from, new Vector2(mid, from.y));
+                    Segment(tree.content, new Vector2(mid, from.y), new Vector2(mid, to.y));
+                    Segment(tree.content, new Vector2(mid, to.y), to);
+                    Segment(tree.content, to, to + new Vector2(-8, 6));
+                    Segment(tree.content, to, to + new Vector2(-8, -6));
+                }
+            }
+        }
+        foreach (var skill in PlayerGrowthAttributes.Skills)
+        {
+            string id = skill.id;
+            var node = Button(tree.content, "", skill.position, new Vector2(70, 70), () => { selectedId = id; CancelHold(); Refresh(); });
+            node.transform.localRotation = Quaternion.Euler(0, 0, 45);
+            // Thicken only skill-node borders; other page controls keep their line weight.
+            foreach (Transform child in node.transform)
+            {
+                if (child.name != "Line") continue;
+                var edge = (RectTransform)child;
+                Vector2 size = edge.sizeDelta;
+                edge.sizeDelta = size.x > size.y ? new Vector2(size.x, 3f) : new Vector2(3f, size.y);
+            }
+            node.interactable = !skill.locked;
+            nodes[id] = node.GetComponent<Image>();
+            var art = Rect("Icon", node.transform, Vector2.zero, new Vector2(44, 44));
+            art.localRotation = Quaternion.Euler(0, 0, -45);
+            if (skill.healthBonus > 0 || skill.attackBonus > 0 || skill.energyBonus > 0)
+            {
+                // The node is rotated 45 degrees: local +Y moves the complete
+                // icon group toward the screen's upper-left corner.
+                art.anchoredPosition = new Vector2(0f, 7f);
+            }
+            art.gameObject.AddComponent<CanvasRenderer>();
+            var skillArt = art.gameObject.AddComponent<SkillPageArt>();
+            skillArt.locked = skill.locked;
+            skillArt.soulMark = PlayerGrowthAttributes.IsSoulMarkSkill(skill.id);
+            skillArt.domino = PlayerGrowthAttributes.IsDominoSkill(skill.id);
+            skillArt.ghostForm = PlayerGrowthAttributes.IsGhostFormSkill(skill.id);
+            skillArt.combatExpertise = PlayerGrowthAttributes.IsCombatExpertiseSkill(skill.id);
+            skillArt.fearRoar = PlayerGrowthAttributes.IsFearRoarSkill(skill.id);
+            skillArt.royalCommand = PlayerGrowthAttributes.IsRoyalCommandSkill(skill.id);
+            skillArt.royalCommandLevel = skill.id == "royal_command_2" ? 2 : 1;
+            skillArt.fearRoarLevel = skill.id == "fear_roar_3" ? 3 : skill.id == "fear_roar_2" ? 2 : 1;
+            skillArt.strengthBonus = skill.attackBonus > 0;
+            skillArt.energyBonus = skill.energyBonus > 0;
+            skillArt.combatExpertiseLevel = skill.id == "combat_expertise_2" ? 2 : 1;
+            skillArt.ghostFormLevel = skill.id == "ghost_form_3" ? 3 : skill.id == "ghost_form_2" ? 2 : 1;
+            skillArt.dominoLevel = skill.id == "domino_3" ? 3 : skill.id == "domino_2" ? 2 : 1;
+            skillArt.soulMarkLevel = skill.id == "soul_mark_3" ? 3 : skill.id == "soul_mark_2" ? 2 : 1;
+            if (skill.healthBonus > 0 || skill.attackBonus > 0 || skill.energyBonus > 0)
+            {
+                int bonusValue = skill.healthBonus > 0 ? skill.healthBonus : skill.attackBonus > 0 ? skill.attackBonus : skill.energyBonus;
+                Text bonus = Label(art, "+" + bonusValue, new Vector2(20, -20), new Vector2(40, 24), 18);
+                bonus.fontStyle = FontStyle.Bold;
+            }
+        }
+        TabJournalMenuController.CreateMapZoomButton(frame, "Zoom In", "+", new Vector2(-67f, 18f), () => tree.Zoom(0.25f));
+        TabJournalMenuController.CreateMapZoomButton(frame, "Zoom Out", "−", new Vector2(-37f, 18f), () => tree.Zoom(-0.25f));
+        percentage = Label(frame, "100%", new Vector2(249, -222), new Vector2(78, 24), 17);
+        tree.horizontalScrollbar = Scrollbar(frame, new Vector2(-85, -220), new Vector2(540, 8), false);
+        tree.verticalScrollbar = Scrollbar(frame, new Vector2(366, 15), new Vector2(8, 430), true);
+        tree.CenterTreeLayout();
+        tree.horizontalNormalizedPosition = tree.verticalNormalizedPosition = 0.5f;
+        Refresh();
+    }
+
+    private void Update()
+    {
+        var growth = PlayerGrowthAttributes.Instance;
+        if (observedGrowth != growth)
+        {
+            if (observedGrowth != null) observedGrowth.AttributesChanged -= Refresh;
+            observedGrowth = growth;
+            if (observedGrowth != null) observedGrowth.AttributesChanged += Refresh;
+            Refresh();
+        }
+        if (percentage != null) percentage.text = Mathf.RoundToInt(tree.Scale * 100) + "%";
+        if (!holding) return;
+        if (!Input.GetMouseButton(0) || !upgradeButton.interactable) { CancelHold(); return; }
+        holdTime += Time.unscaledDeltaTime;
+        upgradeFill.rectTransform.anchorMax = new Vector2(Mathf.Clamp01(holdTime / 1.2f), 1);
+        if (holdTime >= 1.2f)
+        {
+            growth?.TryUpgradeSkill(selectedId);
+            CancelHold();
+            Refresh();
+        }
+    }
+    private void OnEnable() { if (count != null) Refresh(); }
+    private void OnDisable() { CancelHold(); }
+    private void OnDestroy() { if (observedGrowth != null) observedGrowth.AttributesChanged -= Refresh; }
+    private void CancelHold()
+    {
+        holding = false; holdTime = 0;
+        if (upgradeFill != null) upgradeFill.rectTransform.anchorMax = new Vector2(0, 1);
+    }
+    private void Refresh()
+    {
+        if (count == null) return;
+        var growth = PlayerGrowthAttributes.Instance;
+        count.text = "：" + (growth != null ? growth.CollectibleCount : 0);
+        // Keep icon and number centered as one compact group, including multi-digit counts.
+        float countWidth = count.preferredWidth;
+        const float iconWidth = 42f, gap = 3f;
+        float groupWidth = iconWidth + gap + countWidth;
+        collectibleIconRect.anchoredPosition = new Vector2(-groupWidth * 0.5f + iconWidth * 0.5f, 202f);
+        count.rectTransform.sizeDelta = new Vector2(countWidth, 40f);
+        count.rectTransform.anchoredPosition = new Vector2((iconWidth + gap) * 0.5f, 202f);
+        var selected = Array.Find(PlayerGrowthAttributes.Skills, s => s.id == selectedId);
+        bool discovered = selected != null && growth != null && growth.IsSkillDiscovered(selected);
+        title.text = selected == null ? "" : discovered ? selected.title : "未解锁技能";
+        titleDivider.SetActive(selected != null);
+        description.text = selected == null ? "" : discovered ? selected.description : "该技能需要附身特定角色才能解锁";
+        bool upgraded = selected != null && growth != null && growth.HasSkill(selected.id);
+        bool prerequisiteMet = selected != null && growth != null && growth.HasSkillPrerequisite(selected);
+        upgradeButton.interactable = selected != null && discovered && !selected.locked && !upgraded && prerequisiteMet && growth.CollectibleCount >= selected.cost;
+        upgradeText.text = selected == null ? "请选择技能" : upgraded ? "已升级" : !discovered ? "未解锁" : !prerequisiteMet ? "请先解锁前置技能" : "升级（消耗" + selected.cost + "）";
+        upgradeButton.GetComponent<Image>().color = upgradeButton.interactable ? Dark : Locked;
+        upgradeText.color = upgradeButton.interactable ? Ink : new Color(0.25f, 0.35f, 0.42f);
+        foreach (var skill in PlayerGrowthAttributes.Skills)
+        {
+            if (!nodes.TryGetValue(skill.id, out var image)) continue;
+            bool locked = skill.locked || growth == null || !growth.IsSkillDiscovered(skill);
+            var art = image.GetComponentInChildren<SkillPageArt>(true);
+            if (art != null && art.locked != locked) { art.locked = locked; art.SetAllDirty(); }
+            image.color = locked ? Locked :
+                growth != null && growth.HasSkill(skill.id) ? new Color(0.4f, 0.75f, 0.8f) :
+                selectedId == skill.id ? new Color(0.18f, 0.4f, 0.5f) : Dark;
+        }
+    }
+    private static RectTransform Rect(string name, Transform parent, Vector2 position, Vector2 size)
+    {
+        var rect = new GameObject(name, typeof(RectTransform)).GetComponent<RectTransform>();
+        rect.SetParent(parent, false); rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = size; rect.anchoredPosition = position; return rect;
+    }
+    private Text Label(Transform parent, string value, Vector2 pos, Vector2 size, int fontSize)
+    {
+        var text = Rect("Label", parent, pos, size).gameObject.AddComponent<Text>();
+        text.font = font; text.text = value; text.fontSize = fontSize; text.color = Ink;
+        text.alignment = TextAnchor.MiddleCenter; text.raycastTarget = false; return text;
+    }
+    private Button Button(Transform parent, string label, Vector2 pos, Vector2 size, Action action)
+    {
+        var rect = Rect(label, parent, pos, size);
+        var image = rect.gameObject.AddComponent<Image>(); image.color = Dark;
+        var button = rect.gameObject.AddComponent<Button>(); button.targetGraphic = image;
+        button.transition = Selectable.Transition.None;
+        if (action != null) button.onClick.AddListener(() => action());
+        Border(rect); Label(rect, label, Vector2.zero, size, 18); return button;
+    }
+    private static void Stroke(Transform parent, Vector2 pos, Vector2 size)
+    {
+        var image = Rect("Line", parent, pos, size).gameObject.AddComponent<Image>(); image.color = Ink; image.raycastTarget = false;
+    }
+    private static void Border(RectTransform r)
+    {
+        Stroke(r, new Vector2(0, r.sizeDelta.y / 2), new Vector2(r.sizeDelta.x, 1));
+        Stroke(r, new Vector2(0, -r.sizeDelta.y / 2), new Vector2(r.sizeDelta.x, 1));
+        Stroke(r, new Vector2(r.sizeDelta.x / 2, 0), new Vector2(1, r.sizeDelta.y));
+        Stroke(r, new Vector2(-r.sizeDelta.x / 2, 0), new Vector2(1, r.sizeDelta.y));
+    }
+    private static void Segment(Transform parent, Vector2 a, Vector2 b)
+    {
+        var line = Rect("Branch", parent, (a+b)/2, new Vector2(Vector2.Distance(a,b), 2));
+        line.localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(b.y-a.y,b.x-a.x)*Mathf.Rad2Deg);
+        var image = line.gameObject.AddComponent<Image>(); image.color = Ink; image.raycastTarget = false;
+    }
+    private static Scrollbar Scrollbar(Transform parent, Vector2 pos, Vector2 size, bool vertical)
+    {
+        var track = Rect("Scrollbar", parent, pos, size); track.gameObject.AddComponent<Image>().color = Dark;
+        var handle = Rect("Handle", track, Vector2.zero, Vector2.zero);
+        var image = handle.gameObject.AddComponent<Image>(); image.color = Ink;
+        var bar = track.gameObject.AddComponent<Scrollbar>(); bar.handleRect = handle; bar.targetGraphic = image;
+        bar.direction = vertical ? UnityEngine.UI.Scrollbar.Direction.BottomToTop : UnityEngine.UI.Scrollbar.Direction.LeftToRight;
+        TabJournalMenuController.ApplySkillScrollbarStyle(bar);
+        return bar;
+    }
+}
+
+public sealed class SkillTreeScroll : ScrollRect
+{
+    private const float MinimumScale = 0.5f;
+    private Vector2 baseContentSize = new Vector2(1200, 600);
+    public float Scale { get; private set; } = 1f;
+    public void CenterTreeLayout()
+    {
+        if (content == null || content.childCount == 0) return;
+        Vector2 minimum = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
+        Vector2 maximum = new Vector2(float.NegativeInfinity, float.NegativeInfinity);
+        var corners = new Vector3[4];
+        foreach (RectTransform child in content)
+        {
+            child.GetLocalCorners(corners);
+            var matrix = Matrix4x4.TRS(child.localPosition, child.localRotation, child.localScale);
+            foreach (var corner in corners)
+            {
+                Vector2 point = matrix.MultiplyPoint3x4(corner);
+                minimum = Vector2.Min(minimum, point);
+                maximum = Vector2.Max(maximum, point);
+            }
+        }
+        // Include rotated diamond corners and branches, rather than centering on the root node.
+        Vector2 center = (minimum + maximum) * 0.5f;
+        foreach (RectTransform child in content) child.anchoredPosition -= center;
+        baseContentSize = Vector2.Max(baseContentSize, (maximum - minimum) / Scale + Vector2.one * 80f);
+        content.sizeDelta = baseContentSize * Scale;
+        StopMovement();
+        content.anchoredPosition = Vector2.zero;
+    }
+    public void Zoom(float delta)
+    {
+        float old = Scale;
+        Scale = Mathf.Clamp(Scale + delta, MinimumScale, 3f);
+        content.sizeDelta = baseContentSize * Scale;
+        // Scale nodes without scaling the scroll bounds twice.
+        foreach (RectTransform child in content)
+        {
+            child.anchoredPosition *= Scale / old;
+            child.localScale = Vector3.one * Scale;
+        }
+        if (Scale <= MinimumScale + 0.0001f)
+        {
+            StopMovement();
+            content.anchoredPosition = Vector2.zero;
+        }
+    }
+    public override void OnScroll(PointerEventData data) { Zoom(data.scrollDelta.y * 0.15f); }
+}
+
+[RequireComponent(typeof(CanvasRenderer))]
+public sealed class SkillPageArt : MaskableGraphic
+{
+    private static readonly Sprite[] soulMarkSprites = new Sprite[3];
+    private static readonly Sprite[] ghostFormSprites = new Sprite[3];
+    private static readonly string[][] GhostFormVariants = { BuildGhostFormPixels(1), BuildGhostFormPixels(2), BuildGhostFormPixels(3) };
+    public int ghostFormLevel = 1;
+    private static string[] BuildGhostFormPixels(int level)
+    {
+        string[] body = {
+            "................", "................", "......####......", "....########....",
+            "...##########...", "..############..", "..####.##.####..", "..####.##.####..",
+            "..############..", "..############..", "...##########...", "....########....",
+            "......####......", "................", "................", "................"
+        };
+        var rows = new string[21];
+        for (int y = 0; y < 21; y++)
+        {
+            var row = new string('.', 21).ToCharArray();
+            if (y < body.Length) for (int x = 0; x < 16; x++) row[x] = body[y][x];
+            if (y >= 14)
+                for (int x = level == 3 ? 14 : 16; x <= 20; x++)
+                    if (y == 14 || y == 20 ||
+                        (level == 1 ? x == 18 : level == 2 ? x == 17 || x == 19 : x == 15 || x == 17 || x == 19)) row[x] = '#';
+            rows[y] = new string(row);
+        }
+        return rows;
+    }
+    private static Sprite soulMarkWorldSprite;
+    private static Sprite dominoWorldSprite;
+    private static readonly Sprite[] dominoSprites = new Sprite[3];
+    private static readonly string[][] DominoVariants = { BuildDominoPixels(1), BuildDominoPixels(2), BuildDominoPixels(3) };
+    public int dominoLevel = 1;
+    private static string[] BuildDominoPixels(int level)
+    {
+        string[] skull = { "..#####..", ".#######.", "#########", "##..#..##", "##..#..##", ".###.###.", "..#####..", "..#.#.#.." };
+        var rows = new string[21];
+        for (int y = 0; y < 21; y++)
+        {
+            var row = new string('.', 21).ToCharArray();
+            int cardShift = level == 3 ? -2 : 0; // Leave a clear gap beside the wider numeral III.
+            for (int x = 3; x <= 14; x++)
+                if (y >= 1 && y <= 18) row[x + cardShift] = '#';
+            if (y >= 6 && y < 14)
+                for (int x = 0; x < 9; x++)
+                    if (skull[y - 6][x] == '#') row[x + 5 + cardShift] = '.';
+            if (level > 0 && y >= 14)
+                for (int x = level == 3 ? 14 : 16; x <= 20; x++)
+                    if (y == 14 || y == 20 ||
+                        (level == 1 ? x == 18 : level == 2 ? x == 17 || x == 19 : x == 15 || x == 17 || x == 19)) row[x] = '#';
+            rows[y] = new string(row);
+        }
+        return rows;
+    }
+    public static Sprite GetDominoWorldSprite()
+    {
+        // Without the numeral, the card occupies columns 3..14. Center on the card,
+        // not on the full canvas that reserves empty space for the numeral on the right.
+        if (dominoWorldSprite == null) dominoWorldSprite = CreateSoulMarkSprite(BuildDominoPixels(0), 9f / 21f);
+        return dominoWorldSprite;
+    }
+    private static readonly string[] SoulMarkBasePixels = {
+        ".......#.......", ".......#.......", "....#######....",
+        "....#..#..#....", "..###..#..###..", "..#.........#..",
+        "..#.........#..", "#####..#..#####", "..#.........#..",
+        "..#.........#..", "..###..#..###..", "....#..#..#....",
+        "....#######....", ".......#.......", ".......#......."
+    };
+    private static readonly string[][] SoulMarkVariants = { BuildSoulMarkPixels(1), BuildSoulMarkPixels(2), BuildSoulMarkPixels(3) };
+    public int soulMarkLevel = 1;
+    private static string[] BuildSoulMarkPixels(int level)
+    {
+        // Shared composition for the tree and equipment slots.
+        // Keep the reticle upper-left and the serif Roman I clear at bottom-right.
+        var rows = new string[21];
+        for (int y = 0; y < rows.Length; y++)
+        {
+            var row = new string('.', 21).ToCharArray();
+            if (y >= 1 && y < 16)
+                for (int x = 0; x < 15; x++) row[x + 1] = SoulMarkBasePixels[y - 1][x];
+            if (y >= 14 && y <= 20)
+                for (int x = level == 3 ? 14 : 16; x <= 20; x++)
+                    if (y == 14 || y == 20 ||
+                        (level == 1 ? x == 18 : level == 2 ? x == 17 || x == 19 : x == 15 || x == 17 || x == 19)) row[x] = '#';
+            rows[y] = new string(row);
+        }
+        return rows;
+    }
+    public static Sprite GetAbilitySprite(string id)
+    {
+        if (PlayerGrowthAttributes.IsRoyalCommandSkill(id)) return ZeldaCharacterData.GetRankedCommandIcon(id == "royal_command_2" ? 2 : 1);
+        if (PlayerGrowthAttributes.IsFearRoarSkill(id)) return FearRoarArea.GetRankedIcon(id == "fear_roar_3" ? 3 : id == "fear_roar_2" ? 2 : 1);
+        if (PlayerGrowthAttributes.IsCombatExpertiseSkill(id)) return ZeldaHealthHeartsUI.GetRankedCombatExpertiseIcon(id == "combat_expertise_2" ? 2 : 1);
+        if (PlayerGrowthAttributes.IsGhostFormSkill(id))
+        {
+            int rank = id == "ghost_form_3" ? 3 : id == "ghost_form_2" ? 2 : 1;
+            if (ghostFormSprites[rank - 1] == null) ghostFormSprites[rank - 1] = CreateSoulMarkSprite(GhostFormVariants[rank - 1]);
+            return ghostFormSprites[rank - 1];
+        }
+        if (PlayerGrowthAttributes.IsDominoSkill(id))
+        {
+            int rank = id == "domino_3" ? 3 : id == "domino_2" ? 2 : 1;
+            if (dominoSprites[rank - 1] == null) dominoSprites[rank - 1] = CreateSoulMarkSprite(DominoVariants[rank - 1]);
+            return dominoSprites[rank - 1];
+        }
+        if (!PlayerGrowthAttributes.IsSoulMarkSkill(id)) return null;
+        int level = id == "soul_mark_3" ? 3 : id == "soul_mark_2" ? 2 : 1;
+        if (soulMarkSprites[level - 1] != null) return soulMarkSprites[level - 1];
+        soulMarkSprites[level - 1] = CreateSoulMarkSprite(SoulMarkVariants[level - 1]);
+        return soulMarkSprites[level - 1];
+    }
+    public static Sprite GetSoulMarkWorldSprite()
+    {
+        if (soulMarkWorldSprite == null) soulMarkWorldSprite = CreateSoulMarkSprite(SoulMarkBasePixels);
+        return soulMarkWorldSprite;
+    }
+    private static Sprite CreateSoulMarkSprite(string[] SoulMarkPixels, float pivotX = 0.5f)
+    {
+        int size = SoulMarkPixels.Length;
+        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        texture.name = "Soul Mark Skill Icon";
+        texture.filterMode = FilterMode.Point;
+        texture.wrapMode = TextureWrapMode.Clamp;
+        var pixels = new Color32[size * size];
+        for (int y = 0; y < size; y++) for (int x = 0; x < size; x++)
+            pixels[(size - 1 - y) * size + x] = SoulMarkPixels[y][x] == '#' ? new Color32(255,255,255,255) : new Color32(0,0,0,0);
+        texture.SetPixels32(pixels); texture.Apply(false, true);
+        return Sprite.Create(texture, new Rect(0,0,size,size), new Vector2(pivotX,0.5f), size);
+    }
+    public bool collectibleIcon, locked, soulMark, domino, ghostForm, combatExpertise;
+    public bool strengthBonus;
+    public bool energyBonus;
+    private static Sprite strengthBonusSprite;
+    private static Sprite StrengthBonusSprite
+    {
+        get
+        {
+            if (strengthBonusSprite == null) strengthBonusSprite = ZeldaHealthHeartsUI.CreateStrengthIcon(out _);
+            return strengthBonusSprite;
+        }
+    }
+    public int combatExpertiseLevel = 1;
+    public bool fearRoar;
+    public int fearRoarLevel = 1;
+    public bool royalCommand;
+    public int royalCommandLevel = 1;
+    public override Texture mainTexture => !locked && royalCommand ? ZeldaCharacterData.GetRankedCommandIcon(royalCommandLevel).texture : !locked && fearRoar ? FearRoarArea.GetRankedIcon(fearRoarLevel).texture : !locked && strengthBonus ? StrengthBonusSprite.texture : combatExpertise && !locked
+        ? ZeldaHealthHeartsUI.GetRankedCombatExpertiseIcon(combatExpertiseLevel).texture : base.mainTexture;
+    private RectTransform collectibleOrbit, collectibleGlow;
+    private GrowthCollectible.IconAppearance collectibleAppearance;
+    private const float CollectibleUiScale = 20f;
+    protected override void Awake() { base.Awake(); raycastTarget = false; }
+    private void Update()
+    {
+        if (!collectibleIcon) return;
+        if (collectibleOrbit == null) BuildCollectibleIcon();
+        collectibleOrbit.Rotate(0f, 0f, collectibleAppearance.rotationSpeed * Time.unscaledDeltaTime);
+        float pulse = 1f + Mathf.Sin(Time.unscaledTime * collectibleAppearance.pulseSpeed) * collectibleAppearance.pulseAmount;
+        collectibleGlow.localScale = Vector3.one * pulse;
+    }
+
+    private Image CollectibleImage(string name, Transform parent, Vector2 position, Vector2 size, Sprite sprite, Color tint)
+    {
+        var obj = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        var image = obj.GetComponent<Image>();
+        image.rectTransform.SetParent(parent, false);
+        image.rectTransform.anchorMin = image.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        image.rectTransform.anchoredPosition = position;
+        image.rectTransform.sizeDelta = size;
+        image.sprite = sprite; image.color = tint; image.raycastTarget = false;
+        return image;
+    }
+
+    private void BuildCollectibleIcon()
+    {
+        collectibleAppearance = GrowthCollectible.GetIconAppearance();
+        var appearance = collectibleAppearance;
+        collectibleGlow = CollectibleImage("Breathing Glow", transform, Vector2.zero,
+            Vector2.one * appearance.glowSize * CollectibleUiScale, appearance.glow,
+            new Color(1, 1, 1, appearance.glowOpacity)).rectTransform;
+        Vector3[] points = GrowthCollectible.IconVertices;
+        float width = appearance.lineWidth * CollectibleUiScale;
+        for (int i = 0; i < points.Length; i++)
+        {
+            for (int j = i + 1; j < points.Length; j++)
+            {
+                Vector2 a = points[i] * CollectibleUiScale, b = points[j] * CollectibleUiScale;
+                var edge = CollectibleImage("Tetrahedron Edge", transform, (a + b) * 0.5f,
+                    new Vector2(Vector2.Distance(a, b), width), null, Color.white);
+                edge.rectTransform.localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(b.y-a.y, b.x-a.x) * Mathf.Rad2Deg);
+                CollectibleImage("Round Cap", transform, a, Vector2.one * width, appearance.circle, Color.white);
+                CollectibleImage("Round Cap", transform, b, Vector2.one * width, appearance.circle, Color.white);
+            }
+        }
+        collectibleOrbit = new GameObject("Rotating Orbit Points", typeof(RectTransform)).GetComponent<RectTransform>();
+        collectibleOrbit.SetParent(transform, false);
+        for (int i = 0; i < appearance.pointCount; i++)
+        {
+            float angle = i * Mathf.PI * 2f / appearance.pointCount;
+            CollectibleImage("Orbit Point", collectibleOrbit,
+                new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * appearance.radius * CollectibleUiScale,
+                Vector2.one * appearance.pointSize * CollectibleUiScale, appearance.circle, Color.white);
+        }
+    }
+    protected override void OnPopulateMesh(VertexHelper vh)
+    {
+        vh.Clear();
+        if (energyBonus && !locked)
+        {
+            // Same horizontal rectangle proportions and solid fill as the E.G.O HUD.
+            Quad(vh, Vector2.zero, new Vector2(30.8f, 17.6f), ZeldaUiPalette.Ghost);
+            return;
+        }
+        if ((combatExpertise || strengthBonus || fearRoar || royalCommand) && !locked)
+        {
+            Color swordTint = ZeldaUiPalette.Ghost;
+            Rect r = strengthBonus ? new Rect(-17f, -17f, 34f, 34f) : rectTransform.rect;
+            vh.AddVert(new Vector2(r.xMin, r.yMin), swordTint, new Vector2(0, 0));
+            vh.AddVert(new Vector2(r.xMin, r.yMax), swordTint, new Vector2(0, 1));
+            vh.AddVert(new Vector2(r.xMax, r.yMax), swordTint, new Vector2(1, 1));
+            vh.AddVert(new Vector2(r.xMax, r.yMin), swordTint, new Vector2(1, 0));
+            vh.AddTriangle(0, 1, 2); vh.AddTriangle(0, 2, 3);
+            return;
+        }
+        if (collectibleIcon)
+        {
+            return;
+        }
+        string[] pixels = locked ? new[] { "..###..", ".#...#.", ".#...#.", "#######", "###.###", "###.###", "#######" } : ghostForm ? GhostFormVariants[Mathf.Clamp(ghostFormLevel, 1, 3) - 1] : domino ? DominoVariants[Mathf.Clamp(dominoLevel, 1, 3) - 1] : soulMark ? SoulMarkVariants[Mathf.Clamp(soulMarkLevel, 1, 3) - 1] :
+            new[] { "..#...#..", ".###.###.", "#########", "#########", ".#######.", "..#####..", "...###...", "....#...." };
+        float unit = (soulMark || domino || ghostForm) && !locked ? 2.1f : 3.6f;
+        Color tint = locked ? new Color(0.25f,0.35f,0.42f) : ZeldaUiPalette.Ghost;
+        for (int y=0;y<pixels.Length;y++) for (int x=0;x<pixels[y].Length;x++)
+            if (pixels[y][x]=='#') Quad(vh,new Vector2((x-(pixels[y].Length-1)/2f)*unit,((pixels.Length-1)/2f-y)*unit),Vector2.one*unit,tint);
+    }
+    private static void Quad(VertexHelper vh, Vector2 center, Vector2 size, Color c)
+    {
+        int start=vh.currentVertCount; Vector2 half=size/2;
+        vh.AddVert(center+new Vector2(-half.x,-half.y),c,Vector2.zero);
+        vh.AddVert(center+new Vector2(-half.x,half.y),c,Vector2.zero);
+        vh.AddVert(center+new Vector2(half.x,half.y),c,Vector2.zero);
+        vh.AddVert(center+new Vector2(half.x,-half.y),c,Vector2.zero);
+        vh.AddTriangle(start,start+1,start+2); vh.AddTriangle(start,start+2,start+3);
+    }
+    private static void Line(VertexHelper vh,Vector2 a,Vector2 b,float width,Color c)
+    {
+        int n=vh.currentVertCount; Vector2 d=(b-a).normalized; Vector2 p=new Vector2(-d.y,d.x)*width/2;
+        vh.AddVert(a-p,c,Vector2.zero); vh.AddVert(a+p,c,Vector2.zero); vh.AddVert(b+p,c,Vector2.zero); vh.AddVert(b-p,c,Vector2.zero);
+        vh.AddTriangle(n,n+1,n+2); vh.AddTriangle(n,n+2,n+3);
     }
 }

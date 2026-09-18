@@ -16,6 +16,9 @@ public sealed class ClockworkPuppetPickupItem : PickupItemBase
     private float leverSearchRadius;
     [SerializeField, Min(0.1f)] private float reclaimDistance = 1.15f;
     [SerializeField, Min(0.1f)] private float lockedDoorPryDistance = 0.7f;
+    [SerializeField, Min(0.1f)] private float manualInteractionDistance = 0.85f;
+    [SerializeField, Min(0.1f)] private float lockedDoorPryHoldDuration = 3f;
+    [SerializeField, Range(0f, 1f)] private float lockedDoorPryMagicFraction = 0.5f;
     [SerializeField, Min(0.05f)] private float deployedScale = 0.58f;
     [SerializeField, Min(0.1f), Tooltip("Radius of the additional camera-vision reveal centred on a deployed puppet, including while it drives a cardboard box.")]
     private float visionRevealRadius = 3f;
@@ -40,6 +43,9 @@ public sealed class ClockworkPuppetPickupItem : PickupItemBase
     public float LeverSearchRadius => Mathf.Max(0f, leverSearchRadius);
     public float ReclaimDistance => reclaimDistance;
     public float LockedDoorPryDistance => lockedDoorPryDistance;
+    public float ManualInteractionDistance => manualInteractionDistance;
+    public float LockedDoorPryHoldDuration => lockedDoorPryHoldDuration;
+    public float LockedDoorPryMagicFraction => lockedDoorPryMagicFraction;
     public float DeployedScale => deployedScale;
     public float VisionRevealRadius => visionRevealRadius;
     public bool ShowNavigationDebug => showNavigationDebug;
@@ -97,7 +103,38 @@ public sealed class ClockworkPuppetPickupItem : PickupItemBase
         return runtime;
     }
 
-    private ClockworkPuppetRuntime DeployPuppet(
+    public ClockworkPuppetRuntime DeployControlledFromCardboardBox(
+        Vector3 worldPosition,
+        LeverData targetLever,
+        ZeldaCharacterData controllingCharacter,
+        float remainingMagic,
+        string itemInstanceId,
+        string itemName,
+        string itemDescription,
+        bool hasVisualColor,
+        Color visualColor)
+    {
+        ClockworkPuppetRuntime runtime = DeployPuppet(
+            worldPosition,
+            controllingCharacter,
+            targetLever,
+            remainingMagic);
+        if (runtime == null)
+        {
+            return null;
+        }
+
+        runtime.SetInventoryIdentity(
+            itemInstanceId,
+            itemName,
+            itemDescription,
+            hasVisualColor,
+            visualColor);
+        runtime.AttachToLeverFromCardboardBox(targetLever);
+        return runtime;
+    }
+
+    public ClockworkPuppetRuntime DeployPuppet(
         Vector3 worldPosition,
         ZeldaCharacterData deployingCharacter,
         LeverData preferredLever,
@@ -136,6 +173,9 @@ public sealed class ClockworkPuppetPickupItem : PickupItemBase
         leverSearchRadius = Mathf.Max(0f, leverSearchRadius);
         reclaimDistance = Mathf.Max(0.1f, reclaimDistance);
         lockedDoorPryDistance = Mathf.Max(0.1f, lockedDoorPryDistance);
+        manualInteractionDistance = Mathf.Max(0.1f, manualInteractionDistance);
+        lockedDoorPryHoldDuration = Mathf.Max(0.1f, lockedDoorPryHoldDuration);
+        lockedDoorPryMagicFraction = Mathf.Clamp01(lockedDoorPryMagicFraction);
         deployedScale = Mathf.Max(0.05f, deployedScale);
         visionRevealRadius = Mathf.Max(0.1f, visionRevealRadius);
         navigationPathWidth = Mathf.Max(0.005f, navigationPathWidth);

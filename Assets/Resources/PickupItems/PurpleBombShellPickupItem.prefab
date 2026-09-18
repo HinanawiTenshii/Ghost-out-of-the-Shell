@@ -128,7 +128,7 @@ MonoBehaviour:
   itemColor: {r: 1, g: 1, b: 1, a: 1}
   worldScale: 0.55
   shellColor: {r: 0.54, g: 0.25, b: 0.82, a: 1}
-  shellShadowColor: {r: 0.31, g: 0.12, b: 0.52, a: 1}
+  shellShadowColor: {r: 0.351, g: 0.1625, b: 0.533, a: 1}
   shellHighlightColor: {r: 0.72, g: 0.43, b: 0.94, a: 1}
 --- !u!114 &9400000006
 MonoBehaviour:

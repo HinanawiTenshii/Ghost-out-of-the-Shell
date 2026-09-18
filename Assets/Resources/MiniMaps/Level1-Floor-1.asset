@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9a2f0b8e4c7d41c6a912fc0e693d45a1, type: 3}
   m_Name: Level1-Floor-1
   m_EditorClassIdentifier: Assembly-CSharp::RuntimeMiniMapSceneData
-  schemaVersion: 3
+  schemaVersion: 4
   sceneName: Level1-Floor-1
   displayName: "\u57CE\u5821\u5730\u4E0B\u5BA4"
   blockPaths:
@@ -29,11 +29,11 @@ MonoBehaviour:
     - {x: 72, y: -27.393227}
     - {x: 72, y: -42.801254}
   - points:
-    - {x: 71.999954, y: -27.432941}
-    - {x: 71.499954, y: -27.432941}
-    - {x: 71.499954, y: -20.39994}
-    - {x: 71.999954, y: -20.39994}
-    - {x: 71.999954, y: -27.432941}
+    - {x: 71.999954, y: -24.351662}
+    - {x: 71.499954, y: -24.351662}
+    - {x: 71.499954, y: -20.399818}
+    - {x: 71.999954, y: -20.399818}
+    - {x: 71.999954, y: -24.351662}
   - points:
     - {x: 67.18007, y: -13.372841}
     - {x: 67.18007, y: -12.872841}
@@ -248,3 +248,4 @@ MonoBehaviour:
   questTargets:
   - questId: level1.craft_super_bomb
     position: {x: 79.66, y: -22.43}
+  bridges: []

@@ -128,7 +128,7 @@ MonoBehaviour:
   itemColor: {r: 1, g: 1, b: 1, a: 1}
   worldScale: 0.55
   cordColor: {r: 0.42, g: 0.3, b: 0.2, a: 1}
-  cordHighlightColor: {r: 0.76, g: 0.62, b: 0.42, a: 1}
+  cordHighlightColor: {r: 0.78, g: 0.64, b: 0.43, a: 1}
   emberColor: {r: 1, g: 0.42, b: 0.12, a: 1}
 --- !u!114 &9300000006
 MonoBehaviour:

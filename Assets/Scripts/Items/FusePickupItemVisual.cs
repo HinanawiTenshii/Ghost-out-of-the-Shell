@@ -1,12 +1,12 @@
 using UnityEngine;
 
-/// <summary>Pixel-art coiled fuse with a small burning tip.</summary>
+/// <summary>Chunky bent fuse, matching the finished bomb's tan cord.</summary>
 public sealed class FusePickupItemVisual : PickupItemVisualBase
 {
     [SerializeField] private Color cordColor =
         new Color(0.42f, 0.3f, 0.2f, 1f);
     [SerializeField] private Color cordHighlightColor =
-        new Color(0.76f, 0.62f, 0.42f, 1f);
+        new Color(0.78f, 0.64f, 0.43f, 1f);
     [SerializeField] private Color emberColor =
         new Color(1f, 0.42f, 0.12f, 1f);
 
@@ -28,17 +28,22 @@ public sealed class FusePickupItemVisual : PickupItemVisualBase
     {
         return new[]
         {
-            "..............EE.",
-            ".............EHH.",
-            "............CH...",
-            "..........CCH....",
-            "........CCH......",
-            "......CCH........",
-            "....CCH..........",
-            "..CCH....CCCCCC..",
-            ".CCH.CCCC....CC..",
-            ".CCCCC........C..",
-            "..CCC............"
+            "................",
+            "................",
+            "...........EE...",
+            "..........HHE...",
+            ".........HHC....",
+            "........HHC.....",
+            ".......HHC......",
+            "......HHC.......",
+            ".....HHC........",
+            "....HHC.........",
+            "...HHC..........",
+            "...HCC..........",
+            "...HHHHHHH......",
+            "....CCCCCC......",
+            "................",
+            "................"
         };
     }
 }

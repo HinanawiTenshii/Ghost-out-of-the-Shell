@@ -24,7 +24,8 @@ public class SwordZeldaCharacterData : ZeldaCharacterData
     private Sprite attackingLeftSprite;
     private Sprite attackingRightSprite;
 
-    public override bool CanAttack => true;
+    public override bool CanAttack => !IsGhostForm;
+    public override Color GhostFormEyeColor => new Color(0.04f, 0.18f, 0.48f, 1f);
     public override int AttackPower => attackPower;
     public override GameObject AttackPrefab => attackPrefab;
     public override float AttackDuration => attackDuration;
@@ -75,127 +76,174 @@ public class SwordZeldaCharacterData : ZeldaCharacterData
         facingUpSprite = CreateCharacterSprite(Vector2.up);
         facingLeftSprite = CreateCharacterSprite(Vector2.left);
         facingRightSprite = CreateCharacterSprite(Vector2.right);
-        attackingDownSprite = CreateAttackingCharacterSprite(Vector2.down);
-        attackingUpSprite = CreateAttackingCharacterSprite(Vector2.up);
-        attackingLeftSprite = CreateAttackingCharacterSprite(Vector2.left);
-        attackingRightSprite = CreateAttackingCharacterSprite(Vector2.right);
+        attackingDownSprite = CreateCharacterSprite(Vector2.down, true);
+        attackingUpSprite = CreateCharacterSprite(Vector2.up, true);
+        attackingLeftSprite = CreateCharacterSprite(Vector2.left, true);
+        attackingRightSprite = CreateCharacterSprite(Vector2.right, true);
     }
 
-    private Sprite CreateAttackingCharacterSprite(Vector2 facing)
-    {
-        Sprite baseSprite = CreateCharacterSprite(facing);
-        Texture2D sourceTexture = baseSprite.texture;
-        Texture2D attackTexture = new Texture2D(sourceTexture.width, sourceTexture.height);
-        attackTexture.filterMode = FilterMode.Point;
+    // One-pixel shorter boots; a higher texture pivot retains the world-space ground baseline.
+    // Full 16x16 silhouettes: the helmet ends at row 4 and rests directly on
+    // row 5's shoulders. There is deliberately no neck or narrow skin bridge.
+    // Short legs end at y=3. The animator lifts a foot within y=3..4.
+    private static readonly string[] FrontBody = {
+        "......HHHH......",
+        ".....AAAAAA.....",
+        ".....SAAAAS.....",
+        ".....AFEFEA.....",
+        ".....AFFFFA.....",
+        "....LHAAAAHL....",
+        "....ASQQPPSA....",
+        "....HHPPPPHH....",
+        "....GGAPPAGG....",
+        "....GGBQQBGG....",
+        ".....AATTAA.....",
+        ".....KK..KK.....",
+        ".....KK..KK.....",
+        "................",
+        "................",
+        "................",
+    };
 
-        for (int y = 0; y < sourceTexture.height; y++)
+    private static readonly string[] BackBody = {
+        "......HHHH......",
+        ".....AAAAAA.....",
+        ".....SAHHAS.....",
+        ".....SAAAAS.....",
+        ".....SSSSSS.....",
+        "....LHAAAAHL....",
+        "....ASTDDTSA....",
+        "....HHTDDTHH....",
+        "....GGTDDTGG....",
+        "....GGBBBBGG....",
+        ".....TDTTDT.....",
+        ".....KK..KK.....",
+        ".....KK..KK.....",
+        "................",
+        "................",
+        "................",
+    };
+
+    private static readonly string[] LeftBody = {
+        ".....HHHH.......",
+        "....HAAAAS......",
+        "....AAAASS......",
+        "....FEAAAS......",
+        "....FFAAAS......",
+        ".....LHAAHL.....",
+        ".....ATTTAS.....",
+        ".....ATHHAS.....",
+        ".....ATGGAS.....",
+        ".....HBGGBB.....",
+        ".....TTDDAS.....",
+        ".....KK..KK.....",
+        ".....KK..KK.....",
+        "................",
+        "................",
+        "................",
+    };
+
+    private static readonly string[] RightBody = {
+        ".......HHHH.....",
+        "......SAAAAH....",
+        "......SSAAAA....",
+        "......SAAAEF....",
+        "......SAAAFF....",
+        ".....LHAAHL.....",
+        ".....SATTTA.....",
+        ".....SAHHTA.....",
+        ".....SAGGTA.....",
+        ".....BBGGBH.....",
+        ".....SADDTT.....",
+        ".....KK..KK.....",
+        ".....KK..KK.....",
+        "................",
+        "................",
+        "................",
+    };
+
+    private Sprite CreateCharacterSprite(Vector2 facing, bool attacking = false)
+    {
+        string[] rows = facing == Vector2.up ? BackBody :
+            facing == Vector2.left ? LeftBody : facing == Vector2.right ? RightBody : FrontBody;
+        var pixels = new Color[16 * 16];
+        for (int row = 0; row < 16; row++)
+        for (int x = 0; x < 16; x++)
+            pixels[(15 - row) * 16 + x] = PixelColor(rows[row][x]);
+
+        if (attacking)
         {
-            for (int x = 0; x < sourceTexture.width; x++)
+            RestoreBodyBehindAttackingArm(pixels, facing);
+            int startX = facing == Vector2.left ? 2 : facing == Vector2.right ? 10 : 6;
+            int startY = facing == Vector2.up ? 10 : facing == Vector2.down ? 4 : 6;
+            for (int y = startY; y < startY + 3; y++)
+            for (int x = startX; x < startX + 4; x++)
+                pixels[y * 16 + x] = PixelColor(y == startY + 2 ? 'H' : 'A');
+            int handX = facing == Vector2.left ? startX :
+                facing == Vector2.right ? startX + 2 : startX + 1;
+            int handY = facing == Vector2.up ? startY + 1 : startY;
+            for (int y = handY; y < handY + 2; y++)
+            for (int x = handX; x < handX + 2; x++)
+                pixels[y * 16 + x] = PixelColor('G');
+        }
+
+        var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false)
+        {
+            name = "SwordGuy " + facing + (attacking ? " Attack" : " Idle"),
+            filterMode = FilterMode.Point,
+            wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        texture.SetPixels(pixels);
+        texture.Apply(); // Keep idle pixels readable for PixelCharacterWalkAnimator.
+        var sprite = Sprite.Create(texture, new Rect(0, 0, 16, 16), new Vector2(0.5f, 0.3125f), 16f);
+        sprite.name = texture.name;
+        sprite.hideFlags = HideFlags.HideAndDontSave;
+        return sprite;
+    }
+
+    private void RestoreBodyBehindAttackingArm(Color[] pixels, Vector2 facing)
+    {
+        if (facing == Vector2.down || facing == Vector2.up)
+        {
+            int outerX = facing == Vector2.down ? 4 : 11;
+            int innerX = facing == Vector2.down ? 5 : 10;
+            for (int y = 6; y <= 8; y++)
             {
-                attackTexture.SetPixel(x, y, sourceTexture.GetPixel(x, y));
+                pixels[y * 16 + outerX] = Color.clear;
+                pixels[y * 16 + innerX] = PixelColor(y == 6 ? 'B' : 'T');
             }
         }
-
-        Color tunic = new Color(0.36f, 0.38f, 0.42f, 1f);
-        Color gauntlet = GetArmorHighlightColor(new Color(0.48f, 0.53f, 0.57f, 1f));
-
-        if (facing == Vector2.up)
-        {
-            FillRect(attackTexture, 6, 11, 4, 3, gauntlet);
-            FillRect(attackTexture, 7, 8, 2, 4, tunic);
-        }
-        else if (facing == Vector2.left)
-        {
-            FillRect(attackTexture, 1, 6, 5, 2, gauntlet);
-            FillRect(attackTexture, 5, 5, 3, 3, tunic);
-        }
-        else if (facing == Vector2.right)
-        {
-            FillRect(attackTexture, 10, 6, 5, 2, gauntlet);
-            FillRect(attackTexture, 8, 5, 3, 3, tunic);
-        }
         else
         {
-            FillRect(attackTexture, 6, 5, 4, 3, gauntlet);
-            FillRect(attackTexture, 7, 7, 2, 3, tunic);
+            // The near arm lies over the centre of the torso in both profiles.
+            // Restore the underlying armor/belt before extending that arm.
+            for (int y = 6; y <= 8; y++)
+            for (int x = 7; x <= 8; x++)
+                pixels[y * 16 + x] = PixelColor(y == 6 ? 'B' : 'T');
         }
-
-        attackTexture.Apply();
-        return Sprite.Create(attackTexture, new Rect(0, 0, sourceTexture.width, sourceTexture.height), new Vector2(0.5f, 0.25f), 16f);
     }
 
-    private Sprite CreateCharacterSprite(Vector2 facing)
+    private Color PixelColor(char symbol)
     {
-        const int size = 16;
-        Texture2D texture = new Texture2D(size, size);
-        texture.filterMode = FilterMode.Point;
-
-        Color clear = new Color(1f, 1f, 1f, 0f);
-        Color tunicDark = new Color(0.20f, 0.22f, 0.26f, 1f);
-        Color tunic = new Color(0.36f, 0.38f, 0.42f, 1f);
-        Color tunicLight = GetArmorHighlightColor(new Color(0.52f, 0.54f, 0.57f, 1f));
-        Color helmetDark = new Color(0.16f, 0.20f, 0.24f, 1f);
-        Color helmet = new Color(0.38f, 0.44f, 0.48f, 1f);
-        Color helmetLight = GetArmorHighlightColor(new Color(0.62f, 0.68f, 0.70f, 1f));
-        Color face = new Color(1f, 0.78f, 0.48f, 1f);
-        Color boots = new Color(0.24f, 0.13f, 0.05f, 1f);
-        Color belt = new Color(0.16f, 0.10f, 0.06f, 1f);
-        Color eye = new Color(0.04f, 0.18f, 0.48f, 1f);
-
-        FillRect(texture, 0, 0, size, size, clear);
-        FillRect(texture, 5, 4, 6, 7, tunic);
-        FillRect(texture, 5, 4, 1, 7, tunicDark);
-        FillRect(texture, 10, 4, 1, 7, tunicDark);
-        FillRect(texture, 7, 5, 2, 5, tunicLight);
-        FillRect(texture, 5, 6, 6, 1, belt);
-        SetMarker(texture, 7, 6, helmetLight);
-        FillRect(texture, 4, 8, 2, 3, helmetDark);
-        FillRect(texture, 10, 8, 2, 3, helmet);
-        FillRect(texture, 5, 2, 2, 2, boots);
-        FillRect(texture, 9, 2, 2, 2, boots);
-
-        if (facing == Vector2.up)
+        switch (symbol)
         {
-            FillRect(texture, 5, 10, 6, 5, helmet);
-            FillRect(texture, 5, 10, 2, 1, helmetDark);
-            FillRect(texture, 6, 14, 4, 1, helmetLight);
-            FillRect(texture, 7, 11, 2, 3, helmetDark);
-            SetMarker(texture, 7, 13, helmetLight);
+            case 'T': return new Color(0.36f, 0.38f, 0.42f, 1f);
+            case 'D': return new Color(0.20f, 0.22f, 0.26f, 1f);
+            // Neutral steel breastplate/buckle, independent of rank-colored trim.
+            case 'P': return new Color(0.48f, 0.53f, 0.56f, 1f);
+            case 'Q': return new Color(0.62f, 0.67f, 0.69f, 1f);
+            case 'L': return GetArmorHighlightColor(new Color(0.52f, 0.54f, 0.57f, 1f));
+            case 'S': return new Color(0.16f, 0.20f, 0.24f, 1f);
+            case 'A': return new Color(0.38f, 0.44f, 0.48f, 1f);
+            case 'H': return GetArmorHighlightColor(new Color(0.62f, 0.68f, 0.70f, 1f));
+            case 'F': return new Color(1f, 0.78f, 0.48f, 1f);
+            case 'G': return new Color(0.60f, 0.64f, 0.64f, 1f);
+            case 'K': return new Color(0.24f, 0.13f, 0.05f, 1f);
+            case 'B': return new Color(0.26f, 0.19f, 0.12f, 1f);
+            case 'E': return new Color(0.04f, 0.18f, 0.48f, 1f);
+            default: return Color.clear;
         }
-        else if (facing == Vector2.left)
-        {
-            FillRect(texture, 4, 9, 5, 4, face);
-            FillRect(texture, 3, 11, 7, 3, helmet);
-            FillRect(texture, 4, 14, 5, 1, helmetLight);
-            FillRect(texture, 9, 11, 1, 3, helmetDark);
-            FillRect(texture, 3, 10, 2, 2, helmet);
-            SetMarker(texture, 3, 11, helmetLight);
-            texture.SetPixel(4, 10, eye);
-        }
-        else if (facing == Vector2.right)
-        {
-            FillRect(texture, 7, 9, 5, 4, face);
-            FillRect(texture, 6, 11, 7, 3, helmet);
-            FillRect(texture, 7, 14, 5, 1, helmetLight);
-            FillRect(texture, 6, 11, 1, 3, helmetDark);
-            FillRect(texture, 11, 10, 2, 2, helmet);
-            SetMarker(texture, 11, 11, helmetLight);
-            texture.SetPixel(10, 10, eye);
-        }
-        else
-        {
-            FillRect(texture, 5, 9, 6, 4, face);
-            FillRect(texture, 5, 12, 6, 3, helmet);
-            FillRect(texture, 6, 15, 4, 1, helmetLight);
-            FillRect(texture, 5, 12, 1, 2, helmetDark);
-            FillRect(texture, 10, 12, 1, 2, helmetDark);
-            texture.SetPixel(7, 11, eye);
-            texture.SetPixel(9, 11, eye);
-            SetMarker(texture, 7, 8, helmetLight);
-        }
-
-        texture.Apply();
-        return Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.25f), 16f);
     }
 
     private Color GetArmorHighlightColor(Color normalColor)
@@ -225,23 +273,24 @@ public class SwordZeldaCharacterData : ZeldaCharacterData
         return direction.y > 0f ? Vector2.up : Vector2.down;
     }
 
-    private static void FillRect(Texture2D texture, int startX, int startY, int width, int height, Color color)
+    private void OnDestroy()
     {
-        for (int y = startY; y < startY + height; y++)
-        {
-            for (int x = startX; x < startX + width; x++)
-            {
-                texture.SetPixel(x, y, color);
-            }
-        }
+        ReleaseSprite(facingDownSprite);
+        ReleaseSprite(facingUpSprite);
+        ReleaseSprite(facingLeftSprite);
+        ReleaseSprite(facingRightSprite);
+        ReleaseSprite(attackingDownSprite);
+        ReleaseSprite(attackingUpSprite);
+        ReleaseSprite(attackingLeftSprite);
+        ReleaseSprite(attackingRightSprite);
     }
 
-    private static void SetMarker(Texture2D texture, int x, int y, Color color)
+    private void ReleaseSprite(Sprite sprite)
     {
-        texture.SetPixel(x, y, color);
-        texture.SetPixel(x + 1, y, color);
-        texture.SetPixel(x, y + 1, color);
-        texture.SetPixel(x + 1, y + 1, color);
+        if (sprite == null) return;
+        Texture2D texture = sprite.texture;
+        if (Application.isPlaying) { Destroy(sprite); Destroy(texture); }
+        else { DestroyImmediate(sprite); DestroyImmediate(texture); }
     }
 
     protected override void OnValidate()

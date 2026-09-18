@@ -51,6 +51,55 @@ public struct QuestJournalEventChange
 [DefaultExecutionOrder(-490)]
 public sealed class QuestJournalManager : MonoBehaviour
 {
+    [Serializable] public sealed class SavedEntry
+    {
+        public string id, title, details, scene;
+    }
+    [Serializable] public sealed class SavedEvidence
+    {
+        public string id;
+        public List<string> details;
+    }
+    [Serializable] public sealed class SaveState
+    {
+        public List<SavedEntry> entries = new List<SavedEntry>();
+        public List<string> initialized, completed, pendingCompleted;
+        public List<SavedEvidence> evidence = new List<SavedEvidence>();
+        public List<QuestJournalEventChange> updates = new List<QuestJournalEventChange>();
+        public string tracked, initialTracked;
+    }
+
+    public SaveState CaptureSaveState()
+    {
+        var state = new SaveState {
+            initialized = new List<string>(initializedScenes),
+            completed = new List<string>(completedEntryIds),
+            pendingCompleted = new List<string>(pendingCompletionEvidence),
+            tracked = TrackedEntryId, initialTracked = InitialTrackedEntryId
+        };
+        foreach (var e in entries)
+            state.entries.Add(new SavedEntry { id = e.Id, title = e.Title, details = e.Details, scene = e.SourceScene });
+        foreach (var e in pendingDetailEvidence)
+            state.evidence.Add(new SavedEvidence { id = e.Key, details = new List<string>(e.Value) });
+        foreach (var e in pendingUpdateEvidence) state.updates.Add(e.Value);
+        return state;
+    }
+
+    public void ApplySaveState(SaveState state)
+    {
+        if (state == null) return;
+        entries.Clear(); initializedScenes.Clear(); completedEntryIds.Clear();
+        pendingCompletionEvidence.Clear(); pendingDetailEvidence.Clear(); pendingUpdateEvidence.Clear();
+        foreach (var e in state.entries) entries.Add(new Entry(e.id, e.title, e.details, e.scene));
+        if (state.initialized != null) initializedScenes.UnionWith(state.initialized);
+        if (state.completed != null) completedEntryIds.UnionWith(state.completed);
+        if (state.pendingCompleted != null) pendingCompletionEvidence.UnionWith(state.pendingCompleted);
+        foreach (var e in state.evidence) pendingDetailEvidence[e.id] = new List<string>(e.details);
+        foreach (var e in state.updates) pendingUpdateEvidence[e.entryId] = e;
+        TrackedEntryId = state.tracked; InitialTrackedEntryId = state.initialTracked;
+        JournalChanged?.Invoke(); TrackedQuestChanged?.Invoke();
+    }
+
     public sealed class Entry
     {
         public string Id { get; private set; }
@@ -393,29 +442,7 @@ public sealed class QuestJournalManager : MonoBehaviour
         if (!scene.IsValid() || !scene.isLoaded)
             return;
 
-        if (scene.name == "Level1-Floor1")
-        {
-            DoorHingeInteraction[] doors = FindObjectsOfType<DoorHingeInteraction>(true);
-            int cageDoorCount = 0;
-            bool allUnlocked = true;
-            for (int index = 0; index < doors.Length; index++)
-            {
-                DoorHingeInteraction door = doors[index];
-                if (door == null || door.gameObject.scene != scene ||
-                    !door.name.StartsWith("CageDoor", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                cageDoorCount++;
-                allUnlocked &= !door.IsLocked;
-            }
-
-            if (cageDoorCount >= 2 && allUnlocked)
-            {
-                RecordQuestCompletion("level1.open_monster_cage");
-            }
-        }
+        RecordControlledBehemoth(ZeldaRuntimeRegistry.GetControlledMover());
 
         if (scene.name == "Level1-Floor-1")
         {
@@ -433,6 +460,17 @@ public sealed class QuestJournalManager : MonoBehaviour
             }
         }
 
+    }
+
+    public void RecordControlledBehemoth(ZeldaFourWayMover mover)
+    {
+        if (mover == null || !mover.isActiveAndEnabled ||
+            mover.GetComponent<BehemothZeldaCharacterData>() == null ||
+            !SceneManager.GetActiveScene().name.StartsWith("Level1", StringComparison.OrdinalIgnoreCase)) return;
+
+        // Possession alone completes the quest. Evidence is retained even if
+        // the document introducing the quest has not been read yet.
+        RecordQuestCompletion("level1.open_monster_cage");
     }
 
     private string FindLatestIncompleteEntryId(string excludedId = "")

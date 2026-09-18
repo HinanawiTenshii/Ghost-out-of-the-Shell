@@ -96,13 +96,14 @@ public sealed class BombPickupItem : PickupItemBase
         DetonateFromAttack(triggeringCharacter);
     }
 
-    private PlacedBomb CreateConfiguredPlacedBomb(
+    public PlacedBomb CreateConfiguredPlacedBomb(
         Vector3 worldPosition,
         ZeldaCharacterData user)
     {
         GameObject placedObject = new GameObject("Placed Bomb");
         placedObject.transform.position = worldPosition;
         PlacedBomb placedBomb = placedObject.AddComponent<PlacedBomb>();
+        placedBomb.SaveSourceItemId = ItemId;
         placedBomb.Configure(
             fuseDuration,
             flashInterval,

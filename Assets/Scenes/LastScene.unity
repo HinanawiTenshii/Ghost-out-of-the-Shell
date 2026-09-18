@@ -333,8 +333,6 @@ MonoBehaviour:
   followOffset: {x: 0, y: 0, z: -10}
   smoothFollow: 1
   followSmoothTime: 0.12
-  ghostOrthographicSize: 6
-  characterOrthographicSize: 6
   cameraSizeSmoothTime: 0.25
   possessionFocusSizeMultiplier: 0.72
 --- !u!114 &1604600433

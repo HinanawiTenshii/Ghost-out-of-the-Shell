@@ -10,7 +10,8 @@ public enum MapPointIconShape
     Circle,
     Square,
     Star,
-    Exclamation
+    Exclamation,
+    Lever
 }
 
 [Serializable]
@@ -36,7 +37,12 @@ public sealed class MapPointOfInterestRecord
     public Color IconColor => iconColor;
     public bool VisibleOnMap => visibleOnMap;
     public bool Discovered => discovered;
-    public bool Marked => marked;
+    public bool CanBeMarked => iconShape != MapPointIconShape.Lever;
+    // Ignore legacy lever marks from saves made before levers became hover-only.
+    public bool Marked => CanBeMarked && marked;
+    public string TooltipText => iconShape == MapPointIconShape.Lever
+        ? "拉杆"
+        : string.IsNullOrWhiteSpace(description) ? title : title + "\n" + description;
 
     internal void Apply(MapPointOfInterest source)
     {
@@ -70,6 +76,13 @@ public sealed class MapPointOfInterestRecord
 [DefaultExecutionOrder(-450)]
 public sealed class MapPointOfInterestManager : MonoBehaviour
 {
+    public List<MapPointOfInterestRecord> CaptureSaveState() => new List<MapPointOfInterestRecord>(points.Values);
+    public void ApplySaveState(List<MapPointOfInterestRecord> records)
+    {
+        points.Clear();
+        if (records != null) foreach (var record in records) points[record.Id] = record;
+        PointsChanged?.Invoke();
+    }
     private readonly Dictionary<string, MapPointOfInterestRecord> points =
         new Dictionary<string, MapPointOfInterestRecord>();
 
@@ -196,7 +209,7 @@ public sealed class MapPointOfInterestManager : MonoBehaviour
     public bool ToggleMarked(string pointId)
     {
         if (!points.TryGetValue(pointId, out MapPointOfInterestRecord record) ||
-            !record.Discovered)
+            !record.Discovered || !record.CanBeMarked)
         {
             return false;
         }
@@ -270,6 +283,8 @@ public sealed class MapPointOfInterest : MonoBehaviour
 
     private float nextVisibilityCheckTime;
     private string resolvedPointId;
+    private LeverData lever;
+    private SpriteRenderer discoveryRenderer;
 
     public string PointId => string.IsNullOrEmpty(resolvedPointId)
         ? ResolvePointId()
@@ -285,6 +300,15 @@ public sealed class MapPointOfInterest : MonoBehaviour
 
     private void Awake()
     {
+        lever = GetComponent<LeverData>();
+        if (lever != null)
+        {
+            pointTitle = "拉杆";
+            description = "用于控制与其相连的机关。";
+            iconShape = MapPointIconShape.Lever;
+            visibleOnMap = true;
+            discoveryRenderer = GetComponent<SpriteRenderer>();
+        }
         resolvedPointId = ResolvePointId();
         MapPointOfInterestManager.GetOrCreate().Register(this);
     }
@@ -317,10 +341,29 @@ public sealed class MapPointOfInterest : MonoBehaviour
             viewport.x >= -viewportPadding &&
             viewport.x <= 1f + viewportPadding &&
             viewport.y >= -viewportPadding &&
-            viewport.y <= 1f + viewportPadding)
+            viewport.y <= 1f + viewportPadding &&
+            IsVisibleToPlayer(camera))
         {
             manager.Discover(this);
         }
+    }
+
+    private bool IsVisibleToPlayer(Camera camera)
+    {
+        // Keep authored POI behavior, but levers require actual player vision,
+        // not merely a position inside the camera rectangle behind a wall.
+        if (lever == null) return true;
+        if (GameSaveSystem.IsLoading) return false;
+        ZeldaFourWayMover mover = ZeldaRuntimeRegistry.GetControlledMover();
+        if (mover == null || ZeldaRuntimeRegistry.GetGameplayScene(mover.gameObject) != gameObject.scene)
+            return false;
+
+        CameraCircularVision vision = camera.GetComponent<CameraCircularVision>();
+        // A minimal test scene without a vision mask exposes its whole viewport.
+        if (vision == null || !vision.isActiveAndEnabled) return true;
+        return discoveryRenderer != null && discoveryRenderer.sprite != null
+            ? vision.IsWorldBoundsVisible(discoveryRenderer.bounds, transform)
+            : vision.IsWorldPositionVisible(transform.position, transform);
     }
 
     public void ForceDiscover()
@@ -369,6 +412,8 @@ public sealed class MapPointOfInterest : MonoBehaviour
 
     private string ResolvePointId()
     {
+        if (lever != null)
+            return gameObject.scene.name + ":lever:" + SceneTravelStateManager.GetMapObjectId(transform);
         return string.IsNullOrWhiteSpace(pointId)
             ? BuildFallbackId()
             : pointId.Trim();
@@ -388,33 +433,51 @@ public sealed class MapPointOfInterestUiInteraction : MonoBehaviour,
     private string pointId;
     private Action<string, RectTransform> entered;
     private Action<string> exited;
+    private bool hoverOnly;
 
     public void Configure(
         string configuredPointId,
         Action<string, RectTransform> pointerEntered,
-        Action<string> pointerExited)
+        Action<string> pointerExited,
+        bool configuredHoverOnly = false)
     {
         pointId = configuredPointId;
         entered = pointerEntered;
         exited = pointerExited;
+        hoverOnly = configuredHoverOnly;
+        SetHovered(false);
     }
 
     public void OnPointerEnter(PointerEventData eventData)
     {
+        SetHovered(true);
         entered?.Invoke(pointId, transform as RectTransform);
     }
 
     public void OnPointerExit(PointerEventData eventData)
     {
+        SetHovered(false);
         exited?.Invoke(pointId);
     }
 
     public void OnPointerClick(PointerEventData eventData)
     {
-        if (eventData.button == PointerEventData.InputButton.Left)
+        if (!hoverOnly && eventData.button == PointerEventData.InputButton.Left)
         {
             MapPointOfInterestManager.GetOrCreate().ToggleMarked(pointId);
         }
+    }
+
+    private void SetHovered(bool value)
+    {
+        RuntimeMiniMapPointIconGraphic graphic = GetComponent<RuntimeMiniMapPointIconGraphic>();
+        if (graphic != null) graphic.SetHovered(hoverOnly && value);
+    }
+
+    private void OnDisable()
+    {
+        SetHovered(false);
+        exited?.Invoke(pointId);
     }
 }
 
@@ -423,11 +486,21 @@ public sealed class RuntimeMiniMapPointIconGraphic : MaskableGraphic
 {
     private MapPointIconShape shape;
     private bool marked;
+    private bool hovered;
 
     public void Configure(MapPointIconShape configuredShape, bool isMarked)
     {
         shape = configuredShape;
-        marked = isMarked;
+        marked = configuredShape != MapPointIconShape.Lever && isMarked;
+        hovered = false;
+        SetVerticesDirty();
+    }
+
+    public void SetHovered(bool value)
+    {
+        bool next = shape == MapPointIconShape.Lever && value;
+        if (hovered == next) return;
+        hovered = next;
         SetVerticesDirty();
     }
 
@@ -438,6 +511,8 @@ public sealed class RuntimeMiniMapPointIconGraphic : MaskableGraphic
         Vector2 center = rect.center;
         float radius = Mathf.Min(rect.width, rect.height) *
                        (marked ? 0.30f : 0.25f);
+        // Enlarge only the drawing, keeping the hover hitbox stable at the edges.
+        if (hovered) radius *= 1.3f;
 
         switch (shape)
         {
@@ -456,6 +531,9 @@ public sealed class RuntimeMiniMapPointIconGraphic : MaskableGraphic
                 AddFan(vertexHelper, center + new Vector2(0f, -radius * 1.35f),
                     radius * 0.26f, 10, color, 0f);
                 break;
+            case MapPointIconShape.Lever:
+                AddLever(vertexHelper, center, radius, color);
+                break;
             default:
                 AddDiamond(vertexHelper, center, radius * 1.15f, color);
                 break;
@@ -467,6 +545,21 @@ public sealed class RuntimeMiniMapPointIconGraphic : MaskableGraphic
             float frameRadius = Mathf.Min(rect.width, rect.height) * 0.47f;
             AddFrame(vertexHelper, center, frameRadius, frameColor);
         }
+    }
+
+    private static void AddLever(VertexHelper helper, Vector2 center, float radius, Color color)
+    {
+        AddQuad(helper, center + new Vector2(0f, -radius * 0.72f),
+            new Vector2(radius, radius * 0.18f), color);
+        AddPolygon(helper, center, new[]
+        {
+            new Vector2(-0.38f, -0.56f) * radius,
+            new Vector2(-0.10f, -0.68f) * radius,
+            new Vector2(0.68f, 0.70f) * radius,
+            new Vector2(0.40f, 0.82f) * radius
+        }, color);
+        AddFan(helper, center + new Vector2(0.54f, 0.82f) * radius,
+            radius * 0.34f, 8, color, 0f);
     }
 
     private static void AddDiamond(

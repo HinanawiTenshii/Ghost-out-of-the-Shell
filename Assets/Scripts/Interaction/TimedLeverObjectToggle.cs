@@ -33,6 +33,37 @@ public sealed class TimedLeverObjectToggle : MonoBehaviour
     public int MaximumSourceLevers => MaximumBoundLevers;
     public float ToggleDuration => toggleDuration;
     public bool IsTemporaryToggleActive => temporaryToggleActive;
+    [System.Serializable] public sealed class SaveState
+    {
+        public float remaining;
+        public int[] indices;
+        public bool[] original;
+    }
+    public SaveState CaptureSaveState()
+    {
+        var indices = new List<int>();
+        var states = new List<bool>();
+        for (int i = 0; i < toggledObjects.Count; i++)
+        {
+            int index = System.Array.IndexOf(boundObjects, toggledObjects[i]);
+            if (index < 0) continue;
+            indices.Add(index); states.Add(originalActiveStates[i]);
+        }
+        return new SaveState { remaining = remainingDuration, indices = indices.ToArray(), original = states.ToArray() };
+    }
+    public void ApplySaveState(SaveState state)
+    {
+        if (state == null) return;
+        toggledObjects.Clear(); originalActiveStates.Clear();
+        remainingDuration = state.remaining;
+        for (int i = 0; i < state.indices.Length; i++)
+        {
+            int index = state.indices[i];
+            if (index < 0 || index >= boundObjects.Length || boundObjects[index] == null) continue;
+            toggledObjects.Add(boundObjects[index]); originalActiveStates.Add(state.original[i]);
+        }
+        temporaryToggleActive = remainingDuration > 0f && toggledObjects.Count > 0;
+    }
 
     public LeverData GetSourceLever(int index)
     {
@@ -177,6 +208,7 @@ public sealed class TimedLeverObjectToggle : MonoBehaviour
             return;
         }
 
+        CameraCircularVision.NotifyBlockersChanged();
         remainingDuration = Mathf.Max(0.01f, toggleDuration);
         temporaryToggleActive = true;
     }
@@ -201,6 +233,7 @@ public sealed class TimedLeverObjectToggle : MonoBehaviour
         originalActiveStates.Clear();
         remainingDuration = 0f;
         temporaryToggleActive = false;
+        CameraCircularVision.NotifyBlockersChanged();
     }
 
     private void OnValidate()

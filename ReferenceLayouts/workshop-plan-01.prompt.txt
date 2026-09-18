@@ -1,0 +1,15 @@
+Generation mode: built-in image_gen
+
+Use case: infographic-diagram.
+Create a clear schematic floor plan for ONE medieval town artisan plot, following front shop → rear workshop → rear courtyard. Chinese language. Strict top-down flat 2D, only simple rectangles, circles, straight lines, solid pale fills, clean dark outlines. White background. No texture, gradients, shadows, perspective, furniture illustrations, decorative medieval elements.
+Landscape canvas. Main plan left 75%, compact legend and explanatory text right 25%. North/back is at top. Horizontal public street along bottom, labelled 临街道路. Plot is roughly 12 m wide by 24 m deep as conceptual dimensions only; vertical narrow service alley outside right boundary labelled 侧巷. Plot sequence bottom to top:
+1 Front shop row about 5 m deep, divided into a large 前店 / 展示·交易 on left and small 储物间 on right. Clearly draw open customer doorway connecting public street to front shop.
+2 Rear workshop row about 8 m deep immediately above shop, labelled 后坊 / 加工·维修, with two simple thin rectangular workbenches, small square labelled 炉台 in upper left, and open doorway directly from shop. On its right edge show a real door gap into service alley.
+3 Rear courtyard about 11 m deep on top, labelled 院落 / 卸货·堆料·晾晒, with open central space, a simple rectangular open shed at top left labelled 料棚, a few small rectangles grouped against left boundary labelled 堆料区. Wide real gate gap in right courtyard boundary connects to side alley. Wide door from workshop to courtyard.
+All room and yard divisions explicit, wall openings cleanly visible. Side alley connects all the way down to street, clearly passable. No unrelated rooms, no detailed objects.
+Thin ochre arrows show customer route street → shop only. Thin muted blue arrows show delivery route street → side alley → courtyard → workshop. Arrows do not cross solid walls. Use small matching legend: 顾客动线 and 运货动线.
+Title at top: 前店—后坊—院落 · 工坊平面示意.
+Right notes exact text: 单层示意; 参考占地：约12 × 24米; 临街交易，后部生产; 侧巷进货，院落周转; 尺寸可按玩法调整.
+Architectural diagram, generous spacing, readable Chinese labels, large primary spaces, simple blockout reference.
+
+Edit: add doorway between shop and storage; reverse courtyard/workshop arrow to point into workshop.

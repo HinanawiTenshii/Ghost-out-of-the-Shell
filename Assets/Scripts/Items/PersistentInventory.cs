@@ -229,6 +229,11 @@ public sealed class PersistentInventory : MonoBehaviour
             return;
         }
 
+        if (ClockworkPuppetRuntime.BlocksCharacterInput)
+        {
+            return;
+        }
+
         if (Input.GetKeyDown(KeyCode.C))
         {
             Slot selectedSlot = GetSlot(SelectedSlotIndex);
@@ -320,6 +325,10 @@ public sealed class PersistentInventory : MonoBehaviour
 
         string normalizedId = itemId.Trim();
         int safeMaxStack = Mathf.Max(1, maxStackSize);
+        // Older crystal pickups incorrectly carried unique IDs. They are still
+        // fungible crystals and may join a stack without changing keys/charged items.
+        bool legacyCrystalStack = normalizedId == "stability_crystal";
+        if (legacyCrystalStack) safeMaxStack = 10;
         int availableCapacity = 0;
 
         for (int i = 0; i < slots.Length; i++)
@@ -328,7 +337,7 @@ public sealed class PersistentInventory : MonoBehaviour
             {
                 availableCapacity += safeMaxStack;
             }
-            else if (slots[i].ItemId == normalizedId && string.IsNullOrEmpty(slots[i].ItemInstanceId))
+            else if (slots[i].ItemId == normalizedId && (legacyCrystalStack || string.IsNullOrEmpty(slots[i].ItemInstanceId)))
             {
                 availableCapacity += Mathf.Max(0, safeMaxStack - slots[i].Quantity);
             }
@@ -345,7 +354,7 @@ public sealed class PersistentInventory : MonoBehaviour
         {
             if (slots[i].IsEmpty ||
                 slots[i].ItemId != normalizedId ||
-                !string.IsNullOrEmpty(slots[i].ItemInstanceId))
+                (!legacyCrystalStack && !string.IsNullOrEmpty(slots[i].ItemInstanceId)))
             {
                 continue;
             }
@@ -587,7 +596,7 @@ public sealed class PersistentInventory : MonoBehaviour
 
         CardboardBoxPickupItem nearbyBox =
             CardboardBoxPickupItem.FindNearestAvailableContainer(position);
-        if (nearbyBox != null &&
+        if (nearbyBox != null && user != null && !user.IsGhostLike &&
             itemPrefab.CanBeStoredInCardboardBox(user) &&
             nearbyBox.TryStoreItem(slot, itemPrefab, user))
         {

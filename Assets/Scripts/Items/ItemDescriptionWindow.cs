@@ -29,6 +29,15 @@ public sealed class ItemDescriptionWindow : MonoBehaviour
     private string pendingDiscoveryId = string.Empty;
 
     public static bool IsOpen => instance != null && instance.isOpen;
+    public static string[] CaptureDiscoveryHistory() => instance == null
+        ? new string[0] : new List<string>(instance.discoveredItems).ToArray();
+
+    public static void ApplyDiscoveryHistory(string[] ids)
+    {
+        var window = GetOrCreate();
+        window.discoveredItems.Clear();
+        if (ids != null) window.discoveredItems.UnionWith(ids);
+    }
     public static bool BlocksInput => IsOpen || Time.frameCount <= inputBlockedThroughFrame;
 
     public static ItemDescriptionWindow GetOrCreate()
@@ -356,6 +365,7 @@ public sealed class ItemDescriptionWindow : MonoBehaviour
         closeRect.sizeDelta = new Vector2(300f, 32f);
         closeHintText.text = "按[E]关闭";
 
+        CRTScreenEffect.RegisterCanvas(windowCanvas);
         windowRoot.SetActive(false);
     }
 
@@ -455,6 +465,7 @@ public sealed class ItemDescriptionWindow : MonoBehaviour
             windowCanvas.worldCamera = uiCamera;
             windowCanvas.planeDistance = uiCamera.nearClipPlane + 0.01f;
         }
+        CRTScreenEffect.RegisterCanvas(windowCanvas);
     }
 
     private void OnDestroy()

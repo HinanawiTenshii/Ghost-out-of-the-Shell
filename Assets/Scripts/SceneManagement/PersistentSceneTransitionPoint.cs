@@ -12,9 +12,10 @@ public sealed class PersistentSceneTransitionPoint : MonoBehaviour
     [SerializeField, Tooltip("World position assigned to the controlled character after the target scene and its spawn point finish initializing.")]
     private Vector2 targetArrivalPosition;
     [SerializeField] private KeyCode interactKey = KeyCode.E;
-    [SerializeField, Min(0f)] private float interactionDistance = 1.2f;
-    [SerializeField] private Vector2 triggerSize = new Vector2(1.1f, 0.75f);
-    [SerializeField] private Vector2 triggerOffset = new Vector2(0f, 0.25f);
+    [SerializeField, Tooltip("Exact local-space size shared by the editor outline, trigger collider and interaction test.")]
+    private Vector2 triggerSize = new Vector2(1.1f, 0.75f);
+    [SerializeField, Tooltip("Exact local-space offset shared by the editor outline, trigger collider and interaction test.")]
+    private Vector2 triggerOffset = new Vector2(0f, 0.25f);
     [SerializeField] private Vector2 interactionPromptOffset = new Vector2(0f, 0.9f);
     [SerializeField] private Color editorBorderColor =
         new Color(0.22f, 0.76f, 1f, 0.9f);
@@ -23,12 +24,14 @@ public sealed class PersistentSceneTransitionPoint : MonoBehaviour
     private TextMesh promptText;
     private Font promptFont;
     private Material promptMaterial;
+    private BoxCollider2D triggerCollider;
     private bool isTransitioning;
 
     public string TargetSceneName => targetSceneName;
     public string DestinationAreaName => destinationAreaName;
     public Vector2 TargetArrivalPosition => targetArrivalPosition;
-    public float InteractionDistance => interactionDistance;
+    public Vector2 TriggerSize => triggerSize;
+    public Vector2 TriggerOffset => triggerOffset;
 
     private void Awake()
     {
@@ -48,11 +51,17 @@ public sealed class PersistentSceneTransitionPoint : MonoBehaviour
         ZeldaFourWayMover mover = GetNearbyControlledMover();
         if (mover != null)
         {
+            // A transition point is an area interaction.  Using this object's
+            // centre here made the global interaction arbiter reject the
+            // offer after the player crossed the centre of a wide/scaled
+            // trigger, even though both colliders were still overlapping.
+            // Offer at the mover position so collider overlap is the single
+            // source of truth for both the prompt and the input range.
             ZeldaInteractionArbiter.OfferInteraction(
                 this,
                 mover,
                 interactKey,
-                transform.position,
+                mover.transform.position,
                 SetPromptFromArbiter);
         }
         else
@@ -65,7 +74,7 @@ public sealed class PersistentSceneTransitionPoint : MonoBehaviour
                 this,
                 mover,
                 interactKey,
-                transform.position,
+                mover.transform.position,
                 BeginTransition);
         }
     }
@@ -78,15 +87,45 @@ public sealed class PersistentSceneTransitionPoint : MonoBehaviour
     private ZeldaFourWayMover GetNearbyControlledMover()
     {
         ZeldaFourWayMover mover = ZeldaRuntimeRegistry.GetControlledMover();
-        if (mover == null ||
-            ((Vector2)mover.transform.position - (Vector2)transform.position).sqrMagnitude >
-            interactionDistance * interactionDistance)
+        if (mover == null || !OverlapsInteractionArea(mover))
         {
             return null;
         }
 
         ZeldaCharacterData data = mover.GetComponent<ZeldaCharacterData>();
         return data == null || !data.IsDead ? mover : null;
+    }
+
+    private bool OverlapsInteractionArea(ZeldaFourWayMover mover)
+    {
+        if (mover == null)
+        {
+            return false;
+        }
+
+        if (triggerCollider == null)
+        {
+            triggerCollider = GetComponent<BoxCollider2D>();
+        }
+
+        if (triggerCollider == null || !triggerCollider.enabled)
+        {
+            return false;
+        }
+
+        Collider2D moverCollider = mover.GetComponent<Collider2D>();
+        if (moverCollider == null || !moverCollider.enabled ||
+            !moverCollider.gameObject.activeInHierarchy)
+        {
+            // All normal Zelda movers have a body collider, but retain a
+            // point fallback for a custom mover whose collider was removed.
+            return triggerCollider.OverlapPoint(mover.transform.position);
+        }
+
+        ColliderDistance2D distance =
+            triggerCollider.Distance(moverCollider);
+        return distance.isValid &&
+            (distance.isOverlapped || distance.distance <= 0.001f);
     }
 
     private void BeginTransition()
@@ -183,6 +222,7 @@ public sealed class PersistentSceneTransitionPoint : MonoBehaviour
 
         renderer.sortingLayerID = highestLayerId;
         renderer.sortingOrder = short.MaxValue - 2;
+        ZeldaPossessionProgressBar.ConfigureOverlayRenderer(renderer);
         promptMaterial = new Material(promptFont.material)
         {
             name = name + " Persistent Transition Font Material",
@@ -202,12 +242,16 @@ public sealed class PersistentSceneTransitionPoint : MonoBehaviour
 
     private void SynchronizeCollider()
     {
-        BoxCollider2D box = GetComponent<BoxCollider2D>();
-        box.isTrigger = true;
-        box.size = new Vector2(
+        if (triggerCollider == null)
+        {
+            triggerCollider = GetComponent<BoxCollider2D>();
+        }
+
+        triggerCollider.isTrigger = true;
+        triggerCollider.size = new Vector2(
             Mathf.Max(0.05f, triggerSize.x),
             Mathf.Max(0.05f, triggerSize.y));
-        box.offset = triggerOffset;
+        triggerCollider.offset = triggerOffset;
     }
 
     private void OnDisable()
@@ -232,7 +276,6 @@ public sealed class PersistentSceneTransitionPoint : MonoBehaviour
         destinationAreaName = string.IsNullOrWhiteSpace(destinationAreaName)
             ? "目标区域"
             : destinationAreaName.Trim();
-        interactionDistance = Mathf.Max(0f, interactionDistance);
         triggerSize.x = Mathf.Max(0.05f, triggerSize.x);
         triggerSize.y = Mathf.Max(0.05f, triggerSize.y);
         SynchronizeCollider();

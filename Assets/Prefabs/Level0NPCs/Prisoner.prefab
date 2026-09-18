@@ -148,6 +148,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 35b73b9b715143788f2cda694c9f275a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  cameraOrthographicSize: 7
+  playerVisionRadius: 13
+  sceneCameraOverrides: []
   health: 3
   skillValue: 0
   permissionLevel: 0
@@ -201,13 +204,13 @@ MonoBehaviour:
   collisionSkinWidth: 0.01
   deathGhostPrefab: {fileID: 4527040845616928534, guid: 3686e58a077f8534bbf32cc6244eab34, type: 3}
   sprintKey: 32
-  sprintSpeedMultiplier: 1.55
-  maximumStamina: 4
+  sprintSpeedMultiplier: 2
+  maximumStamina: 15
   staminaConsumptionPerSecond: 1
   staminaRecoveryDelay: 1.25
-  staminaRecoveryPerSecond: 1.4
+  staminaRecoveryPerSecond: 1.5
   exhaustedResumeThreshold: 0.25
-  staminaProgressOffset: {x: 0, y: 1.25}
+  staminaProgressOffset: {x: 0, y: 1.3}
   staminaProgressScale: 0.8
   staminaProgressColor: {r: 0.22, g: 0.86, b: 0.4, a: 1}
 --- !u!114 &4657559875753840611
@@ -238,7 +241,7 @@ MonoBehaviour:
   attackDistance: 1.1
   attackFacingTolerance: 20
   attackCooldown: 0.35
-  regularHostileLoseSightDelay: 1.5
+  regularHostileLoseSightDelay: 7
   solidCollisionLayers:
     serializedVersion: 2
     m_Bits: 4294967295

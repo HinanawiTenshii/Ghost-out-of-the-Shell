@@ -15,6 +15,7 @@
 .gradle/
 .consulo/
 ExportedObj/
+.codex-temp/
 
 # Auto-generated project files
 *.csproj

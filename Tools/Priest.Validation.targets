@@ -1,0 +1,14 @@
+<Project>
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Characters\DesertStrongmanZeldaCharacterData.cs" />
+    <Compile Include="Assets\Scripts\Characters\DesertStrongmanZeldaCharacterData.cs" />
+    <Compile Remove="Assets\Scripts\Interaction\SignpostInteraction.cs" />
+    <Compile Include="Assets\Scripts\Interaction\SignpostInteraction.cs" />
+    <Compile Remove="Assets\Scripts\Characters\PriestZeldaCharacterData.cs" />
+    <Compile Include="Assets\Scripts\Characters\PriestZeldaCharacterData.cs" />
+    <Compile Remove="Assets\Scripts\Map\MiniMapWallGroup.cs" />
+    <Compile Include="Assets\Scripts\Map\MiniMapWallGroup.cs" />
+    <Compile Remove="Assets\Scripts\Interaction\RotatingBridgeMechanism.cs" />
+    <Compile Include="Assets\Scripts\Interaction\RotatingBridgeMechanism.cs" />
+  </ItemGroup>
+</Project>

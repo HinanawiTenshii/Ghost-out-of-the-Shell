@@ -21,6 +21,7 @@ public class LeverData : MonoBehaviour
     [SerializeField] private Vector2 interactionPromptOffset = new Vector2(0f, 0.9f);
 
     private SpriteRenderer spriteRenderer;
+    private BoxCollider2D interactionCollider;
     private Sprite offSprite;
     private Sprite onSprite;
     private bool isOn;
@@ -56,6 +57,26 @@ public class LeverData : MonoBehaviour
         }
     }
 
+    public float GetSurfaceDistanceTo(
+        Collider2D sourceCollider,
+        Vector2 sourcePosition)
+    {
+        float fallback = Vector2.Distance(sourcePosition, transform.position);
+        if (sourceCollider == null || interactionCollider == null ||
+            !interactionCollider.enabled)
+        {
+            return fallback;
+        }
+
+        ColliderDistance2D distance =
+            sourceCollider.Distance(interactionCollider);
+        if (!distance.isValid)
+        {
+            return fallback;
+        }
+        return distance.isOverlapped ? 0f : distance.distance;
+    }
+
     public void ApplyPersistentState(bool value)
     {
         isOn = value;
@@ -77,15 +98,19 @@ public class LeverData : MonoBehaviour
     private void Awake()
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
-        BoxCollider2D boxCollider = GetComponent<BoxCollider2D>();
-        boxCollider.isTrigger = false;
-        boxCollider.size = new Vector2(0.66f, 0.495f);
-        boxCollider.offset = new Vector2(0f, 0.21f);
+        interactionCollider = GetComponent<BoxCollider2D>();
+        interactionCollider.isTrigger = false;
+        interactionCollider.size = new Vector2(0.66f, 0.495f);
+        interactionCollider.offset = new Vector2(0f, 0.21f);
 
         offSprite = CreateLeverSprite(false);
         onSprite = CreateLeverSprite(true);
         ApplyVisual();
         EnsureRequirementWindow();
+        // Runtime attachment covers all existing prefab/scene levers without
+        // changing their interaction data or duplicating a shared prefab ID.
+        if (GetComponent<MapPointOfInterest>() == null)
+            gameObject.AddComponent<MapPointOfInterest>();
     }
 
     private void OnEnable()
@@ -188,23 +213,23 @@ public class LeverData : MonoBehaviour
             ? "能力不足"
             : "按[E]进行互动";
 
-        EnsureInteractionPrompt();
-        if (interactionPromptObject == null)
-            return;
-
-        interactionPromptText.text = promptMessage;
+        // Register even in a minimal test scene with no HUD or prompt font.
         ZeldaFourWayMover controlledMover =
             characterData.GetComponent<ZeldaFourWayMover>();
-        interactionPromptObject.transform.position =
-            controlledMover.GetOverheadWorldPosition(interactionPromptOffset);
-        interactionPromptObject.transform.rotation = Quaternion.identity;
         ZeldaInteractionArbiter.OfferInteraction(
             this,
             controlledMover,
             interactKey,
             transform.position,
             SetInteractionPromptVisible);
+        EnsureInteractionPrompt();
+        if (interactionPromptObject == null)
+            return;
 
+        interactionPromptText.text = promptMessage;
+        interactionPromptObject.transform.position =
+            controlledMover.GetOverheadWorldPosition(interactionPromptOffset);
+        interactionPromptObject.transform.rotation = Quaternion.identity;
         interactionPromptFont.RequestCharactersInTexture(
             promptMessage,
             72,
@@ -251,6 +276,8 @@ public class LeverData : MonoBehaviour
 
         promptRenderer.sortingLayerID = highestSortingLayerId;
         promptRenderer.sortingOrder = short.MaxValue - 2;
+        ZeldaPossessionProgressBar.ConfigureOverlayRenderer(promptRenderer);
+        ZeldaPossessionProgressBar.ConfigureOverlayRenderer(promptRenderer);
         interactionPromptMaterial = new Material(interactionPromptFont.material)
         {
             name = name + " Lever Interaction Prompt Font Material",
@@ -291,6 +318,22 @@ public class LeverData : MonoBehaviour
             return;
         }
 
+        // A bridge interlock owns the hinge on the same object. Do not also
+        // toggle that hinge directly or it would rotate twice / bypass safety.
+        RotatingBridgeMechanism bridgeMechanism = target.GetComponent<RotatingBridgeMechanism>();
+        if (bridgeMechanism != null)
+        {
+            bridgeMechanism.ToggleFromExternal();
+            return;
+        }
+
+        DoubleSlidingDoor slidingDoor = target.GetComponent<DoubleSlidingDoor>();
+        if (slidingDoor != null)
+        {
+            slidingDoor.ToggleFromExternal();
+            return;
+        }
+
         DoorHingeInteraction doorHinge = target.GetComponent<DoorHingeInteraction>();
         if (doorHinge != null)
         {
@@ -299,6 +342,7 @@ public class LeverData : MonoBehaviour
         }
 
         target.SetActive(!target.activeSelf);
+        CameraCircularVision.NotifyBlockersChanged();
     }
 
     private void ApplyVisual()

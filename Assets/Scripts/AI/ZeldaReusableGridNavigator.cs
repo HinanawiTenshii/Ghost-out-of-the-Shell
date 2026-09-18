@@ -398,10 +398,19 @@ public sealed class ZeldaReusableGridNavigator : MonoBehaviour
             hit.transform.IsChildOf(transform)) return true;
         if (bodyCollider != null && Physics2D.GetIgnoreCollision(bodyCollider, hit))
             return true;
+        ZeldaCharacterData hitCharacter =
+            hit.GetComponentInParent<ZeldaCharacterData>();
+        if (hitCharacter != null &&
+            !hitCharacter.ParticipatesInCharacterCollision)
+        {
+            if (bodyCollider != null)
+                Physics2D.IgnoreCollision(bodyCollider, hit, true);
+            return true;
+        }
         if (ignoredTarget != null && hit.transform.IsChildOf(ignoredTarget.transform)) return true;
         DoorHingeInteraction door = hit.GetComponentInParent<DoorHingeInteraction>();
         if (door != null && !door.IsLocked) return true;
-        if (!includeCharacters && hit.GetComponentInParent<ZeldaCharacterData>() != null)
+        if (!includeCharacters && hitCharacter != null)
             return true;
         return false;
     }
@@ -419,6 +428,10 @@ public sealed class ZeldaReusableGridNavigator : MonoBehaviour
         foreach (ZeldaFourWayMover mover in ZeldaRuntimeRegistry.Movers)
         {
             if (mover == null || !mover.gameObject.activeInHierarchy) continue;
+            ZeldaCharacterData moverCharacter =
+                mover.GetComponent<ZeldaCharacterData>();
+            if (moverCharacter == null ||
+                !moverCharacter.ParticipatesInCharacterCollision) continue;
             float sqr = ((Vector2)mover.transform.position - position).sqrMagnitude;
             if (sqr < best) { best = sqr; closest = mover; }
         }

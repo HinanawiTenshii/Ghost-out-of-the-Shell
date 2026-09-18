@@ -43,6 +43,7 @@ public sealed class CardboardBoxWearState : MonoBehaviour
     public ZeldaFourWayMover WearerMover => mover;
     public Vector2 WorldCenter => transform.position;
     public int RemainingBlockedAttacks => remainingBlockedAttacks;
+    public string SaveSourceItemId => sourceItemId;
 
     public void Configure(
         CardboardBoxPickupItem source,
@@ -142,6 +143,7 @@ public sealed class CardboardBoxWearState : MonoBehaviour
     {
         BeginAnimatedExit(true);
     }
+    public void ExitForGhostForm() => CompleteExit(true);
 
     private void BeginAnimatedExit(bool returnToInventory)
     {

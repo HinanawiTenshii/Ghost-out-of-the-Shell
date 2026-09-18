@@ -12,9 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9a2f0b8e4c7d41c6a912fc0e693d45a1, type: 3}
   m_Name: LastScene
   m_EditorClassIdentifier: Assembly-CSharp::RuntimeMiniMapSceneData
-  schemaVersion: 3
+  schemaVersion: 4
   sceneName: LastScene
   displayName: LastScene
   blockPaths: []
   transitions: []
   questTargets: []
+  bridges: []

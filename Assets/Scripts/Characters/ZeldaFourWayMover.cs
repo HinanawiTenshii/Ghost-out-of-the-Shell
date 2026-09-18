@@ -41,11 +41,11 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     [Header("Player Sprint (Non-Ghost Only)")]
     [SerializeField] private KeyCode sprintKey = KeyCode.Space;
-    [SerializeField, Min(1f)] private float sprintSpeedMultiplier = 1.55f;
-    [SerializeField, Min(0.1f)] private float maximumStamina = 9f;
+    [SerializeField, Min(1f)] private float sprintSpeedMultiplier = 2.00f;
+    [SerializeField, Min(0.1f)] private float maximumStamina = 15f;
     [SerializeField, Min(0.01f)] private float staminaConsumptionPerSecond = 1f;
     [SerializeField, Min(0f)] private float staminaRecoveryDelay = 1.25f;
-    [SerializeField, Min(0.01f)] private float staminaRecoveryPerSecond = 1.4f;
+    [SerializeField, Min(0.01f)] private float staminaRecoveryPerSecond = 1.5f;
     [SerializeField, Range(0f, 1f)] private float exhaustedResumeThreshold = 0.25f;
     [SerializeField] private Vector2 staminaProgressOffset = new Vector2(0f, 1.3f);
     [SerializeField, Min(0.1f)] private float staminaProgressScale = 0.8f;
@@ -61,6 +61,7 @@ public class ZeldaFourWayMover : MonoBehaviour
     private float attackTimer;
     private float controlSwitchHoldTimer;
     private ZeldaFourWayMover pendingControlTarget;
+    private PossessionTransferParticles possessionTransferParticles;
     private ZeldaPossessionProgressBar possessionProgressBar;
     private ZeldaPossessionProgressBar staminaProgressBar;
     private float currentStamina;
@@ -81,12 +82,32 @@ public class ZeldaFourWayMover : MonoBehaviour
         new Dictionary<Sprite, Vector2>();
 
     public Vector2 FacingDirection => facingDirection;
+    public Vector3 PossessionVisualCenter => spriteRenderer != null && spriteRenderer.sprite != null
+        ? spriteRenderer.bounds.center : transform.position;
+    // Camera systems run before this mover's Awake on initial scene creation.
+    public ZeldaCharacterData CharacterData => characterData != null
+        ? characterData : (characterData = GetComponent<ZeldaCharacterData>());
     public bool IsMoving => moveDirection.sqrMagnitude > 0f;
     public bool IsAttacking => attackTimer > 0f;
+    public void CancelAttackForStun()
+    {
+        attackTimer = 0f;
+        moveDirection = Vector2.zero;
+        ApplyFacingVisual();
+    }
     public bool IsSprinting => isSprinting;
     public CardboardBoxWearState ActiveCardboardBox => activeCardboardBox;
     public bool IsWearingCardboardBox => activeCardboardBox != null;
     public float CurrentStamina => currentStamina;
+    public void RestoreSavedMovement(Vector2 facing, float stamina)
+    {
+        facingDirection = facing.sqrMagnitude > 0f ? facing.normalized : Vector2.down;
+        currentStamina = Mathf.Clamp(stamina, 0f, maximumStamina);
+        moveDirection = Vector2.zero;
+        var body = GetComponent<Rigidbody2D>();
+        if (body != null) body.velocity = Vector2.zero;
+        ApplyFacingVisual();
+    }
     public float StaminaNormalized =>
         maximumStamina > 0f
             ? Mathf.Clamp01(currentStamina / maximumStamina)
@@ -154,6 +175,7 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     private void OnDisable()
     {
+        if (characterSkillProgressBar != null) characterSkillProgressBar.Hide();
         ZeldaRuntimeRegistry.NotifyMoverDisabled(this);
         possessionInteractionSelected = false;
         SetPossessionPromptVisible(false);
@@ -169,10 +191,40 @@ public class ZeldaFourWayMover : MonoBehaviour
     private void LateUpdate()
     {
         UpdatePossessionPrompt();
+        RefreshCharacterSkillProgress();
+    }
+
+    private ZeldaPossessionProgressBar characterSkillProgressBar;
+    private void RefreshCharacterSkillProgress()
+    {
+        if (characterData == null || !characterData.IsCombatExpertiseActive)
+        {
+            if (characterSkillProgressBar != null) characterSkillProgressBar.Hide();
+            return;
+        }
+        if (characterSkillProgressBar == null)
+        {
+            var progress = new GameObject("Combat Expertise Progress");
+            progress.transform.SetParent(transform, false);
+            characterSkillProgressBar = progress.AddComponent<ZeldaPossessionProgressBar>();
+        }
+        float scale = Mathf.Max(0.1f, staminaProgressScale);
+        // The shared bar fills only its bottom 3/14 units. Leave a small gap above that visible part.
+        characterSkillProgressBar.transform.localPosition = GetStaminaProgressLocalPosition() +
+            Vector3.up * ((3f / 14f) * scale + 0.06f);
+        characterSkillProgressBar.transform.localScale = Vector3.one * scale;
+        characterSkillProgressBar.SetProgress(characterData.CombatExpertiseProgress, new Color(1f, 0.08f, 0.06f, 1f));
     }
 
     private void UpdatePossessionPrompt()
     {
+        if (ClockworkPuppetRuntime.BlocksCharacterInput)
+        {
+            possessionInteractionSelected = false;
+            SetPossessionPromptVisible(false);
+            return;
+        }
+
         bool failureVisible = possessionAttemptRejected ||
             (possessionProgressBar != null && possessionProgressBar.IsFailureActive);
         suppressPossessionPromptFromArbiter = IsPossessionInProgress ||
@@ -182,12 +234,14 @@ public class ZeldaFourWayMover : MonoBehaviour
             : (pendingControlTarget != null
                 ? pendingControlTarget
                 : FindControlSwitchCandidate());
-        bool canPossess = !DocumentReader.IsInputBlocked
+        // Offer F for nearby characters even when energy or AI state prevents
+        // possession. Eligibility is checked when the selected action is used.
+        bool hasPossessionTarget = !DocumentReader.IsInputBlocked
             && characterData != null
             && !characterData.IsDead
-            && IsValidControlSwitchTarget(candidate);
+            && IsPotentialControlSwitchTarget(candidate);
 
-        if (!canPossess)
+        if (!hasPossessionTarget)
         {
             possessionInteractionSelected = false;
             SetPossessionPromptVisible(false);
@@ -270,6 +324,8 @@ public class ZeldaFourWayMover : MonoBehaviour
 
         promptRenderer.sortingLayerID = highestSortingLayerId;
         promptRenderer.sortingOrder = short.MaxValue - 2;
+        ZeldaPossessionProgressBar.ConfigureOverlayRenderer(promptRenderer);
+        ZeldaPossessionProgressBar.ConfigureOverlayRenderer(promptRenderer);
         possessionPromptMaterial = new Material(possessionPromptFont.material)
         {
             name = name + " Possession Prompt Font Material",
@@ -334,11 +390,22 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     private void Update()
     {
+        if (characterData != null) characterData.ApplyPlayerHealthUpgrade();
         if (DocumentReader.IsInputBlocked)
         {
             moveDirection = Vector2.zero;
             StopSprintingAndRefreshStaminaBar();
             ResetControlSwitchProgress();
+            ApplyFacingVisual();
+            return;
+        }
+
+        if (ClockworkPuppetRuntime.BlocksCharacterInput)
+        {
+            moveDirection = Vector2.zero;
+            StopSprintingAndRefreshStaminaBar();
+            ResetControlSwitchProgress();
+            possessionAttemptRejected = false;
             ApplyFacingVisual();
             return;
         }
@@ -362,7 +429,7 @@ public class ZeldaFourWayMover : MonoBehaviour
             activeCardboardBox.RequestExit();
         }
 
-        if (characterData.CanAttack && Input.GetMouseButtonDown(0) && !IsAttacking)
+        if (characterData.CanAttack && !characterData.IsGhostForm && Input.GetMouseButtonDown(0) && !IsAttacking)
         {
             TryPerformAttack(facingDirection);
         }
@@ -567,7 +634,16 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     private void ApplyFacingVisual()
     {
-        characterData.ApplyCharacterVisual(spriteRenderer, facingDirection, IsMoving, IsAttacking);
+        characterData.ApplyCharacterVisualWithMovement(spriteRenderer, facingDirection, IsMoving, IsAttacking);
+        if (characterData.IsGhostForm) characterData.GhostForm.ApplyVisual(spriteRenderer, IsMoving);
+    }
+
+    public void RefreshFormVisuals()
+    {
+        if (characterData == null) return;
+        isSprinting = false;
+        ApplyFacingVisual();
+        RefreshStaminaProgressBar();
     }
 
     private Vector2 ToNearestCardinalDirection(Vector2 direction)
@@ -587,7 +663,7 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     public bool TryPerformAttack(Vector2 requestedFacingDirection)
     {
-        if (characterData == null || characterData.IsDead || !characterData.CanAttack || IsAttacking)
+        if (characterData == null || characterData.IsDead || characterData.IsGhostForm || !characterData.CanAttack || IsAttacking)
         {
             return false;
         }
@@ -669,9 +745,9 @@ public class ZeldaFourWayMover : MonoBehaviour
         }
 
         ZeldaFourWayMover target = FindControlSwitchCandidate();
-        if (!IsValidControlSwitchTarget(target))
+        if (target == null)
         {
-            RejectPossessionAttempt();
+            ResetControlSwitchProgress();
             return false;
         }
 
@@ -686,11 +762,24 @@ public class ZeldaFourWayMover : MonoBehaviour
             return false;
         }
 
+        if (!IsValidControlSwitchTarget(target))
+        {
+            RejectPossessionAttempt();
+            return false;
+        }
+
         if (target != pendingControlTarget)
         {
+            StopPossessionTransferParticles(false);
             ReleasePendingControlTarget();
             pendingControlTarget = target;
             controlSwitchHoldTimer = 0f;
+            GhostZeldaCharacterData ghostVisual = CharacterData as GhostZeldaCharacterData;
+            if (ghostVisual == null && deathGhostPrefab != null)
+                ghostVisual = deathGhostPrefab.GetComponent<GhostZeldaCharacterData>();
+            Color particleTint = ghostVisual != null ? ghostVisual.ConsciousnessParticleTint
+                : new Color(0.72f, 0.95f, 1f, 0.78f);
+            possessionTransferParticles = PossessionTransferParticles.Create(this, target, particleTint);
 
             ZeldaCharacterAiBase targetAi = pendingControlTarget.GetComponent<ZeldaCharacterAiBase>();
             if (targetAi != null)
@@ -715,6 +804,7 @@ public class ZeldaFourWayMover : MonoBehaviour
         }
 
         ZeldaFourWayMover completedTarget = pendingControlTarget;
+        StopPossessionTransferParticles(true);
         ResetControlSwitchProgress();
         return TrySwitchControl(completedTarget);
     }
@@ -722,7 +812,7 @@ public class ZeldaFourWayMover : MonoBehaviour
     private float GetActivePossessionDuration()
     {
         float duration = Mathf.Max(0.05f, controlSwitchHoldDuration);
-        if (!(characterData is GhostZeldaCharacterData))
+        if (!characterData.IsGhostLike)
         {
             duration += Mathf.Max(0f, nonGhostPossessionDurationBonus);
         }
@@ -739,19 +829,18 @@ public class ZeldaFourWayMover : MonoBehaviour
         }
 
         ZeldaCharacterData targetData = target.GetComponent<ZeldaCharacterData>();
-        if (!characterData.TrySpendPossessionEnergy(targetData.PossessionCost))
-        {
-            RejectPossessionAttempt();
-            return false;
-        }
 
+        if (DominoSkillRuntime.TryPossess(this, target)) return true;
         target.ReceiveControl(facingDirection);
+        PlayerGrowthAttributes.Instance?.RecordPossessedCharacter(target.GetComponent<ZeldaCharacterData>());
+        SoulMarkRuntime.ClearAfterDirectPossession(target);
         NotifyAiWitnessesOfPossession(target);
         moveDirection = Vector2.zero;
         attackTimer = 0f;
         ApplyFacingVisual();
         enabled = false;
 
+        QuestJournalManager.GetOrCreate().RecordControlledBehemoth(target);
         characterData.DestroyAfterSuccessfulPossession();
         return true;
     }
@@ -834,6 +923,12 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     private void UpdateSprint(bool movementRequested, float deltaTime)
     {
+        if (characterData.IsGhostForm)
+        {
+            isSprinting = false;
+            RefreshStaminaProgressBar();
+            return;
+        }
         bool isGhost = characterData is GhostZeldaCharacterData;
         bool canSprint =
             !isGhost &&
@@ -917,6 +1012,7 @@ public class ZeldaFourWayMover : MonoBehaviour
             return false;
         }
 
+        if (characterData.IsGhostForm) return true;
         float staminaMaximum = Mathf.Max(0.1f, maximumStamina);
         return currentStamina < staminaMaximum - 0.001f;
     }
@@ -939,7 +1035,8 @@ public class ZeldaFourWayMover : MonoBehaviour
         staminaProgressBar.transform.localRotation = Quaternion.identity;
         staminaProgressBar.transform.localScale =
             Vector3.one * Mathf.Max(0.1f, staminaProgressScale);
-        staminaProgressBar.SetProgress(StaminaNormalized, staminaProgressColor);
+        staminaProgressBar.SetProgress(characterData.IsGhostForm ? characterData.GhostForm.Remaining / characterData.GhostForm.TotalDuration : StaminaNormalized,
+            characterData.IsGhostForm ? new Color(0.08f, 0.2f, 0.65f, 1f) : staminaProgressColor);
     }
 
     private void StopSprintingAndRefreshStaminaBar()
@@ -966,7 +1063,7 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     public float ConsumeStamina(float amount)
     {
-        if (amount <= 0f || characterData is GhostZeldaCharacterData)
+        if (amount <= 0f || characterData.IsGhostLike)
         {
             return currentStamina;
         }
@@ -1019,6 +1116,7 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     private void ResetControlSwitchProgress()
     {
+        StopPossessionTransferParticles(false);
         ReleasePendingControlTarget();
         pendingControlTarget = null;
         controlSwitchHoldTimer = 0f;
@@ -1041,6 +1139,13 @@ public class ZeldaFourWayMover : MonoBehaviour
                 controlSwitchFailureDuration,
                 controlSwitchFailureFlashCount);
         }
+    }
+
+    private void StopPossessionTransferParticles(bool completed)
+    {
+        if (possessionTransferParticles != null)
+            possessionTransferParticles.StopEmission(completed);
+        possessionTransferParticles = null;
     }
 
     private void ReleasePendingControlTarget()
@@ -1269,14 +1374,12 @@ public class ZeldaFourWayMover : MonoBehaviour
         }
 
         ZeldaCharacterData candidateData = candidate.GetComponent<ZeldaCharacterData>();
-        if (characterData.FinalPossessionEnergy < candidateData.PossessionCost)
+        if (characterData.MaxPossessionEnergy < candidateData.PossessionCost)
         {
             return false;
         }
 
-        ZeldaCharacterAiBase candidateAi = candidate.GetComponent<ZeldaCharacterAiBase>();
-        return candidateAi != null && candidateAi.isActiveAndEnabled &&
-            candidateAi.IsInPossessableState;
+        return true;
     }
 
     private bool IsPotentialControlSwitchTarget(ZeldaFourWayMover candidate)
@@ -1290,7 +1393,15 @@ public class ZeldaFourWayMover : MonoBehaviour
         return candidateData != null && !candidateData.IsDead;
     }
 
-    private void ReceiveControl(Vector2 inheritedFacingDirection)
+    public ZeldaFourWayMover GetSoulMarkCandidate()
+    {
+        var candidate = FindControlSwitchCandidate();
+        return IsValidControlSwitchTarget(candidate) ? candidate : null;
+    }
+
+    public GameObject SoulTransferFallbackPrefab => deathGhostPrefab;
+
+    public void ReceiveControl(Vector2 inheritedFacingDirection)
     {
         DisableCharacterAi();
         facingDirection = inheritedFacingDirection.sqrMagnitude > 0f ? inheritedFacingDirection : Vector2.down;
@@ -1363,4 +1474,152 @@ public class ZeldaFourWayMover : MonoBehaviour
     }
 #endif
 
+}
+
+/// <summary>Scene-local soul mark and delayed transfer, independent of the dying body.</summary>
+public sealed class SoulMarkRuntime : MonoBehaviour
+{
+    private static SoulMarkRuntime instance;
+    public static bool IsTransferring => instance != null && instance.transferring;
+    public static bool IsVisionCovered => instance != null && instance.visionCovered;
+    public static void ClearAfterDirectPossession(ZeldaFourWayMover target)
+    {
+        if (instance != null && !instance.transferring && instance.marked == target)
+            instance.ClearMark();
+    }
+    public static void ClearForSceneTransition()
+    {
+        if (instance != null) Destroy(instance.gameObject);
+    }
+    private void OnEnable() => UnityEngine.SceneManagement.SceneManager.activeSceneChanged += OnSceneChanged;
+    private void OnDisable() => UnityEngine.SceneManagement.SceneManager.activeSceneChanged -= OnSceneChanged;
+    private void OnSceneChanged(UnityEngine.SceneManagement.Scene previous, UnityEngine.SceneManagement.Scene next)
+    {
+        if (previous != next) ClearForSceneTransition();
+    }
+    private ZeldaFourWayMover source, marked;
+    private SpriteRenderer marker;
+    private CameraVisionStreamingExempt exemption;
+    private bool transferring;
+    private bool visionCovered;
+    private float markerBlinkTime;
+
+    public static void Use(ZeldaFourWayMover user)
+    {
+        if (user == null || IsTransferring || user.GetComponent<ZeldaCharacterData>().IsGhostForm) return;
+        if (instance == null)
+        {
+            instance = new GameObject("Soul Mark Runtime").AddComponent<SoulMarkRuntime>();
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(instance.gameObject, ZeldaRuntimeRegistry.GetGameplayScene(user.gameObject));
+        }
+        instance.ValidateMark();
+        if (instance.marked != null)
+        {
+            if (user.GetComponent<GhostZeldaCharacterData>() != null) return;
+            instance.StartCoroutine(instance.Transfer(user));
+            return;
+        }
+        var candidate = user.GetSoulMarkCandidate();
+        if (candidate == null) return;
+        var data = user.GetComponent<ZeldaCharacterData>();
+        int level = PlayerGrowthAttributes.Instance != null ? PlayerGrowthAttributes.Instance.SoulMarkLevel : 1;
+        int energyCost = Mathf.Max(0, candidate.GetComponent<ZeldaCharacterData>().PossessionCost - (level >= 3 ? 1 : 0));
+        if (!data.TrySpendPossessionEnergy(energyCost)) return;
+        DominoSkillRuntime.RemoveMark(candidate.GetComponent<ZeldaCharacterData>());
+        instance.source = user;
+        instance.marked = candidate;
+        // Own a separate exemption: a replaced mark removes its component at frame end.
+        instance.exemption = candidate.gameObject.AddComponent<CameraVisionStreamingExempt>();
+        instance.marker = new GameObject("Soul Mark Visual").AddComponent<SpriteRenderer>();
+        instance.marker.sprite = SkillPageArt.GetSoulMarkWorldSprite();
+        instance.marker.color = ZeldaUiPalette.Primary;
+        instance.markerBlinkTime = 0f;
+        instance.marker.transform.localScale = Vector3.one * 0.48f;
+        instance.LateUpdate();
+    }
+
+    private void ValidateMark()
+    {
+        if (transferring || marked == null && source == null) return;
+        if (marked == null ||
+            marked.GetComponent<ZeldaCharacterData>().IsDead ||
+            ZeldaRuntimeRegistry.GetGameplayScene(marked.gameObject) != gameObject.scene)
+            ClearMark();
+    }
+
+    private void LateUpdate()
+    {
+        ValidateMark();
+        if (marker == null || marked == null) return;
+        markerBlinkTime = (markerBlinkTime + Time.deltaTime) % 1f;
+        marker.color = markerBlinkTime < 0.5f ? ZeldaUiPalette.Primary : Color.white;
+        var visual = marked.GetComponentInChildren<SpriteRenderer>();
+        marker.transform.position = (visual != null ? visual.bounds.center : marked.transform.position)
+            + Vector3.up * 0.15f;
+        if (visual != null)
+        {
+            marker.sortingLayerID = visual.sortingLayerID;
+            marker.sortingOrder = visual.sortingOrder + 5;
+        }
+    }
+
+    private System.Collections.IEnumerator Transfer(ZeldaFourWayMover user)
+    {
+        // Reuse the ordinary bomb prefab's authored blast and investigation ranges.
+        var bombPrefab = Resources.Load<BombPickupItem>("PickupItems/BombPickupItem");
+        if (bombPrefab == null) { Debug.LogError("Soul mark requires the ordinary bomb pickup prefab."); yield break; }
+        transferring = true;
+        var destination = marked;
+        var fallback = user.SoulTransferFallbackPrefab;
+        Vector3 origin = user.transform.position;
+        var data = user.GetComponent<ZeldaCharacterData>();
+        var bomb = bombPrefab.CreateConfiguredPlacedBomb(origin, data);
+        user.enabled = false; // Death notification must not spawn the source body's ghost.
+        data.DieFromSoulDetonation();
+        bomb.DetonateSoulMark(PlayerGrowthAttributes.Instance != null ? PlayerGrowthAttributes.Instance.SoulMarkLevel : 1);
+        yield return new WaitForSeconds(0.5f);
+        // Let the explosion remain visible before covering the actual control/camera handoff.
+        visionCovered = true;
+        if (destination != null && !destination.GetComponent<ZeldaCharacterData>().IsDead)
+        {
+            destination.gameObject.SetActive(true);
+            destination.ReceiveControl(Vector2.down);
+            var targetData = destination.GetComponent<ZeldaCharacterData>();
+            PlayerGrowthAttributes.Instance?.RecordPossessedCharacter(targetData);
+            targetData.ClearCurrentPossessionEnergy();
+            QuestJournalManager.GetOrCreate().RecordControlledBehemoth(destination);
+        }
+        else if (fallback != null)
+        {
+            var ghost = Instantiate(fallback, origin, Quaternion.identity).GetComponent<ZeldaFourWayMover>();
+            if (ghost != null) ghost.ReceiveControl(Vector2.down);
+        }
+        var controlled = ZeldaRuntimeRegistry.GetControlledMover();
+        var camera = Camera.main;
+        if (camera != null && controlled != null)
+        {
+            var follow = camera.GetComponent<CameraFollowActiveZeldaMover>();
+            if (follow != null) follow.BeginSoulTransferFollow(controlled);
+            var streaming = camera.GetComponent<CameraVisionObjectStreaming>();
+            if (streaming != null) streaming.PrepareSoulTransferView();
+        }
+        // Keep the curtain through camera/streaming/vision LateUpdates before reopening it.
+        yield return null;
+        yield return new WaitForEndOfFrame();
+        ClearMark();
+        visionCovered = false;
+        transferring = false;
+    }
+
+    private void ClearMark()
+    {
+        if (marker != null) Destroy(marker.gameObject);
+        if (exemption != null) Destroy(exemption);
+        marker = null; exemption = null; marked = null; source = null;
+    }
+    private void OnDestroy()
+    {
+        ClearMark();
+        if (instance == this) instance = null;
+    }
 }

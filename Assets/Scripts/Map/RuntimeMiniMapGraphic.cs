@@ -17,6 +17,11 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
     private const float MaximumZoom = 5f;
     private readonly List<Vector2[]> blockPaths = new List<Vector2[]>();
     private readonly List<Vector2> filledWallTriangles = new List<Vector2>();
+    private readonly List<RuntimeMiniMapBridgeData> bridgeLayouts = new List<RuntimeMiniMapBridgeData>();
+    private readonly List<RotatingBridgeMechanism> liveBridges = new List<RotatingBridgeMechanism>();
+    private readonly List<bool> displayedBridgeStates = new List<bool>();
+    private int staticPathCount;
+    private string geometrySceneName;
     private readonly List<RuntimeMiniMapTransitionData> transitions =
         new List<RuntimeMiniMapTransitionData>();
     private readonly List<RuntimeMiniMapQuestTargetData> questTargets =
@@ -166,17 +171,25 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
     public void RebuildFromScene(Scene scene)
     {
         blockPaths.Clear();
+        ResetBridgeLayouts(scene.name);
         transitions.Clear();
         questTargets.Clear();
         hasBounds = false;
 
         int blocksLayer = LayerMask.NameToLayer("Blocks");
+        HashSet<Collider2D> additionalWalls = new HashSet<Collider2D>();
+        foreach (MiniMapWallGroup group in FindObjectsOfType<MiniMapWallGroup>(true))
+        {
+            if (group.gameObject.scene != scene || group.Walls == null) continue;
+            foreach (Collider2D wall in group.Walls)
+                if (wall != null && wall.gameObject.scene == scene) additionalWalls.Add(wall);
+        }
         Collider2D[] colliders = FindObjectsOfType<Collider2D>(true);
         for (int index = 0; index < colliders.Length; index++)
         {
             Collider2D collider = colliders[index];
             if (collider == null || collider.gameObject.scene != scene ||
-                collider.gameObject.layer != blocksLayer)
+                (collider.gameObject.layer != blocksLayer && !additionalWalls.Contains(collider)))
             {
                 continue;
             }
@@ -198,6 +211,22 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
 
             AddColliderPaths(collider);
         }
+
+        staticPathCount = blockPaths.Count;
+        foreach (RotatingBridgeMechanism mechanism in FindObjectsOfType<RotatingBridgeMechanism>(true))
+        {
+            if (mechanism.gameObject.scene != scene || mechanism.BridgeHinge == null) continue;
+            DoorHingeInteraction hinge = mechanism.BridgeHinge;
+            var original = CaptureBridgePaths(mechanism, colliders, additionalWalls, blocksLayer, false);
+            var rotated = CaptureBridgePaths(mechanism, colliders, additionalWalls, blocksLayer, true);
+            AddBridgeLayout(new RuntimeMiniMapBridgeData
+            {
+                persistentId = SceneTravelStateManager.GetMapObjectId(hinge.transform),
+                originalPaths = original,
+                rotatedPaths = rotated
+            }, mechanism);
+        }
+        RefreshBridgeLayouts(true);
 
         SceneTransitionPoint[] regularTransitions =
             FindObjectsOfType<SceneTransitionPoint>(true);
@@ -243,6 +272,7 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
     public void RebuildFromSnapshot(RuntimeMiniMapSceneData snapshot)
     {
         blockPaths.Clear();
+        ResetBridgeLayouts(snapshot != null ? snapshot.SceneName : string.Empty);
         transitions.Clear();
         questTargets.Clear();
         hasBounds = false;
@@ -292,6 +322,11 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
             }
         }
 
+        staticPathCount = blockPaths.Count;
+        if (snapshot != null && snapshot.Bridges != null)
+            foreach (RuntimeMiniMapBridgeData layout in snapshot.Bridges) AddBridgeLayout(layout, null);
+        RefreshBridgeLayouts(true);
+
         EnsureUsableBounds();
         RebuildFilledWallTriangles();
         SetVerticesDirty();
@@ -330,9 +365,10 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
             destination.Configure(
                 sceneName,
                 displayName,
-                blockPaths,
+                blockPaths.GetRange(0, staticPathCount),
                 transitions,
-                questTargets);
+                questTargets,
+                bridgeLayouts);
         }
     }
 
@@ -349,6 +385,8 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
             return;
         }
 
+        RefreshBridgeLayouts(false);
+
         float alpha = Mathf.Lerp(
             0.38f,
             0.95f,
@@ -358,6 +396,86 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
             lastMarkerAlpha = alpha;
             SetVerticesDirty();
         }
+    }
+
+    private void ResetBridgeLayouts(string sceneName)
+    {
+        geometrySceneName = sceneName;
+        staticPathCount = 0;
+        bridgeLayouts.Clear();
+        liveBridges.Clear();
+        displayedBridgeStates.Clear();
+    }
+
+    private static RuntimeMiniMapPathData[] CaptureBridgePaths(
+        RotatingBridgeMechanism mechanism, Collider2D[] colliders,
+        HashSet<Collider2D> additionalWalls, int blocksLayer, bool rotated)
+    {
+        var paths = new List<Vector2[]>();
+        DoorHingeInteraction hinge = mechanism.BridgeHinge;
+        Matrix4x4 toEndpoint = hinge.GetMapEndpointMatrix(rotated) * hinge.MapHingeTransform.worldToLocalMatrix;
+        foreach (Collider2D collider in colliders)
+        {
+            // The rotating bridge uses rectangular walls. Never capture its
+            // invisible passage safety barriers or ordinary door geometry.
+            BoxCollider2D box = collider as BoxCollider2D;
+            if (box == null || box.GetComponentInParent<RotatingBridgeMechanism>(true) != mechanism ||
+                (box.gameObject.layer != blocksLayer && !additionalWalls.Contains(box))) continue;
+            paths.Add(RuntimeMiniMapSceneData.CreateBoxPath(
+                toEndpoint * box.transform.localToWorldMatrix, box.offset, box.size));
+        }
+        for (int index = 0; index < 4; index++)
+        {
+            DoubleSlidingDoor door = mechanism.GetMapPassage(index);
+            if (door != null) door.AppendMapEndpointPaths(index % 2 == 0 ? !rotated : rotated, paths);
+        }
+        var result = new RuntimeMiniMapPathData[paths.Count];
+        for (int i = 0; i < paths.Count; i++) result[i] = new RuntimeMiniMapPathData { points = paths[i] };
+        return result;
+    }
+
+    private void AddBridgeLayout(RuntimeMiniMapBridgeData layout, RotatingBridgeMechanism source)
+    {
+        bridgeLayouts.Add(layout);
+        liveBridges.Add(source);
+        displayedBridgeStates.Add(false);
+        // Both endpoints contribute to bounds: switching must not recenter/zoom the map.
+        EncapsulatePaths(layout.originalPaths);
+        EncapsulatePaths(layout.rotatedPaths);
+    }
+
+    private void EncapsulatePaths(RuntimeMiniMapPathData[] paths)
+    {
+        if (paths == null) return;
+        foreach (RuntimeMiniMapPathData path in paths)
+            if (path.points != null) foreach (Vector2 point in path.points) Encapsulate(point);
+    }
+
+    private void RefreshBridgeLayouts(bool force)
+    {
+        bool changed = force;
+        for (int i = 0; i < bridgeLayouts.Count; i++)
+        {
+            bool rotated = false;
+            if (liveBridges[i] != null) rotated = liveBridges[i].MapUsesRotatedLayout;
+            else if (SceneTravelStateManager.Instance != null)
+                SceneTravelStateManager.Instance.TryGetMapDoorState(
+                    geometrySceneName, bridgeLayouts[i].persistentId, out rotated);
+            changed |= displayedBridgeStates[i] != rotated;
+            displayedBridgeStates[i] = rotated;
+        }
+        if (!changed) return;
+        blockPaths.RemoveRange(staticPathCount, blockPaths.Count - staticPathCount);
+        for (int i = 0; i < bridgeLayouts.Count; i++)
+        {
+            RuntimeMiniMapPathData[] paths = displayedBridgeStates[i]
+                ? bridgeLayouts[i].rotatedPaths : bridgeLayouts[i].originalPaths;
+            if (paths == null) continue;
+            foreach (RuntimeMiniMapPathData path in paths)
+                if (path.points != null && path.points.Length >= 2) blockPaths.Add(path.points);
+        }
+        RebuildFilledWallTriangles();
+        SetVerticesDirty();
     }
 
     protected override void OnPopulateMesh(VertexHelper vertexHelper)

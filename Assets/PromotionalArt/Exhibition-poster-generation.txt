@@ -1,0 +1,14 @@
+Tool: built-in image_gen
+Export: JPEG quality 95, resized from 1672x941 to 3840x2160 (16:9).
+
+Use case: ads-marketing.
+Create a finished premium indie game exhibition promotional artwork, horizontal EXACT 16:9, preferably 3840x2160 or 2048x1152. Deliver JPG if supported.
+Reference image is a COMPOSITION REFERENCE ONLY: reproduce its left aligned stacked title at middle-left, thin horizontal rules with a small central emblem below the title, and a large character bust on the right extending to bottom and right edges. Do not copy reference words, anime girl, flowers or white watercolor style.
+Project title text VERBATIM, three lines:
+GHOST
+out of the
+SHELL
+Large widely tracked refined geometric sans-serif capitals for GHOST and SHELL, smaller widely tracked lowercase middle line; meticulously clean accurate typography. Title occupies left 43%, begins 7% from left, centered around 46% height; thin split underline at 65% height with a tiny original hollow-shell / ghost-core emblem in center. No additional copy, no footer text, no watermark.
+Subject: a striking abstract geometric humanoid shell bust in three-quarter profile looking left, positioned in right 52% of frame; faceless or minimally featured, no detailed realistic anatomy. Architectural layered silhouettes, cut-paper-like solid planar shapes, circular head arcs, offset cyan spirit contour lifting slightly outside and behind the dark blue body shell. A small luminous core and repeated offset silhouettes visually convey one consciousness moving outside a body. Use a unified expressive character-shaped focal point, not random scattered geometry.
+Design language: geometric modernism and constructivist editorial composition, confident asymmetry, circular arcs, precise diagonals and monumental flat planes. Contemporary sophisticated game key art, restrained and exceptionally composed. Plenty of calm negative space behind title. Avoid retro propaganda colors and generic sci-fi HUDs.
+Palette: dominant deep blue-black #050E18 background, midnight navy planes, project ghost blue #2882D2 and electric cyan #5FF8E9 accents; title pale ice blue. Restrained gradients within geometric forms, crisp silhouettes and subtle depth. Sparse fine CRT horizontal scanlines and very slight phosphor grain visible only up close, localized gentle blue afterimage; preserve type clarity. No rainbow chromatic glitches, no heavy bloom, no neon city, no extra characters, no photorealism. Entire canvas filled edge-to-edge with finished artwork, no mockup frame.

@@ -2165,6 +2165,75 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 7904703681210521721, guid: 7898a02a9527db9458bef7c9f6fd279b, type: 3}
   m_PrefabInstance: {fileID: 60799804}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &375574372
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 375574374}
+  - component: {fileID: 375574373}
+  m_Layer: 0
+  m_Name: Level1Group
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &375574373
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 375574372}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6930e49cd1924bf2a886947ca5cd59ba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  levelId: Level1
+  displayName: Level1
+  saveSchemaVersion: 1
+  scenes:
+  - sceneAsset: {fileID: 102900000, guid: ebae33990a6004f4187c1b8dad71292d, type: 3}
+    sceneName: Level1-Garden
+    sceneSaveId: Level1-Garden
+    scenePath: Assets/Scenes/Level1/Level1-Garden.unity
+  - sceneAsset: {fileID: 102900000, guid: 576735c7f2c770f4497bf47b2dcff882, type: 3}
+    sceneName: Level1-Floor-1
+    sceneSaveId: Level1-Garden
+    scenePath: Assets/Scenes/Level1/Level1-Floor-1.unity
+  - sceneAsset: {fileID: 102900000, guid: 9879426a70df8e3449f5893ae14619ed, type: 3}
+    sceneName: Level1-Floor1
+    sceneSaveId: Level1-Garden
+    scenePath: Assets/Scenes/Level1/Level1-Floor1.unity
+  - sceneAsset: {fileID: 102900000, guid: 5e4d3d25d11d1d64e8a4eb322bb75560, type: 3}
+    sceneName: Level1-Floor2
+    sceneSaveId: Level1-Garden
+    scenePath: Assets/Scenes/Level1/Level1-Floor2.unity
+  - sceneAsset: {fileID: 102900000, guid: 9b466dbf46cd1b845aca657850db525b, type: 3}
+    sceneName: Level1-Floor3
+    sceneSaveId: Level1-Garden
+    scenePath: Assets/Scenes/Level1/Level1-Floor3.unity
+  entrySceneIndex: 0
+--- !u!4 &375574374
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 375574372}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 11.075871, y: 3.3590863, z: -126.66024}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 19
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &413464699
 GameObject:
   m_ObjectHideFlags: 0
@@ -2630,8 +2699,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 485259010}
   m_LocalRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
-  m_LocalPosition: {x: -27.82, y: -1.173, z: 0.87157845}
-  m_LocalScale: {x: 24.896448, y: 1, z: 1}
+  m_LocalPosition: {x: -27.8133, y: -1.173, z: 0.87157845}
+  m_LocalScale: {x: 24.896448, y: 1.0135, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1508382463}
@@ -2860,7 +2929,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6100000, guid: 6015813740da4646a3b9468217ebd25e, type: 3}
       propertyPath: m_Size.y
-      value: 10.136062
+      value: 10.752446
       objectReference: {fileID: 0}
     - target: {fileID: 6100000, guid: 6015813740da4646a3b9468217ebd25e, type: 3}
       propertyPath: m_Offset.x
@@ -2868,7 +2937,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6100000, guid: 6015813740da4646a3b9468217ebd25e, type: 3}
       propertyPath: m_Offset.y
-      value: 3.9246945
+      value: 3.6165023
       objectReference: {fileID: 0}
     - target: {fileID: 11400000, guid: 6015813740da4646a3b9468217ebd25e, type: 3}
       propertyPath: areaSize.x
@@ -2876,7 +2945,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 11400000, guid: 6015813740da4646a3b9468217ebd25e, type: 3}
       propertyPath: areaSize.y
-      value: 10.136062
+      value: 10.752446
       objectReference: {fileID: 0}
     - target: {fileID: 11400000, guid: 6015813740da4646a3b9468217ebd25e, type: 3}
       propertyPath: areaOffset.x
@@ -2884,7 +2953,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 11400000, guid: 6015813740da4646a3b9468217ebd25e, type: 3}
       propertyPath: areaOffset.y
-      value: 3.9246945
+      value: 3.6165023
       objectReference: {fileID: 0}
     - target: {fileID: 11400000, guid: 6015813740da4646a3b9468217ebd25e, type: 3}
       propertyPath: permissionLevel
@@ -3589,7 +3658,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4657559875753840611, guid: d6d3e135316f0014fb9e1b4033dc6378, type: 3}
       propertyPath: regularHostileLoseSightDelay
-      value: 5
+      value: 7
       objectReference: {fileID: 0}
     - target: {fileID: 4657559875753840611, guid: d6d3e135316f0014fb9e1b4033dc6378, type: 3}
       propertyPath: investigationWaypointPauseDuration
@@ -7232,7 +7301,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6100000, guid: 6015813740da4646a3b9468217ebd25e, type: 3}
       propertyPath: m_Size.y
-      value: 6.0646563
+      value: 6.399062
       objectReference: {fileID: 0}
     - target: {fileID: 6100000, guid: 6015813740da4646a3b9468217ebd25e, type: 3}
       propertyPath: m_Offset.x
@@ -7240,7 +7309,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6100000, guid: 6015813740da4646a3b9468217ebd25e, type: 3}
       propertyPath: m_Offset.y
-      value: 0.19188643
+      value: 0.14061975
       objectReference: {fileID: 0}
     - target: {fileID: 11400000, guid: 6015813740da4646a3b9468217ebd25e, type: 3}
       propertyPath: areaSize.x
@@ -7248,7 +7317,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 11400000, guid: 6015813740da4646a3b9468217ebd25e, type: 3}
       propertyPath: areaSize.y
-      value: 6.0646563
+      value: 6.399062
       objectReference: {fileID: 0}
     - target: {fileID: 11400000, guid: 6015813740da4646a3b9468217ebd25e, type: 3}
       propertyPath: areaOffset.x
@@ -7256,7 +7325,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 11400000, guid: 6015813740da4646a3b9468217ebd25e, type: 3}
       propertyPath: areaOffset.y
-      value: 0.19188643
+      value: 0.14061975
       objectReference: {fileID: 0}
     - target: {fileID: 11400000, guid: 6015813740da4646a3b9468217ebd25e, type: 3}
       propertyPath: permissionLevel
@@ -8424,8 +8493,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1374783721}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -1.369, y: -10.094299, z: 0.87157845}
-  m_LocalScale: {x: 5.89449, y: 0.5, z: 1}
+  m_LocalPosition: {x: -1.369, y: -10.100829, z: 0.87157845}
+  m_LocalScale: {x: 5.89449, y: 0.48693162, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1508382463}
@@ -8540,8 +8609,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1391406162}
   m_LocalRotation: {x: -0, y: -0, z: 0.7071068, w: 0.7071068}
-  m_LocalPosition: {x: 1.8227553, y: -10.8713, z: 0.87157845}
-  m_LocalScale: {x: 2.05424, y: 0.5, z: 1}
+  m_LocalPosition: {x: 1.8227553, y: -10.87796, z: 0.87157845}
+  m_LocalScale: {x: 2.0409286, y: 0.5, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1508382463}
@@ -10607,6 +10676,10 @@ PrefabInstance:
     - target: {fileID: 7904703681210521722, guid: 7898a02a9527db9458bef7c9f6fd279b, type: 3}
       propertyPath: isLocked
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7904703681210521722, guid: 7898a02a9527db9458bef7c9f6fd279b, type: 3}
+      propertyPath: canBeLockpicked
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7904703681210521722, guid: 7898a02a9527db9458bef7c9f6fd279b, type: 3}
       propertyPath: lockedJournalEntryId

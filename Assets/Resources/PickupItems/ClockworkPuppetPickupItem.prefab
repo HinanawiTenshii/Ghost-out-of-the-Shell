@@ -140,7 +140,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   itemName: "\u673A\u5173\u9B54\u50CF"
-  itemDescription: "\u4EE5\u9B54\u529B\u9A71\u52A8\u7684\u673A\u5173\u9B54\u50CF\uFF0C\u4F1A\u81EA\u52A8\u5BFB\u627E\u5E76\u53CD\u590D\u64CD\u63A7\u6700\u8FD1\u7684\u673A\u5173\uFF0C\u64CD\u63A7\u673A\u5173\u4F1A\u6D88\u8017\u5176\u5185\u90E8\u50A8\u5B58\u7684\u9B54\u529B\uFF0C\u9B54\u529B\u8017\u5C3D\u540E\u4F1A\u635F\u574F\u3002"
+  itemDescription: "\u4EE5\u9B54\u529B\u9A71\u52A8\u7684\u673A\u5173\u9B54\u50CF\uFF0C\u4F7F\u7528\u540E\u53EF\u4EE5\u8FDC\u7A0B\u63A7\u5236\uFF0C\u9760\u8FD1\u673A\u5173\u540E\u53EF\u4EE5\u9644\u7740\u5728\u673A\u5173\u4E0A\u64CD\u63A7\u673A\u5173\uFF0C\u5F53\u9047\u5230\u9501\u4F4F\u7684\u95E8\u65F6\u53EF\u4EE5\u6D88\u8017\u5927\u91CF\u9B54\u529B\u8FDB\u884C\u64AC\u9501\u3002"
   itemId: clockwork_puppet
   persistentIdentity: {fileID: 0}
   uniqueInstanceId: 
@@ -160,9 +160,12 @@ MonoBehaviour:
   leverSearchRadius: 0
   reclaimDistance: 1.15
   lockedDoorPryDistance: 0.7
+  manualInteractionDistance: 0.85
+  lockedDoorPryHoldDuration: 3
+  lockedDoorPryMagicFraction: 0.5
   deployedScale: 0.58
   visionRevealRadius: 3
-  showNavigationDebug: 1
+  showNavigationDebug: 0
   navigationPathColor: {r: 0.15, g: 0.85, b: 1, a: 0.9}
   navigationTargetColor: {r: 1, g: 0.25, b: 0.75, a: 1}
   navigationPathWidth: 0.035

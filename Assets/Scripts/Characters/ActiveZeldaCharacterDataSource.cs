@@ -28,6 +28,7 @@ public sealed class ActiveZeldaCharacterDataSource : MonoBehaviour
     public int PossessionEnergy { get; private set; }
     public int CurrentHealth { get; private set; }
     public int MaxHealth { get; private set; }
+    public bool IsGhostLike { get; private set; }
 
     /// <summary>
     /// Raised when the controlled character changes or any exposed value changes.
@@ -100,8 +101,11 @@ public sealed class ActiveZeldaCharacterDataSource : MonoBehaviour
             : PermissionArea.DefaultPermissionLevel;
         int nextPossessionCost = nextData != null ? nextData.PossessionCost : 0;
         int nextPossessionEnergy = nextData != null ? nextData.FinalPossessionEnergy : 0;
+        int nextEnergyThirds = nextData != null ? nextData.CrystalEnergyThirds : 0;
+        int nextEnergyMax = nextData != null ? nextData.MaxPossessionEnergy : 0;
         int nextCurrentHealth = nextData != null ? nextData.CurrentHealth : 0;
         int nextMaxHealth = nextData != null ? nextData.Health : 0;
+        bool nextIsGhostLike = nextData != null && nextData.IsGhostLike;
 
         bool changed = activeMover != nextMover ||
             activeCharacterData != nextData ||
@@ -112,8 +116,11 @@ public sealed class ActiveZeldaCharacterDataSource : MonoBehaviour
             CurrentAreaPermissionLevel != nextAreaPermissionLevel ||
             PossessionCost != nextPossessionCost ||
             PossessionEnergy != nextPossessionEnergy ||
+            cachedCrystalEnergyThirds != nextEnergyThirds ||
+            cachedEnergyMax != nextEnergyMax ||
             CurrentHealth != nextCurrentHealth ||
-            MaxHealth != nextMaxHealth;
+            MaxHealth != nextMaxHealth ||
+            IsGhostLike != nextIsGhostLike;
 
         if (activeMover != nextMover || activeCharacterData != nextData)
         {
@@ -129,8 +136,11 @@ public sealed class ActiveZeldaCharacterDataSource : MonoBehaviour
         CurrentAreaPermissionLevel = nextAreaPermissionLevel;
         PossessionCost = nextPossessionCost;
         PossessionEnergy = nextPossessionEnergy;
+        cachedCrystalEnergyThirds = nextEnergyThirds;
+        cachedEnergyMax = nextEnergyMax;
         CurrentHealth = nextCurrentHealth;
         MaxHealth = nextMaxHealth;
+        IsGhostLike = nextIsGhostLike;
 
         if (changed)
         {
@@ -139,6 +149,7 @@ public sealed class ActiveZeldaCharacterDataSource : MonoBehaviour
     }
 
     private PlayerGrowthAttributes connectedGrowthSource;
+    private int cachedCrystalEnergyThirds, cachedEnergyMax;
 
     private void ConnectActiveSources()
     {

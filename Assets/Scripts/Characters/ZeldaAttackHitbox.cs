@@ -7,7 +7,8 @@ public enum ZeldaAttackVisualShape
     Sword,
     Hammer,
     Rock,
-    Shockwave
+    Shockwave,
+    Book
 }
 
 [RequireComponent(typeof(SpriteRenderer))]
@@ -25,6 +26,45 @@ public class ZeldaAttackHitbox : MonoBehaviour
     private static Sprite hammerSprite;
     private static Sprite rockSprite;
     private static Sprite shockwaveSprite;
+    private static Sprite bookSprite;
+
+    // Coarse pixels match the characters: a two-tone blade, solid crossguard
+    // and plain grip, without fine channels or alternating grip wraps.
+    // Neutral values retain owner tint; 8 x 16 at 16 PPU keeps size/pivot intact.
+    private static readonly string[] SwordPixels = {
+        "...HH...",
+        "..MHHM..",
+        "..MHHM..",
+        "..MHHM..",
+        "..MHHM..",
+        "..MHHM..",
+        "..MHHM..",
+        "..MHHM..",
+        "..MHHM..",
+        "..MHHM..",
+        "..MHHM..",
+        "GGGGGGGG",
+        ".GGDDGG.",
+        "...DD...",
+        "...DD...",
+        "..GGGG..",
+    };
+
+    // A small bound volume: D=outline/spine, C=cover, G=gold, P=page edges.
+    private static readonly string[] BookPixels = {
+        "............",
+        ".DDDDDDDDD..",
+        ".DGCCCCCCGD.",
+        ".DGCCCCCCGD.",
+        ".DGCCGGCCGD.",
+        ".DGCCGGCCGD.",
+        ".DGCCCCCCGD.",
+        ".DGCCCCCCGD.",
+        ".DGGGGGGGGD.",
+        ".DPPPPPPPGD.",
+        ".DDDDDDDDD..",
+        "............"
+    };
     private readonly HashSet<ZeldaCharacterData> damagedTargets = new HashSet<ZeldaCharacterData>();
     private readonly HashSet<DoorData> damagedDoors = new HashSet<DoorData>();
     private readonly HashSet<DollAttackShake> shakenDolls = new HashSet<DollAttackShake>();
@@ -79,6 +119,7 @@ public class ZeldaAttackHitbox : MonoBehaviour
 
     private void Update()
     {
+        if (CancelForStunnedOwner()) return;
         if (visualShape != ZeldaAttackVisualShape.Shockwave)
         {
             return;
@@ -146,6 +187,7 @@ public class ZeldaAttackHitbox : MonoBehaviour
 
     private void TryDamage(Collider2D other)
     {
+        if (CancelForStunnedOwner()) return;
         ZeldaCharacterData target = other.GetComponentInParent<ZeldaCharacterData>();
         bool isDamageableOwner = target == owner && canDamageOwner;
         if (target != null && (target != owner || isDamageableOwner) &&
@@ -176,6 +218,8 @@ public class ZeldaAttackHitbox : MonoBehaviour
         }
 
         BombPickupItem bombPickup = other.GetComponentInParent<BombPickupItem>();
+        var crystal = other.GetComponentInParent<StabilityCrystalPickupItem>();
+        if (crystal != null) crystal.BurstFromAttack();
         if (bombPickup != null && detonatedBombPickups.Add(bombPickup))
         {
             bombPickup.DetonateFromAttack(owner);
@@ -199,6 +243,18 @@ public class ZeldaAttackHitbox : MonoBehaviour
         cardboardBox.ReceiveAttack(attackPower, owner);
     }
 
+    private bool CancelForStunnedOwner()
+    {
+        // Do not cancel independent bomb explosions just because their owner is stunned.
+        if (canDamageOwner || owner == null) return false;
+        var ai = owner.GetComponent<ZeldaCharacterAiBase>();
+        if (!owner.IsGhostForm && (ai == null || !ai.isActiveAndEnabled || !ai.IsStunned)) return false;
+        triggerCollider.enabled = false;
+        if (spriteRenderer != null) spriteRenderer.enabled = false;
+        Destroy(gameObject);
+        return true;
+    }
+
     private void ApplyVisual()
     {
         if (visualShape == ZeldaAttackVisualShape.Sword)
@@ -217,24 +273,90 @@ public class ZeldaAttackHitbox : MonoBehaviour
         {
             spriteRenderer.sprite = shockwaveSprite;
         }
+        else if (visualShape == ZeldaAttackVisualShape.Book)
+        {
+            if (bookSprite == null) bookSprite = CreateBookSprite();
+            spriteRenderer.sprite = bookSprite;
+        }
         else
         {
             spriteRenderer.sprite = boxSprite;
         }
     }
 
+    private static Sprite CreateBookSprite()
+    {
+        var texture = new Texture2D(12, 12, TextureFormat.RGBA32, false)
+        {
+            name = "Priest Attack Book",
+            filterMode = FilterMode.Point,
+            wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        for (int row = 0; row < 12; row++)
+        for (int x = 0; x < 12; x++)
+            texture.SetPixel(x, 11 - row, BookPixelColor(BookPixels[row][x]));
+        texture.Apply();
+        Sprite sprite = Sprite.Create(texture, new Rect(0, 0, 12, 12),
+            new Vector2(0.5f, 0.5f), 12f);
+        sprite.name = texture.name;
+        sprite.hideFlags = HideFlags.HideAndDontSave;
+        return sprite;
+    }
+
+    private static Color BookPixelColor(char symbol)
+    {
+        switch (symbol)
+        {
+            case 'D': return new Color(0.20f, 0.15f, 0.12f, 1f);
+            case 'C': return new Color(0.40f, 0.25f, 0.23f, 1f);
+            case 'G': return new Color(0.78f, 0.62f, 0.29f, 1f);
+            case 'P': return new Color(0.92f, 0.90f, 0.79f, 1f);
+            default: return Color.clear;
+        }
+    }
+
+    private static Sprite CreateSwordSprite()
+    {
+        var texture = new Texture2D(8, 16, TextureFormat.RGBA32, false)
+        {
+            name = "Coarse Sword Attack",
+            filterMode = FilterMode.Point,
+            wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        for (int row = 0; row < 16; row++)
+        for (int x = 0; x < 8; x++)
+            texture.SetPixel(x, 15 - row, SwordPixelColor(SwordPixels[row][x]));
+        texture.Apply();
+        Sprite sprite = Sprite.Create(texture, new Rect(0, 0, 8, 16),
+            new Vector2(0.5f, 0.18f), 16f);
+        sprite.name = texture.name;
+        sprite.hideFlags = HideFlags.HideAndDontSave;
+        return sprite;
+    }
+
+    private static Color SwordPixelColor(char symbol)
+    {
+        switch (symbol)
+        {
+            case 'H': return new Color(0.96f, 0.96f, 0.96f, 1f);
+            case 'M': return new Color(0.80f, 0.80f, 0.80f, 1f);
+            case 'G': return new Color(0.64f, 0.64f, 0.64f, 1f);
+            case 'D': return new Color(0.38f, 0.38f, 0.38f, 1f);
+            default: return Color.clear;
+        }
+    }
+
     private static void CreateSprites()
     {
-        if (boxSprite != null && shockwaveSprite != null)
+        if (boxSprite != null && shockwaveSprite != null && swordSprite != null)
         {
             return;
         }
 
         Texture2D boxTexture = new Texture2D(8, 8);
         boxTexture.filterMode = FilterMode.Point;
-
-        Texture2D swordTexture = new Texture2D(8, 16);
-        swordTexture.filterMode = FilterMode.Point;
 
         Texture2D hammerTexture = new Texture2D(12, 12);
         hammerTexture.filterMode = FilterMode.Point;
@@ -257,22 +379,6 @@ public class ZeldaAttackHitbox : MonoBehaviour
                 boxTexture.SetPixel(x, y, border ? white : clear);
             }
         }
-
-        for (int y = 0; y < 16; y++)
-        {
-            for (int x = 0; x < 8; x++)
-            {
-                swordTexture.SetPixel(x, y, clear);
-            }
-        }
-
-        FillRect(swordTexture, 2, 5, 4, 9, white);
-        swordTexture.SetPixel(1, 12, white);
-        swordTexture.SetPixel(6, 12, white);
-        FillRect(swordTexture, 3, 14, 2, 2, white);
-        FillRect(swordTexture, 0, 4, 8, 1, white);
-        FillRect(swordTexture, 2, 1, 4, 3, white);
-        FillRect(swordTexture, 1, 0, 6, 1, white);
 
         for (int y = 0; y < 12; y++)
         {
@@ -331,13 +437,12 @@ public class ZeldaAttackHitbox : MonoBehaviour
         }
 
         boxTexture.Apply();
-        swordTexture.Apply();
         hammerTexture.Apply();
         rockTexture.Apply();
         shockwaveTexture.Apply(false, true);
 
         boxSprite = Sprite.Create(boxTexture, new Rect(0, 0, 8, 8), new Vector2(0.5f, 0.5f), 8f);
-        swordSprite = Sprite.Create(swordTexture, new Rect(0, 0, 8, 16), new Vector2(0.5f, 0.18f), 16f);
+        swordSprite = CreateSwordSprite();
         hammerSprite = Sprite.Create(hammerTexture, new Rect(0, 0, 12, 12), new Vector2(0.5f, 0.2f), 12f);
         rockSprite = Sprite.Create(rockTexture, new Rect(0, 0, 12, 12), new Vector2(0.5f, 0.5f), 12f);
         shockwaveSprite = Sprite.Create(

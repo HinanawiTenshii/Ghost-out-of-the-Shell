@@ -1,0 +1,4 @@
+Tool: built-in image_gen edit
+Export: JPEG quality 95, upscaled to 3840x2160.
+
+Edit ONLY the small solid tetrahedron below SHELL inside the dotted ring. Keep the entire poster otherwise unchanged. The current tetrahedron geometry is approved. Make its faces hollow: erase all blue and white triangular face fills, revealing the dark navy background through them. Keep only its existing FOUR outer outline segments and ONE diagonal from top apex to lowest vertex. REMOVE the dashed rear edge completely for a clean visible-edges-only wireframe. Thus exactly FIVE clean thin white segments remain: outer quadrilateral plus ONE diagonal, no other internal lines. Do not add any rear-edge lines or center points. Shrink this inner icon by 15 percent around its center while leaving dotted circle size intact. Keep original orientation and exact silhouette proportions. No extra geometry. No other changes.

@@ -127,6 +127,7 @@ public class ZeldaPossessionProgressBar : MonoBehaviour
         {
             spriteRenderer = GetComponent<SpriteRenderer>();
             spriteRenderer.sortingOrder = ProgressSortingOrder;
+            ConfigureOverlayRenderer(spriteRenderer);
         }
 
         if (progressTexture != null)
@@ -144,6 +145,20 @@ public class ZeldaPossessionProgressBar : MonoBehaviour
             new Vector2(0.5f, 0f),
             14f);
         spriteRenderer.sprite = progressSprite;
+    }
+
+    /// <summary>Render world-space overhead feedback in the post-Blocks UI camera.</summary>
+    public static void ConfigureOverlayRenderer(Renderer renderer)
+    {
+        int uiLayer = LayerMask.NameToLayer("UI");
+        if (uiLayer >= 0) renderer.gameObject.layer = uiLayer;
+        int highestValue = int.MinValue;
+        foreach (SortingLayer layer in SortingLayer.layers)
+        {
+            if (layer.value <= highestValue) continue;
+            highestValue = layer.value;
+            renderer.sortingLayerID = layer.id;
+        }
     }
 
     private void OnDestroy()

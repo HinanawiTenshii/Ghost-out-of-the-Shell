@@ -11,16 +11,17 @@ public class StrongmanZeldaCharacterData : ZeldaCharacterData
     [SerializeField] private Color movingTint = Color.white;
     [SerializeField] private Color attackVisualTint = new Color(1f, 0.62f, 0.18f, 0.55f);
 
-    private static Sprite facingDownSprite;
-    private static Sprite facingUpSprite;
-    private static Sprite facingLeftSprite;
-    private static Sprite facingRightSprite;
-    private static Sprite attackingDownSprite;
-    private static Sprite attackingUpSprite;
-    private static Sprite attackingLeftSprite;
-    private static Sprite attackingRightSprite;
+    private Sprite facingDownSprite;
+    private Sprite facingUpSprite;
+    private Sprite facingLeftSprite;
+    private Sprite facingRightSprite;
+    private Sprite attackingDownSprite;
+    private Sprite attackingUpSprite;
+    private Sprite attackingLeftSprite;
+    private Sprite attackingRightSprite;
 
-    public override bool CanAttack => true;
+    public override bool CanAttack => !IsGhostForm;
+    public override Color GhostFormEyeColor => new Color(0.05f, 0.05f, 0.04f, 1f);
     public override int AttackPower => attackPower;
     public override GameObject AttackPrefab => attackPrefab;
     public override float AttackDuration => attackDuration;
@@ -56,11 +57,13 @@ public class StrongmanZeldaCharacterData : ZeldaCharacterData
             spriteRenderer.sprite = isAttacking ? attackingDownSprite : facingDownSprite;
         }
 
-        Color baseColor = isMoving ? movingTint : idleTint;
+        Color baseColor = GetMovementTint(isMoving);
         spriteRenderer.color = GetDamageFeedbackTint(baseColor);
     }
 
-    private static void CreateDirectionSprites()
+    protected Color GetMovementTint(bool isMoving) => isMoving ? movingTint : idleTint;
+
+    private void CreateDirectionSprites()
     {
         if (facingDownSprite != null)
         {
@@ -77,100 +80,180 @@ public class StrongmanZeldaCharacterData : ZeldaCharacterData
         attackingRightSprite = CreateCharacterSprite(Vector2.right, true);
     }
 
-    private static Sprite CreateCharacterSprite(Vector2 facing, bool attacking)
+    private Sprite CreateCharacterSprite(Vector2 facing, bool attacking)
     {
-        const int width = 20;
-        const int height = 20;
-        Texture2D texture = new Texture2D(width, height);
-        texture.filterMode = FilterMode.Point;
+        var texture = CreateTexture(facing, attacking);
+        // y=4 feet minus y=6 pivot retains the original world-space ground line.
+        var sprite = Sprite.Create(texture, new Rect(0, 0, 20, 20), new Vector2(0.5f, 0.3f), 16f);
+        sprite.name = texture.name;
+        sprite.hideFlags = HideFlags.HideAndDontSave;
+        return sprite;
+    }
 
-        Color clear = new Color(1f, 1f, 1f, 0f);
-        Color skin = new Color(1f, 0.72f, 0.45f, 1f);
-        Color shadowSkin = new Color(0.82f, 0.48f, 0.28f, 1f);
-        Color orange = new Color(1f, 0.42f, 0.05f, 1f);
-        Color darkOrange = new Color(0.68f, 0.2f, 0.02f, 1f);
-        Color boots = new Color(0.16f, 0.09f, 0.05f, 1f);
-        Color hair = new Color(0.18f, 0.09f, 0.03f, 1f);
-        Color eye = new Color(0.05f, 0.05f, 0.04f, 1f);
+    // Four-way compact silhouettes: head touches shoulders, no neck.
+    // Two-pixel legs; profile hands sit in the middle of the torso.
+    private static readonly string[] FrontBody = {
+        "....................",
+        ".......HHHHHH.......",
+        "......HHHHHHHH......",
+        "......HFFFFFFH......",
+        "......FEFFFFEF......",
+        "......SFFFFFFS......",
+        "...FFFCCCCCCCCFFF...",
+        "...FFFCCLLLLCCFFF...",
+        "...SSSCLLLLLLCSSS...",
+        "...GGGCCLLLLCCGGG...",
+        "...GGGCCCLLCCCGGG...",
+        "....DDDCCLLCCDDD....",
+        ".....DDBBBBBBDD.....",
+        "......DCCCCCCD......",
+        "......KKK..KKK......",
+        "......KKK..KKK......",
+        "....................",
+        "....................",
+        "....................",
+        "....................",
+    };
 
-        FillRect(texture, 0, 0, width, height, clear);
+    private static readonly string[] BackBody = {
+        "....................",
+        ".......HHHHHH.......",
+        "......HHHHHHHH......",
+        "......HHHHHHHH......",
+        "......HHHHHHHH......",
+        "......SSHHHHSS......",
+        "...FFFCCCCCCCCFFF...",
+        "...FFFCCDDDDCCFFF...",
+        "...SSSCCCDDCCCSSS...",
+        "...GGGCCCDDCCCGGG...",
+        "...GGGCCCDDCCCGGG...",
+        "....DDDCCDDCCDDD....",
+        ".....DDBBBBBBDD.....",
+        "......DCCCCCCD......",
+        "......KKK..KKK......",
+        "......KKK..KKK......",
+        "....................",
+        "....................",
+        "....................",
+        "....................",
+    };
 
-        FillRect(texture, 6, 3, 3, 3, boots);
-        FillRect(texture, 11, 3, 3, 3, boots);
-        FillRect(texture, 5, 6, 10, 7, orange);
-        FillRect(texture, 4, 8, 12, 4, orange);
-        FillRect(texture, 5, 6, 1, 7, darkOrange);
-        FillRect(texture, 14, 6, 1, 7, darkOrange);
-        FillRect(texture, 8, 12, 4, 2, skin);
-        FillRect(texture, 7, 14, 6, 3, skin);
-        FillRect(texture, 7, 17, 6, 2, hair);
+    private static readonly string[] LeftBody = {
+        "....................",
+        ".....HHHHHH.........",
+        "....HHHHHHHH........",
+        "....HFFFFHHH........",
+        "....FEFFFHHH........",
+        "....SFFFFHHS........",
+        "......CCCCCCCD......",
+        "......CCCSSSCD......",
+        "......CCCFFFCD......",
+        "......CCCGGGCD......",
+        "......CCCGGGCD......",
+        "......DCCCLCCD......",
+        "......DBBBBBBD......",
+        "......DCCCCCCD......",
+        "......KKK..KKK......",
+        "......KKK..KKK......",
+        "....................",
+        "....................",
+        "....................",
+        "....................",
+    };
+
+    private static readonly string[] RightBody = {
+        "....................",
+        ".........HHHHHH.....",
+        "........HHHHHHHH....",
+        "........HHHFFFFH....",
+        "........HHHFFFEF....",
+        "........SHHFFFFS....",
+        "......DCCCCCCC......",
+        "......DCSSSCCC......",
+        "......DCFFFCCC......",
+        "......DCGGGCCC......",
+        "......DCGGGCCC......",
+        "......DCCLCCCD......",
+        "......DBBBBBBD......",
+        "......DCCCCCCD......",
+        "......KKK..KKK......",
+        "......KKK..KKK......",
+        "....................",
+        "....................",
+        "....................",
+        "....................",
+    };
+
+    private Texture2D CreateTexture(Vector2 facing, bool attacking)
+    {
+        const int size = 20;
+        string[] rows = facing == Vector2.up ? BackBody :
+            facing == Vector2.left ? LeftBody : facing == Vector2.right ? RightBody : FrontBody;
+        var pixels = new Color[size * size];
+        for (int row = 0; row < size; row++)
+        for (int x = 0; x < size; x++)
+            pixels[(size - 1 - row) * size + x] = PixelColor(rows[row][x]);
 
         if (attacking)
         {
-            DrawAttackingArms(texture, facing, skin, shadowSkin);
-        }
-        else
-        {
-            FillRect(texture, 2, 8, 3, 5, skin);
-            FillRect(texture, 15, 8, 3, 5, skin);
-            FillRect(texture, 2, 7, 3, 2, shadowSkin);
-            FillRect(texture, 15, 7, 3, 2, shadowSkin);
-        }
-
-        if (facing == Vector2.up)
-        {
-            FillRect(texture, 7, 15, 6, 3, hair);
-        }
-        else if (facing == Vector2.left)
-        {
-            FillRect(texture, 6, 15, 5, 3, skin);
-            FillRect(texture, 5, 16, 3, 2, hair);
-            SetPixelSafe(texture, 6, 15, eye);
-        }
-        else if (facing == Vector2.right)
-        {
-            FillRect(texture, 9, 15, 5, 3, skin);
-            FillRect(texture, 12, 16, 3, 2, hair);
-            SetPixelSafe(texture, 13, 15, eye);
-        }
-        else
-        {
-            SetPixelSafe(texture, 8, 15, eye);
-            SetPixelSafe(texture, 11, 15, eye);
-            FillRect(texture, 9, 14, 2, 1, shadowSkin);
+            RestoreBodyBehindAttackingArm(pixels, facing);
+            int startX = facing == Vector2.left ? 2 : facing == Vector2.right ? 12 : 7;
+            int startY = facing == Vector2.up ? 12 : facing == Vector2.down ? 5 : 9;
+            Paint(pixels, startX, startY, 6, 3, 'F');
+            int handX = facing == Vector2.left ? startX : facing == Vector2.right ? startX + 3 : startX + 1;
+            int handY = facing == Vector2.up ? startY + 1 : startY;
+            Paint(pixels, handX, handY, 3, 2, 'G');
         }
 
-        texture.Apply();
-        return Sprite.Create(texture, new Rect(0, 0, width, height), new Vector2(0.5f, 0.25f), 16f);
+        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        {
+            name = "Strongman " + facing + (attacking ? " Attack" : " Idle"),
+            filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        texture.SetPixels(pixels);
+        texture.Apply(false, attacking);
+        return texture;
     }
 
-    private static void DrawAttackingArms(Texture2D texture, Vector2 facing, Color skin, Color shadowSkin)
+    private void RestoreBodyBehindAttackingArm(Color[] pixels, Vector2 facing)
     {
-        if (facing == Vector2.up)
+        if (facing == Vector2.down || facing == Vector2.up)
         {
-            FillRect(texture, 4, 13, 3, 5, skin);
-            FillRect(texture, 13, 13, 3, 5, skin);
-            FillRect(texture, 4, 17, 3, 2, shadowSkin);
-            FillRect(texture, 13, 17, 3, 2, shadowSkin);
-        }
-        else if (facing == Vector2.left)
-        {
-            FillRect(texture, 0, 9, 6, 4, skin);
-            FillRect(texture, 0, 8, 3, 2, shadowSkin);
-            FillRect(texture, 14, 8, 3, 5, skin);
-        }
-        else if (facing == Vector2.right)
-        {
-            FillRect(texture, 14, 9, 6, 4, skin);
-            FillRect(texture, 17, 8, 3, 2, shadowSkin);
-            FillRect(texture, 3, 8, 3, 5, skin);
+            int outerX = facing == Vector2.down ? 3 : 14;
+            Paint(pixels, outerX, 9, 3, 5, '.');
+            // Preserve a connected clothing edge behind the retracted arm.
+            Paint(pixels, facing == Vector2.down ? 5 : 14, 9, 1, 4, 'D');
         }
         else
         {
-            FillRect(texture, 3, 7, 4, 5, skin);
-            FillRect(texture, 13, 7, 4, 5, skin);
-            FillRect(texture, 3, 6, 4, 2, shadowSkin);
-            FillRect(texture, 13, 6, 4, 2, shadowSkin);
+            int handX = facing == Vector2.left ? 9 : 8;
+            Paint(pixels, handX, 9, 3, 4, 'C');
+        }
+    }
+
+    private void Paint(Color[] pixels, int x, int y, int width, int height, char symbol)
+    {
+        for (int py = y; py < y + height; py++)
+        for (int px = x; px < x + width; px++)
+            pixels[py * 20 + px] = PixelColor(symbol);
+    }
+
+    private Color PixelColor(char symbol)
+    {
+        switch (symbol)
+        {
+            case 'C': return new Color(1f, 0.42f, 0.05f, 1f);
+            case 'D': return new Color(0.68f, 0.2f, 0.02f, 1f);
+            case 'L': return new Color(1f, 0.53f, 0.16f, 1f);
+            case 'B': return new Color(0.30f, 0.18f, 0.10f, 1f);
+            case 'K': return new Color(0.16f, 0.09f, 0.05f, 1f);
+            case 'F': return new Color(1f, 0.72f, 0.45f, 1f);
+            case 'S': return new Color(0.82f, 0.48f, 0.28f, 1f);
+            case 'G': return new Color(0.82f, 0.48f, 0.28f, 1f);
+            case 'H': return new Color(0.18f, 0.09f, 0.03f, 1f);
+            case 'E': return GhostFormEyeColor;
+            default: return Color.clear;
         }
     }
 
@@ -189,25 +272,20 @@ public class StrongmanZeldaCharacterData : ZeldaCharacterData
         return direction.y > 0f ? Vector2.up : Vector2.down;
     }
 
-    private static void FillRect(Texture2D texture, int startX, int startY, int width, int height, Color color)
+    private void OnDestroy()
     {
-        for (int y = startY; y < startY + height; y++)
-        {
-            for (int x = startX; x < startX + width; x++)
-            {
-                SetPixelSafe(texture, x, y, color);
-            }
-        }
+        ReleaseSprite(facingDownSprite); ReleaseSprite(facingUpSprite);
+        ReleaseSprite(facingLeftSprite); ReleaseSprite(facingRightSprite);
+        ReleaseSprite(attackingDownSprite); ReleaseSprite(attackingUpSprite);
+        ReleaseSprite(attackingLeftSprite); ReleaseSprite(attackingRightSprite);
     }
 
-    private static void SetPixelSafe(Texture2D texture, int x, int y, Color color)
+    private void ReleaseSprite(Sprite sprite)
     {
-        if (x < 0 || x >= texture.width || y < 0 || y >= texture.height)
-        {
-            return;
-        }
-
-        texture.SetPixel(x, y, color);
+        if (sprite == null) return;
+        var texture = sprite.texture;
+        if (Application.isPlaying) { Destroy(sprite); Destroy(texture); }
+        else { DestroyImmediate(sprite); DestroyImmediate(texture); }
     }
 
     protected override void OnValidate()

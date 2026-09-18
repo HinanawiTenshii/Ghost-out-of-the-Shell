@@ -49,6 +49,7 @@ public sealed class TitleScreenController : MonoBehaviour
 
     private void Update()
     {
+        if (RetroSceneLoadReveal.IsBlockingInput) return;
         if (levelSelectOptionsRoot != null &&
             levelSelectOptionsRoot.gameObject.activeSelf &&
             Input.GetKeyDown(KeyCode.Escape))
@@ -85,8 +86,12 @@ public sealed class TitleScreenController : MonoBehaviour
             return;
         }
 
-        SceneTravelStateManager.GetOrCreate().ResetAllSceneStates();
-        SceneManager.LoadScene(sceneName.Trim());
+        RetroSceneLoadReveal.BeginTransition(sceneName.Trim(), () =>
+        {
+            GameSaveSystem.Instance?.BeginNewGame();
+            SceneTravelStateManager.GetOrCreate().ResetAllSceneStates();
+            SceneManager.LoadScene(sceneName.Trim());
+        });
     }
 
     public void QuitGame()
@@ -149,7 +154,7 @@ public sealed class TitleScreenController : MonoBehaviour
         optionsRoot.sizeDelta = new Vector2(330f, 390f);
 
         CreateOption(optionsRoot, "开始游戏", 105f, true, StartGame);
-        CreateOption(optionsRoot, "载入游戏（暂未开放）", 35f, false, null);
+        CreateOption(optionsRoot, "载入游戏", 35f, true, OpenLoadSlots);
         CreateOption(optionsRoot, "游戏设置（暂未开放）", -35f, false, null);
         CreateOption(optionsRoot, "结束游戏", -105f, true, QuitGame);
         mainOptionsRoot = optionsRoot;
@@ -164,6 +169,12 @@ public sealed class TitleScreenController : MonoBehaviour
         CreateOption(levelSelectOptionsRoot, "未完待续", -60f, false, null);
         CreateOption(levelSelectOptionsRoot, "返回", -120f, true, ShowMainMenu);
         levelSelectOptionsRoot.gameObject.SetActive(false);
+    }
+
+    private void OpenLoadSlots()
+    {
+        mainOptionsRoot.gameObject.SetActive(false);
+        SaveSlotPanel.Open(mainOptionsRoot.parent, titleFont, false, true, ShowMainMenu);
     }
 
     private static void ConfigureOptionsRoot(RectTransform optionsRoot)
@@ -298,6 +309,7 @@ public sealed class TitleScreenController : MonoBehaviour
             titleCanvas.planeDistance =
                 titleCanvas.worldCamera.nearClipPlane + 0.01f;
         }
+        CRTScreenEffect.RegisterCanvas(titleCanvas);
     }
 
     private static void EnsureEventSystem()

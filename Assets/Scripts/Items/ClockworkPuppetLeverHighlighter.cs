@@ -85,6 +85,11 @@ public sealed class ClockworkPuppetLeverHighlighter : MonoBehaviour
 
     private static bool IsPuppetSelected()
     {
+        if (ClockworkPuppetRuntime.IsRemoteControlActive)
+        {
+            return true;
+        }
+
         PersistentInventory inventory = PersistentInventory.Instance;
         if (inventory == null) return false;
         PersistentInventory.Slot slot = inventory.GetSlot(inventory.SelectedSlotIndex);
@@ -94,14 +99,19 @@ public sealed class ClockworkPuppetLeverHighlighter : MonoBehaviour
 
     private static LeverData FindNearestLeverToPlayer()
     {
+        Transform remoteControlTarget =
+            ClockworkPuppetRuntime.RemoteControlTargetTransform;
         ZeldaFourWayMover mover = ZeldaRuntimeRegistry.GetControlledMover();
-        if (mover == null) return null;
+        if (remoteControlTarget == null && mover == null) return null;
+        Vector2 origin = remoteControlTarget != null
+            ? (Vector2)remoteControlTarget.position
+            : (Vector2)mover.transform.position;
         LeverData closest = null;
         float best = float.MaxValue;
         foreach (LeverData lever in LeverData.WorldLevers)
         {
             if (lever == null || !lever.isActiveAndEnabled) continue;
-            float sqr = ((Vector2)lever.transform.position - (Vector2)mover.transform.position).sqrMagnitude;
+            float sqr = ((Vector2)lever.transform.position - origin).sqrMagnitude;
             if (sqr < best)
             {
                 best = sqr;

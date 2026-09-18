@@ -7,6 +7,7 @@ public class GhostZeldaCharacterData : ZeldaCharacterData
     private const float CharacterCollisionRefreshInterval = 0.5f;
     [SerializeField] private Color idleTint = new Color(0.72f, 0.95f, 1f, 0.78f);
     [SerializeField] private Color movingTint = new Color(0.9f, 1f, 1f, 0.86f);
+    public Color ConsciousnessParticleTint => idleTint;
 
     private static Sprite ghostDownSprite;
     private static Sprite ghostUpSprite;

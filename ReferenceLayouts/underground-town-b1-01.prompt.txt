@@ -1,0 +1,30 @@
+Generation mode: built-in image_gen
+
+Use case: infographic-diagram.
+Create a large underground medieval town level-design reference FLOOR PLAN using ONLY simple geometric shapes, flat solid colors, precise thick wall lines, rectangular rooms and channels, circles only for mechanisms, no illustration, no texture, no shadows, no perspective. Strict 2D orthographic overhead. Landscape high resolution, readable Chinese text. This is ONE continuous underground level B1, NOT stacked floors. Diagram occupies nearly entire canvas with slim title and bottom legend.
+
+Title: 城镇地下层 B1 · 空间布局参考
+Two large clearly separated zones next to each other. Left 58% habitable/service zone in muted warm beige and ochre, right 42% hydraulic zone in pale blue and dark slate. Strong continuous thick separating wall with ONLY TWO controlled real doorway gaps, labelled 检修门 A and 检修门 B, upper middle and lower middle. No water crossing into living zone. All inhabited rooms connect by actual doorway gaps to a clear wide loop corridor. No inaccessible sealed rooms.
+
+LEFT ZONE overall label 地下生活与仓储区:
+At upper edge two stairs to surface buildings, symbols made from parallel straight lines, labels 住宅楼梯 and 工坊楼梯.
+Upper left group of 6 small rectangular resident rooms off a short corridor, collective label 居住区.
+Upper right group of 3 large rectangular stores, label 工坊仓库, a few simple crate rectangles along room edges, unload circulation clear, connecting to 工坊楼梯.
+Middle left large common lounge labelled 居民休息厅, next to medium room labelled 娱乐室, simple block tables only.
+Middle right rectangular distribution hall labelled 公共大厅, large enough for circulation.
+Lower left two small rooms labelled 储物间 and 管理室, lower center a third surface stair labelled 广场楼梯.
+Main corridors form a continuous rectangular loop connecting all these spaces, with a cross passage through public hall. Stairheads connect clearly. Small ventilation shafts as small gray squares along outer edge labelled 通风井, avoid clutter.
+
+RIGHT ZONE overall label 地下水系统:
+A fully separated coherent channel network with DRY walkways around it. Incoming water at upper-right boundary labelled 来水渠, blue arrows consistently downward into a rectangular 分流池 near upper right.
+Immediately downstream a gate rectangle labelled 闸门 G1; adjacent dry-access circular mechanism labelled 绞盘.
+After G1 channel branches in TWO clear paths: main channel runs downward into a LARGE rectangular 蓄水池 in central right; overflow bypass labelled 旁通渠 runs along far right edge, with separate gate 闸门 G2 and adjacent dry lever circle. Both branches rejoin at bottom rectangular 汇流池, then one channel exits lower-right boundary labelled 出水渠 with downstream arrow.
+Main storage pool outlet has gate 闸门 G3 and adjacent dry lever circle, before joining 汇流池.
+Blue water arrows clearly show incoming → dividing basin → main storage or bypass → lower merging basin → outflow. Gates span channel widths, operating mechanisms stand on DRY banks, connected via simple lines to gates.
+Left edge of hydraulic zone a wide continuous DRY 检修步道 links both controlled doors, a room labelled 闸门控制室 near upper door A, dry access to all 3 gate mechanisms. Two clear light-gray rectangular bridges span narrow water channels as needed, labelled 检修桥. Bridges visibly distinct from water and remain at same playable elevation as dry walkways. Draw no arrows across land. Leave generous dry maintenance platforms around basins. No water entering inhabited rooms.
+
+Small bottom legend with 5 color keys: 生活空间, 仓储空间, 干燥通道, 水体, 闸门机关.
+Small bottom note: 同层分区示意｜水槽低于步道｜非严格比例
+Design priorities: connected playable circulation, obvious wet/dry separation, a readable water-control puzzle layout, simple geometry for Unity greyboxing. Fewer clear large spaces over tiny dense details. Labels legible and not overlapping. No real-world engineering dimensions or claims.
+
+Edit the provided underground floor plan. Preserve all room layout, geometry and Chinese labels except these precise corrections: the gate directly BELOW the large central 蓄水池 must read 闸门 G3 (currently duplicate G2). The gate on far-right bypass remains 闸门 G2. Remove the nonsensical extra small Chinese text beside the far-right bypass above G2; keep the proper 旁通渠 label. Make the whole image flat graphic solid colors, remove ALL shadows, dark vignettes, glow, blurry background gradients. Title and bottom legend should sit on a clean white background with dark readable text. Bottom note should clearly read 同层分区示意｜水槽低于步道｜非严格比例. Reverse the small right-pointing arrow in the blue horizontal channel below G1 and left of its junction to point LEFT toward the storage inlet. Ensure gates A and B show clearly passable openings between beige and gray dry floors. Do not add rooms or alter the floor plan.

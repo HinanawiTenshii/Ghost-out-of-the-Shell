@@ -1,0 +1,305 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &840100000000000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 840100000000000002}
+  - component: {fileID: 840100000000000003}
+  - component: {fileID: 840100000000000004}
+  - component: {fileID: 840100000000000005}
+  - component: {fileID: 840100000000000006}
+  - component: {fileID: 840100000000000007}
+  - component: {fileID: 840100000000000008}
+  m_Layer: 0
+  m_Name: Priest-level2
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &840100000000000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 840100000000000001}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!50 &840100000000000003
+Rigidbody2D:
+  serializedVersion: 4
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 840100000000000001}
+  m_BodyType: 1
+  m_Simulated: 1
+  m_UseFullKinematicContacts: 1
+  m_UseAutoMass: 0
+  m_Mass: 1
+  m_LinearDrag: 0
+  m_AngularDrag: 0.05
+  m_GravityScale: 0
+  m_Material: {fileID: 0}
+  m_Interpolate: 1
+  m_SleepingMode: 1
+  m_CollisionDetection: 0
+  m_Constraints: 4
+--- !u!61 &840100000000000004
+BoxCollider2D:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 840100000000000001}
+  m_Enabled: 1
+  m_Density: 1
+  m_Material: {fileID: 0}
+  m_IsTrigger: 0
+  m_UsedByEffector: 0
+  m_UsedByComposite: 0
+  m_Offset: {x: 0, y: 0.23}
+  m_SpriteTilingProperty:
+    border: {x: 0, y: 0, z: 0, w: 0}
+    pivot: {x: 0.5, y: 0.5}
+    oldSize: {x: 1, y: 1}
+    newSize: {x: 1, y: 1}
+    adaptiveTilingThreshold: 0.5
+    drawMode: 0
+    adaptiveTiling: 0
+  m_AutoTiling: 0
+  serializedVersion: 2
+  m_Size: {x: 0.38, y: 0.56}
+  m_EdgeRadius: 0
+--- !u!212 &840100000000000005
+SpriteRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 840100000000000001}
+  m_Enabled: 1
+  m_CastShadows: 0
+  m_ReceiveShadows: 0
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 0
+  m_RayTraceProcedural: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 0
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 1
+  m_Sprite: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_FlipX: 0
+  m_FlipY: 0
+  m_DrawMode: 0
+  m_Size: {x: 1, y: 1}
+  m_AdaptiveModeThreshold: 0.5
+  m_SpriteTileMode: 0
+  m_WasSpriteAssigned: 0
+  m_MaskInteraction: 0
+  m_SpriteSortPoint: 0
+--- !u!114 &840100000000000006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 840100000000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c382a1fdf8b94887bc5b7cf41b273981, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  cameraOrthographicSize: 7
+  playerVisionRadius: 13
+  sceneCameraOverrides: []
+  health: 5
+  skillValue: 3
+  permissionLevel: 1
+  possessionEnergy: 2
+  possessionCost: 2
+  moveSpeed: 3
+  deathExplosionDuration: 0.35
+  deathExplosionScale: 1.9
+  deathExplosionTint: {r: 1, g: 0.65, b: 0.12, a: 1}
+  damageFeedbackDuration: 0.18
+  damageTint: {r: 1, g: 0.2, b: 0.2, a: 1}
+  damageShakeAmount: 0.04
+  damageShakeSpeed: 80
+  attributeWindowOffset: {x: 0, y: 0}
+  attributeWindowScale: 2.2
+  attackPower: 1
+  attackPrefab: {fileID: 100000, guid: c7a3afec32db4e4d83d29bb18d2f601c, type: 3}
+  attackDuration: 0.24
+  attackSpawnOffset: {x: 0, y: 0.48}
+  attackSize: {x: 0.46, y: 0.4}
+  attackVisualTint: {r: 1, g: 1, b: 1, a: 1}
+  robeColor: {r: 0.84, g: 0.85, b: 0.82, a: 1}
+  robeShadow: {r: 0.59, g: 0.61, b: 0.59, a: 1}
+  robeHighlight: {r: 0.95, g: 0.94, b: 0.88, a: 1}
+  trimColor: {r: 0.72, g: 0.56, b: 0.25, a: 1}
+  vestmentColor: {r: 0.90, g: 0.90, b: 0.86, a: 1}
+  faceColor: {r: 0.78, g: 0.55, b: 0.36, a: 1}
+  eyeColor: {r: 0.10, g: 0.13, b: 0.16, a: 1}
+  bootsColor: {r: 0.22, g: 0.16, b: 0.11, a: 1}
+  walkFramesPerSecond: 7
+--- !u!114 &840100000000000007
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 840100000000000001}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a6df8c329184af4a985710734a46f2c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  initialFacingDirection: 0
+  controlSwitchDistance: 0.5
+  controlSwitchRadius: 0.5
+  controlSwitchHoldDuration: 3
+  controlSwitchProgressOffset: {x: 0, y: 1.1}
+  controlSwitchProgressScale: 0.8
+  controlSwitchFailureDuration: 0.9
+  controlSwitchFailureFlashCount: 3
+  possessionPromptOffset: {x: 0, y: 0.9}
+  controlSwitchLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  solidCollisionLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  collisionSkinWidth: 0.01
+  deathGhostPrefab: {fileID: 4527040845616928534, guid: 3686e58a077f8534bbf32cc6244eab34, type: 3}
+--- !u!114 &840100000000000008
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 840100000000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a81494bb8bf44504a8f11adb1cb226c4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  visionRadius: 4
+  visionAngle: 90
+  peripheralVisionAngle: 180
+  peripheralVisionRadius: 1.4
+  visionRayCount: 48
+  visionObstacleLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  visionColor: {r: 0.45, g: 0.8, b: 1, a: 0.22}
+  immediateResponseDistance: 2
+  maximumSuspicion: 100
+  suspicionIncreasePerSecond: 35
+  suspicionDecreasePerSecond: 25
+  attackDistance: 1.1
+  attackFacingTolerance: 20
+  attackCooldown: 0.35
+  regularHostileLoseSightDelay: 7
+  solidCollisionLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  collisionSkinWidth: 0.01
+  searchDuration: 4
+  searchRadius: 1.8
+  searchWaypointTolerance: 0.15
+  searchWaypointChangeInterval: 1.2
+  searchWaypointObstacleClearance: 0.45
+  searchWaypointSamplingAttempts: 12
+  investigationDuration: 3
+  investigationWaypointPauseDuration: 0.65
+  investigationTargetRelocationRadius: 1.5
+  investigationRelocationSamplesPerRing: 12
+  recoveryPositionTolerance: 0.15
+  warningFollowDistance: 1.4
+  warningEscalationTime: 4
+  warningDistanceTolerance: 0.15
+  stateIndicatorOffset: {x: 0, y: 1.15}
+  stateIndicatorScale: 0.65
+  hostileIndicatorDuration: 0.7
+  possessionShakeAmount: 0.025
+  possessionShakeSpeed: 45
+  obstacleProbeDistance: 0.75
+  avoidanceAngleStep: 30
+  avoidanceDirectionSteps: 3
+  avoidanceDirectionHoldTime: 0.3
+  wallFollowExitDelay: 0.35
+  cornerStuckDetectionDuration: 0.18
+  cornerEscapeHoldDuration: 0.4
+  cornerEscapeDirectionSamples: 16
+  cornerOscillationWindowDuration: 0.3
+  cornerMinimumProgressRatio: 0.45
+  navigationRefreshInterval: 0.1
+  hostileNavigationRefreshInterval: 0.05
+  navigationDirectionChangeAngle: 12
+  useGridPathfinding: 1
+  gridCellSize: 0.5
+  gridSearchPadding: 5
+  maximumGridDimension: 45
+  gridPathRefreshInterval: 0.35
+  hostileGridPathRefreshInterval: 0.18
+  gridWaypointTolerance: 0.14
+  gridWallClearance: 0.16
+  maximumWallSeparationStep: 0.12
+  preferredGridObstacleDistance: 0.7
+  gridObstacleProximityCost: 3.5
+  characterSeparationDistance: 0.75
+  characterSeparationStrength: 1.25
+  characterSeparationRefreshInterval: 0.12
+  showNavigationDebug: 1
+  navigationPathColor: {r: 0.15, g: 0.85, b: 1, a: 0.9}
+  navigationTargetColor: {r: 1, g: 0.25, b: 0.75, a: 1}
+  navigationPathWidth: 0.035
+  navigationTargetMarkerSize: 0.18
+  navigationDebugSortingOrder: 200
+  patrolPoint2Offset: {x: 0, y: 0}
+  patrolPoint3Offset: {x: 0, y: 0}
+  patrolPoint4Offset: {x: 0, y: 0}
+  patrolPointTolerance: 0.12
+  waitAtPoint1Duration: 1
+  waitAtPoint2Duration: 1
+  waitAtPoint3Duration: 1
+  waitAtPoint4Duration: 1

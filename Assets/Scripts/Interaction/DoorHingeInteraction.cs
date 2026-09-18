@@ -12,7 +12,14 @@ public class DoorHingeInteraction : MonoBehaviour
     [SerializeField] private float rotationAngle = 90f;
     [SerializeField] private float rotationSpeed = 360f;
     [SerializeField] private bool clockwise;
+    [Header("Optional Double Door Hinges")]
+    [SerializeField, Tooltip("Leave empty for the original single door. For a double door, assign its first child hinge.")]
+    private Transform primaryHinge;
+    [SerializeField, Tooltip("Optional second child hinge. Opens in the opposite direction with the same angle and speed.")]
+    private Transform secondaryHinge;
     [SerializeField] private bool isLocked;
+    [SerializeField, Tooltip("Whether a clockwork puppet can pry this door's lock. Existing doors remain pryable by default.")]
+    private bool canBeLockpicked = true;
     [Header("Password Lock")]
     [SerializeField, Tooltip("When enabled, a locked door requires its four-digit password instead of an inventory key.")]
     private bool passwordLockEnabled;
@@ -46,6 +53,10 @@ public class DoorHingeInteraction : MonoBehaviour
 
     private Quaternion closedRotation;
     private Quaternion targetRotation;
+    private Quaternion secondaryClosedRotation;
+    private Quaternion secondaryTargetRotation;
+    private Transform PrimaryHinge => primaryHinge != null ? primaryHinge : transform;
+    private bool HasSecondaryHinge => secondaryHinge != null && secondaryHinge != PrimaryHinge;
     private bool isOpen;
     private Collider2D[] doorColliders;
     private bool[] doorColliderInitialStates;
@@ -60,11 +71,29 @@ public class DoorHingeInteraction : MonoBehaviour
     private bool lockedInteractionAcknowledged;
     private bool lockedJournalEntryWasAdded;
     private DoorPasswordPanel passwordPanel;
+    private Bounds lastVisionBlockerBounds;
+    private bool hasLastVisionBlockerBounds;
 
     public bool IsLocked => isLocked;
     public static IReadOnlyCollection<DoorHingeInteraction> WorldDoors => ActiveDoors;
     public bool IsOpen => isOpen;
+    /// <summary>Read-only endpoint matrices for the map; never rotates the real door.</summary>
+    public Matrix4x4 GetMapEndpointMatrix(bool open)
+    {
+        Transform hinge = PrimaryHinge;
+        Quaternion initial = Application.isPlaying ? closedRotation : hinge.localRotation;
+        Quaternion rotation = open
+            ? initial * Quaternion.Euler(0f, 0f, clockwise ? -rotationAngle : rotationAngle)
+            : initial;
+        Matrix4x4 parent = hinge.parent != null ? hinge.parent.localToWorldMatrix : Matrix4x4.identity;
+        return parent * Matrix4x4.TRS(hinge.localPosition, rotation, hinge.localScale);
+    }
+    public Transform MapHingeTransform => PrimaryHinge;
+    public bool IsChangingOpenState =>
+        Quaternion.Angle(PrimaryHinge.localRotation, targetRotation) > 0.1f ||
+        (HasSecondaryHinge && Quaternion.Angle(secondaryHinge.localRotation, secondaryTargetRotation) > 0.1f);
     public bool AllowPlayerInteraction => allowPlayerInteraction;
+    public bool CanBeLockpicked => canBeLockpicked;
     public bool PasswordLockEnabled => passwordLockEnabled;
     public PickupItemBase RequiredUnlockItem => requiredUnlockItem;
     public string RequiredUnlockItemId => requiredUnlockItemId;
@@ -74,13 +103,82 @@ public class DoorHingeInteraction : MonoBehaviour
     public string RequiredUnlockItemInstanceId3 =>
         requiredUnlockItemInstanceId3;
 
+    public float GetSurfaceDistanceTo(
+        Collider2D sourceCollider,
+        Vector2 sourcePosition)
+    {
+        float closest = Vector2.Distance(
+            sourcePosition,
+            transform.position);
+        if (sourceCollider == null)
+        {
+            return closest;
+        }
+        if (doorColliders == null)
+        {
+            CacheDoorColliders();
+        }
+
+        for (int i = 0; i < doorColliders.Length; i++)
+        {
+            Collider2D doorCollider = doorColliders[i];
+            if (doorCollider == null || !doorCollider.enabled ||
+                doorCollider == sourceCollider)
+            {
+                continue;
+            }
+            ColliderDistance2D distance =
+                sourceCollider.Distance(doorCollider);
+            if (!distance.isValid)
+            {
+                continue;
+            }
+            closest = Mathf.Min(
+                closest,
+                distance.isOverlapped ? 0f : distance.distance);
+        }
+        return closest;
+    }
+
+    public void SetCollisionIgnoredWith(
+        Collider2D otherCollider,
+        bool ignored)
+    {
+        if (otherCollider == null)
+        {
+            return;
+        }
+        if (doorColliders == null)
+        {
+            CacheDoorColliders();
+        }
+
+        for (int i = 0; i < doorColliders.Length; i++)
+        {
+            Collider2D doorCollider = doorColliders[i];
+            if (doorCollider == null || doorCollider == otherCollider)
+            {
+                continue;
+            }
+            Physics2D.IgnoreCollision(
+                otherCollider,
+                doorCollider,
+                ignored);
+        }
+    }
+
     private void Awake()
     {
         doorPassword = DoorPasswordPanel.NormalizePassword(doorPassword);
         CacheRequiredUnlockItemIdentity(false);
         CacheDoorColliders();
-        closedRotation = transform.localRotation;
+        closedRotation = PrimaryHinge.localRotation;
         targetRotation = closedRotation;
+        if (HasSecondaryHinge)
+        {
+            secondaryClosedRotation = secondaryHinge.localRotation;
+            secondaryTargetRotation = secondaryClosedRotation;
+        }
         QuestJournalInteractionMarker.Configure(
             gameObject,
             addJournalEntryWhenLockedInteractionFails,
@@ -99,6 +197,7 @@ public class DoorHingeInteraction : MonoBehaviour
     private void OnEnable()
     {
         ActiveDoors.Add(this);
+        NotifyVisionBlockerChanged();
     }
 
     private void Update()
@@ -126,10 +225,32 @@ public class DoorHingeInteraction : MonoBehaviour
                 HandlePlayerInteraction);
         }
 
-        transform.localRotation = Quaternion.RotateTowards(
-            transform.localRotation,
-            targetRotation,
-            rotationSpeed * Time.deltaTime);
+        bool moved = RotateHinge(PrimaryHinge, targetRotation);
+        if (HasSecondaryHinge)
+            moved |= RotateHinge(secondaryHinge, secondaryTargetRotation);
+        if (moved)
+        {
+            NotifyVisionBlockerChanged();
+        }
+    }
+
+    private bool RotateHinge(Transform hinge, Quaternion target)
+    {
+        Quaternion previous = hinge.localRotation;
+        hinge.localRotation = Quaternion.RotateTowards(previous, target, rotationSpeed * Time.deltaTime);
+        return Quaternion.Angle(previous, hinge.localRotation) > 0.001f;
+    }
+
+    private void UpdateHingeTargets()
+    {
+        float signedAngle = clockwise ? -rotationAngle : rotationAngle;
+        targetRotation = isOpen
+            ? closedRotation * Quaternion.Euler(0f, 0f, signedAngle)
+            : closedRotation;
+        if (HasSecondaryHinge)
+            secondaryTargetRotation = isOpen
+                ? secondaryClosedRotation * Quaternion.Euler(0f, 0f, -signedAngle)
+                : secondaryClosedRotation;
     }
 
     private void HandlePlayerInteraction()
@@ -178,6 +299,13 @@ public class DoorHingeInteraction : MonoBehaviour
             ? "锁住了"
             : "按[E]进行互动";
 
+        // Interaction is gameplay; missing HUD/font must only suppress its label.
+        ZeldaInteractionArbiter.OfferInteraction(
+            this,
+            controlledCharacter,
+            interactKey,
+            transform.position,
+            SetInteractionPromptVisible);
         EnsureInteractionPrompt();
         if (interactionPromptObject == null)
             return;
@@ -186,13 +314,6 @@ public class DoorHingeInteraction : MonoBehaviour
         interactionPromptObject.transform.position =
             controlledCharacter.GetOverheadWorldPosition(interactionPromptOffset);
         interactionPromptObject.transform.rotation = Quaternion.identity;
-        ZeldaInteractionArbiter.OfferInteraction(
-            this,
-            controlledCharacter,
-            interactKey,
-            transform.position,
-            SetInteractionPromptVisible);
-
         interactionPromptFont.RequestCharactersInTexture(
             promptMessage,
             72,
@@ -301,6 +422,8 @@ public class DoorHingeInteraction : MonoBehaviour
 
         promptRenderer.sortingLayerID = highestSortingLayerId;
         promptRenderer.sortingOrder = short.MaxValue - 2;
+        ZeldaPossessionProgressBar.ConfigureOverlayRenderer(promptRenderer);
+        ZeldaPossessionProgressBar.ConfigureOverlayRenderer(promptRenderer);
         interactionPromptMaterial = new Material(interactionPromptFont.material)
         {
             name = name + " Door Interaction Prompt Font Material",
@@ -328,11 +451,7 @@ public class DoorHingeInteraction : MonoBehaviour
         // repairs doors restored from saves made before this distinction existed.
         SetDoorCollisionEnabled(true);
         isOpen = !isOpen;
-
-        float signedAngle = clockwise ? -rotationAngle : rotationAngle;
-        targetRotation = isOpen
-            ? closedRotation * Quaternion.Euler(0f, 0f, signedAngle)
-            : closedRotation;
+        UpdateHingeTargets();
     }
 
     public void ToggleFromExternal()
@@ -364,6 +483,22 @@ public class DoorHingeInteraction : MonoBehaviour
         return true;
     }
 
+    /// <summary>
+    /// Manual interaction used while the player is remotely controlling a
+    /// clockwork puppet. It deliberately cannot consume inventory keys or
+    /// open the password panel; a locked door must be pried by the puppet.
+    /// </summary>
+    public bool TryInteractFromClockworkPuppet()
+    {
+        if (!allowPlayerInteraction || aiPassageActive || isLocked)
+        {
+            return false;
+        }
+
+        ToggleDoor();
+        return true;
+    }
+
     public void SetLocked(bool locked)
     {
         isLocked = locked;
@@ -386,11 +521,10 @@ public class DoorHingeInteraction : MonoBehaviour
 
         isLocked = locked;
         isOpen = open;
-        float signedAngle = clockwise ? -rotationAngle : rotationAngle;
-        targetRotation = isOpen
-            ? closedRotation * Quaternion.Euler(0f, 0f, signedAngle)
-            : closedRotation;
-        transform.localRotation = targetRotation;
+        UpdateHingeTargets();
+        PrimaryHinge.localRotation = targetRotation;
+        if (HasSecondaryHinge)
+            secondaryHinge.localRotation = secondaryTargetRotation;
 
         // Persisted open/closed state represents the normal hinge state, not the
         // temporary AI passage state. Keeping collision disabled here made a door
@@ -494,8 +628,7 @@ public class DoorHingeInteraction : MonoBehaviour
         aiPassageActive = true;
         aiPassageTimer = aiAutoCloseDelay;
         isOpen = true;
-        float signedAngle = clockwise ? -rotationAngle : rotationAngle;
-        targetRotation = closedRotation * Quaternion.Euler(0f, 0f, signedAngle);
+        UpdateHingeTargets();
         SetDoorCollisionEnabled(false);
     }
 
@@ -505,7 +638,7 @@ public class DoorHingeInteraction : MonoBehaviour
         waitForAiToLeave = true;
         aiPassageTimer = 0f;
         isOpen = false;
-        targetRotation = closedRotation;
+        UpdateHingeTargets();
         SetDoorCollisionEnabled(true);
     }
 
@@ -627,6 +760,56 @@ public class DoorHingeInteraction : MonoBehaviour
 
             doorCollider.enabled = enabled && doorColliderInitialStates[i];
         }
+        NotifyVisionBlockerChanged();
+    }
+
+    private void NotifyVisionBlockerChanged()
+    {
+        if (!TryGetDoorBounds(out Bounds currentBounds))
+        {
+            CameraCircularVision.NotifyBlockersChanged();
+            return;
+        }
+
+        Bounds affectedBounds = currentBounds;
+        if (hasLastVisionBlockerBounds)
+        {
+            affectedBounds.Encapsulate(lastVisionBlockerBounds.min);
+            affectedBounds.Encapsulate(lastVisionBlockerBounds.max);
+        }
+        lastVisionBlockerBounds = currentBounds;
+        hasLastVisionBlockerBounds = true;
+        CameraCircularVision.NotifyBlockersChanged(affectedBounds);
+    }
+
+    private bool TryGetDoorBounds(out Bounds bounds)
+    {
+        bounds = default(Bounds);
+        bool found = false;
+        if (doorColliders == null)
+        {
+            CacheDoorColliders();
+        }
+
+        for (int index = 0; index < doorColliders.Length; index++)
+        {
+            Collider2D doorCollider = doorColliders[index];
+            if (doorCollider == null || doorCollider.isTrigger)
+            {
+                continue;
+            }
+
+            if (!found)
+            {
+                bounds = doorCollider.bounds;
+                found = true;
+            }
+            else
+            {
+                bounds.Encapsulate(doorCollider.bounds);
+            }
+        }
+        return found;
     }
 
     private void CacheRequiredUnlockItemIdentity(bool generateInstanceId)
@@ -811,6 +994,7 @@ public class DoorHingeInteraction : MonoBehaviour
     private void OnDisable()
     {
         ActiveDoors.Remove(this);
+        NotifyVisionBlockerChanged();
         SetInteractionPromptVisible(false);
         if (passwordPanel != null)
         {
@@ -821,6 +1005,7 @@ public class DoorHingeInteraction : MonoBehaviour
     private void OnDestroy()
     {
         ActiveDoors.Remove(this);
+        NotifyVisionBlockerChanged();
         if (interactionPromptObject != null)
         {
             Destroy(interactionPromptObject);

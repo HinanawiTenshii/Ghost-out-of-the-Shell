@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Allocation-free runtime lookup for frequently queried Zelda scene objects.
@@ -22,6 +23,20 @@ public static class ZeldaRuntimeRegistry
     public static IReadOnlyCollection<PermissionArea> PermissionAreas => permissionAreaSet;
     public static event Action ControlledMoverChanged;
     public static event Action PermissionAreasChanged;
+
+    /// <summary>
+    /// Traveling bodies live in DontDestroyOnLoad, but act in the active level.
+    /// Keep ordinary/additively loaded scenes distinct instead of removing scene
+    /// checks from skills (which could otherwise target another loaded level).
+    /// </summary>
+    public static Scene GetGameplayScene(GameObject actor)
+    {
+        if (actor == null) return default;
+        Scene scene = actor.scene;
+        return scene.IsValid() && scene.name == "DontDestroyOnLoad"
+            ? SceneManager.GetActiveScene()
+            : scene;
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void Reset()

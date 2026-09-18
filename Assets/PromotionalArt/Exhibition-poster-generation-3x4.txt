@@ -1,0 +1,12 @@
+Tool: built-in image_gen, portrait adaptation of approved v6 landscape.
+Export: JPEG quality 95, upscaled to 2400x3200 (3:4).
+
+Adapt this approved horizontal game poster into a polished PORTRAIT poster, EXACT aspect ratio 3:4 (width:height), ideally 1536x2048. Recompose for portrait; do not stretch or crop away existing key elements.
+Preserve the approved visual identity: deep blue-black background, ghost blue and cyan palette, geometric modernist / constructivist art with large clean flat shapes and restrained CRT grain, three abstract faceless fantasy JRPG characters, one hooded traveler, one central cyan possessed adventurer with smooth semicircular geometric hair (NO strands or spikes), one pointed-hat mage. Keep their designs closely matched to the reference. A single cyan arc with bead-like spirit trail connects their heads, communicating switching between hosts. Bright central character, muted side characters. Keep faceless circular heads and simplified capes; no anime facial details, no robots.
+Portrait layout: generous dark negative space at top. Place the three-line title centered across upper third, with the SAME widely tracked geometric sans typography as reference:
+GHOST
+out of the
+SHELL
+GHOST and SHELL large uppercase, middle line smaller lowercase. Title starts near 8% of height, ends near 29%; balanced 12% side margins. Under title near 34% height place the SAME small unfilled WIREFRAME TETRAHEDRON within dotted halo between two fine horizontal rules. Maintain the approved oblique four-vertex tetrahedron shape, six edges, hollow faces showing dark background, NO fill, NO square pyramid, small inside ring. Do not change or embellish the icon.
+Below divider, place all three distinct character silhouettes as a monumental staggered trio spanning lower 60% of canvas. Central cyan host in foreground, hooded host left rear, mage right rear. Hats and heads fully legible, comfortable separation from title; capes extend off bottom edge. Connecting cyan spirit arc flows laterally between the three heads in lower half. Preserve asymmetric overlap, strong geometric planes, sophistication and original atmosphere.
+No new text, no taglines, no borders, no mockup. Deliver one finished 3:4 vertical artwork, flat image.

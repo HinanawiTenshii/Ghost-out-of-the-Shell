@@ -45,6 +45,8 @@ public sealed class PauseMenuController : MonoBehaviour
 
     private void Update()
     {
+        if (RetroSceneLoadReveal.IsBlockingInput) return;
+        if (SaveSlotPanel.IsOpen || SaveSlotPanel.LastClosedFrame == Time.frameCount || GameSaveSystem.IsLoading) return;
         if (!Input.GetKeyDown(KeyCode.Escape))
             return;
 
@@ -89,6 +91,7 @@ public sealed class PauseMenuController : MonoBehaviour
             menuCanvas.planeDistance =
                 menuCanvas.worldCamera.nearClipPlane + 0.01f;
         }
+        CRTScreenEffect.RegisterCanvas(menuCanvas);
     }
 
     public void OpenMenu()
@@ -131,13 +134,16 @@ public sealed class PauseMenuController : MonoBehaviour
             return;
         }
 
-        isOpen = false;
-        IsPaused = false;
-        Time.timeScale = previousTimeScale;
-        Cursor.visible = true;
-        Cursor.lockState = CursorLockMode.None;
-        SceneTravelStateManager.GetOrCreate().ResetAllSceneStates();
-        SceneManager.LoadScene(titleSceneName.Trim());
+        RetroSceneLoadReveal.BeginTransition(titleSceneName.Trim(), () =>
+        {
+            isOpen = false;
+            IsPaused = false;
+            Time.timeScale = previousTimeScale;
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+            SceneTravelStateManager.GetOrCreate().ResetAllSceneStates();
+            SceneManager.LoadScene(titleSceneName.Trim());
+        });
     }
 
     private void BuildMenu()
@@ -161,10 +167,16 @@ public sealed class PauseMenuController : MonoBehaviour
         CreateBorder(panelRect, GhostBlue, 3f);
 
         CreateButton(panelRect, "回到游戏", 188f, true, CloseMenu);
-        CreateButton(panelRect, "储存游戏（暂未开放）", 84f, false, null);
-        CreateButton(panelRect, "读取游戏（暂未开放）", -20f, false, null);
+        CreateButton(panelRect, "储存游戏", 84f, true, () => OpenSaveSlots(true));
+        CreateButton(panelRect, "读取游戏", -20f, true, () => OpenSaveSlots(false));
         CreateButton(panelRect, "游戏设置（暂未开放）", -124f, false, null);
         CreateButton(panelRect, "标题界面", -228f, true, ReturnToTitleScreen);
+    }
+
+    private void OpenSaveSlots(bool saving)
+    {
+        menuRoot.SetActive(false);
+        SaveSlotPanel.Open(transform, menuFont, saving, false, () => menuRoot.SetActive(true));
     }
 
     private void CreateButton(

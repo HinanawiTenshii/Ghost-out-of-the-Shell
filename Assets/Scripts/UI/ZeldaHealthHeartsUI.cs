@@ -70,6 +70,9 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
     [SerializeField] private Vector2 screenOffset = new Vector2(12f, 12f);
     [SerializeField] private Vector2 permissionScreenOffset = new Vector2(12f, 12f);
     [SerializeField] private Vector2 possessionEnergyBarSize = new Vector2(8.8f, 15.4f);
+    private const float PossessionEnergyDisplayScale = 1.2f;
+    public Vector2 PossessionEnergyDisplaySize =>
+        new Vector2(possessionEnergyBarSize.y, possessionEnergyBarSize.x) * PossessionEnergyDisplayScale;
     [SerializeField, Min(0f)] private float possessionEnergySpacing = 3.3f;
     [SerializeField, Min(0f)] private float possessionEnergyPermissionGap = 9f;
     [SerializeField] private Vector2 areaPermissionTopOffset = new Vector2(0f, 12f);
@@ -121,8 +124,42 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
     private readonly List<Image> swords = new List<Image>();
     private readonly List<Image> wrenches = new List<Image>();
     private readonly List<Image> possessionEnergyBars = new List<Image>();
+    private static Sprite spentPossessionEnergySprite;
+    private static Sprite solidEnergySprite;
+    public static void ConfigureEnergyIcon(Image icon, int index, ZeldaCharacterData data)
+    {
+        if (solidEnergySprite == null)
+            solidEnergySprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, Texture2D.whiteTexture.width, Texture2D.whiteTexture.height), new Vector2(0.5f, 0.5f));
+        bool extra = data != null && index >= data.BaseMaxPossessionEnergy && data.CrystalEnergyThirds > 0;
+        int normalCurrent = data != null ? data.FinalPossessionEnergy - data.CrystalEnergyThirds / 3 : 0;
+        icon.sprite = extra || index < normalCurrent ? solidEnergySprite : GetSpentPossessionEnergyIcon();
+        icon.type = extra ? Image.Type.Filled : Image.Type.Simple;
+        icon.fillMethod = Image.FillMethod.Horizontal;
+        icon.fillOrigin = 0;
+        icon.fillAmount = extra ? data.CrystalEnergyThirds / 3f : 1f;
+        var particles = icon.GetComponent<TemporaryEnergyParticles>();
+        if (extra && particles == null) particles = icon.gameObject.AddComponent<TemporaryEnergyParticles>();
+        if (particles != null) particles.SetVisible(extra, icon.color);
+    }
+    public static Sprite GetSpentPossessionEnergyIcon()
+    {
+        if (spentPossessionEnergySprite != null) return spentPossessionEnergySprite;
+        var texture = new Texture2D(18, 10, TextureFormat.RGBA32, false);
+        texture.name = "Spent Possession Energy";
+        texture.filterMode = FilterMode.Point;
+        texture.wrapMode = TextureWrapMode.Clamp;
+        var pixels = new Color32[180];
+        for (int y = 0; y < 10; y++) for (int x = 0; x < 18; x++)
+            pixels[y * 18 + x] = x == 0 || x == 17 || y == 0 || y == 9
+                ? new Color32(255, 255, 255, 255) : new Color32(0, 0, 0, 0);
+        texture.SetPixels32(pixels);
+        texture.Apply(false, true);
+        spentPossessionEnergySprite = Sprite.Create(texture, new Rect(0, 0, 18, 10), new Vector2(0.5f, 0.5f), 18f);
+        return spentPossessionEnergySprite;
+    }
     private readonly Image[] inventorySlots = new Image[InventorySlotCount];
     private readonly Image[] inventoryItemIcons = new Image[InventorySlotCount];
+    private readonly Text[] inventoryQuantityTexts = new Text[InventorySlotCount];
     private readonly Sprite[] permissionSprites = new Sprite[10];
     private readonly Texture2D[] permissionTextures = new Texture2D[10];
     private readonly Sprite[] negativePermissionSprites = new Sprite[2];
@@ -248,6 +285,10 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         CreateSwordContainer();
         CreateWrenchContainer();
         CreatePossessionEnergyContainer();
+        var skillSlots = new GameObject("Skill Slots", typeof(RectTransform), typeof(RuntimeSkillSlots));
+        skillSlots.transform.SetParent(transform, false);
+        skillSlots.GetComponent<RuntimeSkillSlots>().Build(permissionLabelFont,
+            wrenchContainer.anchoredPosition.x);
         CreatePermissionObject();
         CreateAreaPermissionObject();
         CreateInventoryPlaceholder();
@@ -465,6 +506,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         {
             SetLayerRecursively(gameObject, uiLayer);
         }
+        CRTScreenEffect.RegisterCanvas(hudCanvas);
     }
 
     public void RefreshSceneCameraBinding()
@@ -810,13 +852,16 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
             PersistentInventory.Slot slot = inventory != null ? inventory.GetSlot(i) : null;
             bool hasItem = slot != null && !slot.IsEmpty;
             inventoryItemIcons[i].gameObject.SetActive(hasItem);
+            inventoryQuantityTexts[i].gameObject.SetActive(hasItem);
             if (!hasItem)
             {
                 inventoryItemIcons[i].sprite = null;
+                inventoryQuantityTexts[i].text = string.Empty;
                 continue;
             }
 
             PickupItemBase itemPrefab = inventory.ResolveItemPrefab(slot.ItemId);
+            inventoryQuantityTexts[i].text = slot.Quantity.ToString();
             if (selected)
             {
                 selectedItemName = !string.IsNullOrWhiteSpace(slot.ItemName)
@@ -836,6 +881,8 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
                     : itemVisual.InventoryTint;
             inventoryItemIcons[i].gameObject.SetActive(inventoryItemIcons[i].sprite != null);
         }
+
+        RefreshInventoryQuantityColors(GetCurrentInventoryUiColor());
 
         if (inventorySelectedNameText != null)
         {
@@ -859,6 +906,42 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
                     permissionLabelFont.material.mainTexture.filterMode = FilterMode.Point;
                 }
             }
+        }
+    }
+
+    private Color GetCurrentInventoryUiColor()
+    {
+        return displayedCharacter != null && displayedCharacter.IsGhostLike
+            ? ghostHeartColor
+            : ZeldaUiPalette.Primary;
+    }
+
+    private void RefreshInventoryQuantityColors(Color inventoryColor)
+    {
+        for (int i = 0; i < inventoryQuantityTexts.Length; i++)
+        {
+            Text quantityText = inventoryQuantityTexts[i];
+            if (quantityText == null)
+            {
+                continue;
+            }
+
+            PersistentInventory.Slot slot = inventory != null
+                ? inventory.GetSlot(i)
+                : null;
+            if (slot == null || slot.IsEmpty)
+            {
+                quantityText.text = string.Empty;
+                quantityText.gameObject.SetActive(false);
+                continue;
+            }
+
+            PickupItemBase itemPrefab = inventory.ResolveItemPrefab(slot.ItemId);
+            bool reachedStackLimit = itemPrefab != null &&
+                slot.Quantity >= Mathf.Max(1, itemPrefab.MaxStackSize);
+            quantityText.color = reachedStackLimit
+                ? areaPermissionWarningColor
+                : inventoryColor;
         }
     }
 
@@ -903,10 +986,11 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         int visibleHeartCount = overHealthDisplay
             ? MaximumHeartCount
             : Mathf.Clamp(currentHealth, 0, MaximumHeartCount);
-        bool isGhostCharacter = displayedCharacter is GhostZeldaCharacterData;
-        Color heartColor = overHealthDisplay
-            ? overHealthColor
-            : isGhostCharacter ? ghostHeartColor : normalHeartColor;
+        bool isActualGhost = displayedCharacter is GhostZeldaCharacterData;
+        bool isGhostCharacter = displayedCharacter != null && displayedCharacter.IsGhostLike;
+        Color heartColor = isGhostCharacter
+            ? ghostHeartColor
+            : overHealthDisplay ? overHealthColor : normalHeartColor;
         currentHeartColor = heartColor;
 
         for (int i = 0; i < hearts.Length; i++)
@@ -922,7 +1006,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
 
         int visibleSwordCount = displayedCharacter == null
             ? 0
-            : isGhostCharacter ? 1 : Mathf.Max(0, attackPower);
+            : isActualGhost ? 1 : Mathf.Max(0, attackPower);
         EnsureSwordCount(visibleSwordCount);
 
         for (int i = 0; i < swords.Count; i++)
@@ -938,7 +1022,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
 
         int visibleWrenchCount = displayedCharacter == null
             ? 0
-            : isGhostCharacter ? 1 : Mathf.Max(0, skillValue);
+            : isActualGhost ? 1 : Mathf.Max(0, skillValue);
         EnsureWrenchCount(visibleWrenchCount);
 
         for (int i = 0; i < wrenches.Count; i++)
@@ -960,7 +1044,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
             permissionLabelText.gameObject.SetActive(showPermission);
         }
 
-        permissionSymbolImage.sprite = isGhostCharacter
+        permissionSymbolImage.sprite = isActualGhost
             ? permissionSprites[0]
             : GetPermissionSprite(permissionLevel);
         Color currentPermissionColor = isGhostCharacter ? ghostHeartColor : permissionColor;
@@ -1044,9 +1128,10 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
 
             inventorySlots[i].color = inventoryColor;
         }
+        RefreshInventoryQuantityColors(inventoryColor);
 
         int visibleEnergyCount = displayedCharacter != null
-            ? Mathf.Max(0, possessionEnergy)
+            ? Mathf.Max(0, displayedCharacter.BaseMaxPossessionEnergy + (displayedCharacter.CrystalEnergyThirds > 0 ? 1 : 0))
             : 0;
         EnsurePossessionEnergyCount(visibleEnergyCount);
         for (int i = 0; i < possessionEnergyBars.Count; i++)
@@ -1058,6 +1143,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
             }
 
             possessionEnergyBars[i].color = isGhostCharacter ? ghostHeartColor : ZeldaUiPalette.Primary;
+            ConfigureEnergyIcon(possessionEnergyBars[i], i, displayedCharacter);
         }
 
         UpdateTaskPointer();
@@ -1172,7 +1258,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         float heartHeight = HeartPixelHeight * pixelScale;
         swordContainer.anchoredPosition = new Vector2(
             screenOffset.x,
-            -screenOffset.y - heartHeight - heartSpacing);
+            -screenOffset.y - heartHeight - PossessionEnergyDisplaySize.y - heartSpacing * 2f - 8f);
         swordContainer.sizeDelta = new Vector2(0f, SwordPixelSize * pixelScale);
     }
 
@@ -1222,7 +1308,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         float swordHeight = SwordPixelSize * pixelScale;
         wrenchContainer.anchoredPosition = new Vector2(
             screenOffset.x,
-            -screenOffset.y - heartHeight - swordHeight - heartSpacing * 2f);
+            -screenOffset.y - heartHeight - PossessionEnergyDisplaySize.y - swordHeight - heartSpacing * 3f - 8f);
         wrenchContainer.sizeDelta = new Vector2(0f, WrenchPixelSize * pixelScale);
     }
 
@@ -1263,9 +1349,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
     {
         float frameSize = PermissionPixelSize * pixelScale * permissionScaleMultiplier;
         float symbolPixelScale = pixelScale * Mathf.Max(1f, permissionScaleMultiplier - 1f);
-        Vector2 permissionPosition = permissionScreenOffset + new Vector2(
-            possessionEnergyBarSize.x + possessionEnergyPermissionGap,
-            0f);
+        Vector2 permissionPosition = permissionScreenOffset;
 
         GameObject permissionObject = new GameObject(
             "Permission Frame",
@@ -1337,10 +1421,11 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         GameObject containerObject = new GameObject("Possession Energy", typeof(RectTransform));
         containerObject.transform.SetParent(transform, false);
         possessionEnergyContainer = containerObject.GetComponent<RectTransform>();
-        possessionEnergyContainer.anchorMin = Vector2.zero;
-        possessionEnergyContainer.anchorMax = Vector2.zero;
-        possessionEnergyContainer.pivot = Vector2.zero;
-        possessionEnergyContainer.anchoredPosition = permissionScreenOffset;
+        possessionEnergyContainer.anchorMin = new Vector2(0f, 1f);
+        possessionEnergyContainer.anchorMax = new Vector2(0f, 1f);
+        possessionEnergyContainer.pivot = new Vector2(0f, 1f);
+        possessionEnergyContainer.anchoredPosition = new Vector2(
+            screenOffset.x, -screenOffset.y - HeartPixelHeight * pixelScale - heartSpacing - 4f);
         possessionEnergyContainer.sizeDelta = Vector2.zero;
     }
 
@@ -1547,6 +1632,32 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
             iconImage.preserveAspect = true;
             iconImage.color = Color.white;
             inventoryItemIcons[i] = iconImage;
+
+            GameObject quantityObject = new GameObject(
+                "Item Quantity",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(Text));
+            quantityObject.transform.SetParent(slotObject.transform, false);
+            RectTransform quantityRect =
+                quantityObject.GetComponent<RectTransform>();
+            quantityRect.anchorMin = Vector2.zero;
+            quantityRect.anchorMax = Vector2.one;
+            quantityRect.pivot = new Vector2(1f, 0f);
+            quantityRect.offsetMin = new Vector2(2f, 1f);
+            quantityRect.offsetMax = new Vector2(-3f, -2f);
+
+            Text quantityText = quantityObject.GetComponent<Text>();
+            quantityText.font = permissionLabelFont;
+            quantityText.fontSize = 13;
+            quantityText.fontStyle = FontStyle.Normal;
+            quantityText.alignment = TextAnchor.LowerRight;
+            quantityText.horizontalOverflow = HorizontalWrapMode.Overflow;
+            quantityText.verticalOverflow = VerticalWrapMode.Overflow;
+            quantityText.color = ZeldaUiPalette.Primary;
+            quantityText.raycastTarget = false;
+            inventoryQuantityTexts[i] = quantityText;
+            quantityObject.SetActive(false);
         }
 
         GameObject selectedNameObject = new GameObject(
@@ -1790,7 +1901,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
             return;
 
         questObjectiveTitleText.text = entry.Title;
-        Color activeColor = displayedCharacter is GhostZeldaCharacterData
+        Color activeColor = displayedCharacter != null && displayedCharacter.IsGhostLike
             ? ghostHeartColor
             : ZeldaUiPalette.Primary;
         ApplyQuestObjectiveColor(activeColor);
@@ -2444,7 +2555,11 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
             }
         }
 
-        Vector2 characterPosition = character.transform.position;
+        Transform remoteControlTarget =
+            ClockworkPuppetRuntime.RemoteControlTargetTransform;
+        Vector2 characterPosition = remoteControlTarget != null
+            ? (Vector2)remoteControlTarget.position
+            : (Vector2)character.transform.position;
         taskMiniMapGraphic.SetZoomToMaximum();
         taskMiniMapGraphic.SetCameraMarkerVisible(true);
         taskMiniMapGraphic.SetCameraPosition(characterPosition);
@@ -2615,13 +2730,12 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
             barObject.transform.SetParent(possessionEnergyContainer, false);
 
             RectTransform barRect = barObject.GetComponent<RectTransform>();
-            barRect.anchorMin = Vector2.zero;
-            barRect.anchorMax = Vector2.zero;
-            barRect.pivot = Vector2.zero;
+            barRect.anchorMin = new Vector2(0f, 1f);
+            barRect.anchorMax = new Vector2(0f, 1f);
+            barRect.pivot = new Vector2(0f, 1f);
             barRect.anchoredPosition = new Vector2(
-                0f,
-                index * (possessionEnergyBarSize.y + possessionEnergySpacing));
-            barRect.sizeDelta = possessionEnergyBarSize;
+                index * (PossessionEnergyDisplaySize.x + possessionEnergySpacing), 0f);
+            barRect.sizeDelta = PossessionEnergyDisplaySize;
 
             Image image = barObject.GetComponent<Image>();
             image.raycastTarget = false;
@@ -2629,10 +2743,10 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
             possessionEnergyBars.Add(image);
         }
 
-        float height = requiredCount > 0
-            ? requiredCount * possessionEnergyBarSize.y + (requiredCount - 1) * possessionEnergySpacing
+        float width = requiredCount > 0
+            ? requiredCount * PossessionEnergyDisplaySize.x + (requiredCount - 1) * possessionEnergySpacing
             : 0f;
-        possessionEnergyContainer.sizeDelta = new Vector2(possessionEnergyBarSize.x, height);
+        possessionEnergyContainer.sizeDelta = new Vector2(width, PossessionEnergyDisplaySize.y);
     }
 
     private void CreateHeartSprite()
@@ -2674,78 +2788,164 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
 
     private void CreateSwordSprite()
     {
-        // Nine-by-nine sword pointing toward the upper-right corner.
+        swordSprite = CreateStrengthIcon(out swordTexture);
+    }
+
+    private static Sprite combatExpertiseIcon;
+    private static readonly Sprite[] rankedCombatIcons = new Sprite[2];
+    public static Sprite GetRankedCombatExpertiseIcon(int rank)
+    {
+        rank = Mathf.Clamp(rank, 1, 2);
+        if (rankedCombatIcons[rank - 1] == null) rankedCombatIcons[rank - 1] = CreateStrengthIcon(out _, true, rank);
+        return rankedCombatIcons[rank - 1];
+    }
+    public static Sprite GetCombatExpertiseIcon()
+    {
+        if (combatExpertiseIcon == null) combatExpertiseIcon = CreateStrengthIcon(out _, true);
+        return combatExpertiseIcon;
+    }
+
+    public static Sprite CreateStrengthIcon(out Texture2D swordTexture, bool crossed = false, int rank = 0)
+    {
+        // Reference silhouette, authored top-to-bottom: broad diagonal blade,
+        // opposing crossguard ends and a short, thick grip. Texture resolution
+        // is independent of SwordPixelSize so the HUD layout stays the same.
         string[] rows =
         {
-            ".#.......",
-            "..#......",
-            "...#.....",
-            ".######..",
-            "....##...",
-            ".....##..",
-            "......##.",
-            ".......##",
-            "........#"
+            ".............####",
+            "............#####",
+            "...........######",
+            "..........######.",
+            ".........######..",
+            "........######...",
+            ".##....######....",
+            ".###..######.....",
+            "...########......",
+            "...#######.......",
+            "....#####........",
+            "...#####.........",
+            "..###.###........",
+            "####....##.......",
+            "###.....##.......",
+            "###..............",
+            "................."
         };
 
-        swordTexture = new Texture2D(SwordPixelSize, SwordPixelSize, TextureFormat.RGBA32, false);
+        if (crossed)
+        {
+            // Keep the slender silhouette, then add half a source pixel of weight below.
+            // The ordinary strength icon above retains its original silhouette.
+            rows = new[]
+            {
+                "...............#.",
+                "..............##.",
+                ".............##..",
+                "............##...",
+                "...........##....",
+                "..........##.....",
+                ".........##......",
+                "........##.......",
+                "...#...##........",
+                "....#.##.........",
+                ".....##..........",
+                "....#.#..........",
+                "...#...#.........",
+                "..#..............",
+                ".##..............",
+                ".#...............",
+                "................."
+            };
+            // Double the resolution for a small thickness adjustment instead of a full
+            // original-pixel expansion, which would merge the guards again.
+            var thickerRows = new string[rows.Length * 2];
+            for (int y = 0; y < thickerRows.Length; y++)
+            {
+                var row = new char[thickerRows.Length];
+                for (int x = 0; x < row.Length; x++)
+                    row[x] = rows[y / 2][x / 2] == '#' ||
+                        (x > 0 && rows[y / 2][(x - 1) / 2] == '#') ? '#' : '.';
+                thickerRows[y] = new string(row);
+            }
+            rows = thickerRows;
+        }
+
+        int textureSize = rank > 0 ? 44 : rows.Length;
+        swordTexture = new Texture2D(textureSize, textureSize, TextureFormat.RGBA32, false);
         swordTexture.name = "Runtime Pixel Sword";
         swordTexture.filterMode = FilterMode.Point;
         swordTexture.wrapMode = TextureWrapMode.Clamp;
 
-        for (int y = 0; y < SwordPixelSize; y++)
+        for (int y = 0; y < textureSize; y++)
         {
-            for (int x = 0; x < SwordPixelSize; x++)
+            for (int x = 0; x < textureSize; x++)
             {
-                swordTexture.SetPixel(x, y, rows[y][x] == '#' ? Color.white : Color.clear);
+                bool filled = y < rows.Length && x < rows.Length &&
+                    (rows[y][x] == '#' || (crossed && rows[y][rows.Length - 1 - x] == '#'));
+                // Keep the swords in the upper-left and the numeral clear of the guards.
+                if (rank > 0 && y >= 32 && y <= 41 && x >= 32 && x <= 41)
+                    filled |= y <= 33 || y >= 40 || (rank == 1 ? x >= 36 && x <= 37 :
+                        (x >= 34 && x <= 35) || (x >= 38 && x <= 39));
+                swordTexture.SetPixel(x, textureSize - 1 - y, filled ? Color.white : Color.clear);
             }
         }
 
         swordTexture.Apply(false, true);
-        swordSprite = Sprite.Create(
+        Sprite swordSprite = Sprite.Create(
             swordTexture,
-            new Rect(0f, 0f, SwordPixelSize, SwordPixelSize),
+            new Rect(0f, 0f, textureSize, textureSize),
             new Vector2(0.5f, 0.5f),
-            SwordPixelSize);
+            textureSize);
         swordSprite.name = "Runtime Pixel Sword";
+        return swordSprite;
     }
 
     private void CreateWrenchSprite()
     {
-        // Nine-by-nine open-ended wrench pointing toward the upper-right corner.
+        wrenchSprite = CreateSkillIcon(out wrenchTexture);
+    }
+
+    public static Sprite CreateSkillIcon(out Texture2D wrenchTexture)
+    {
+        // Double open-ended wrench, authored top-to-bottom from the reference.
+        // Keep texture resolution independent of the existing HUD icon size.
         string[] rows =
         {
-            ".##......",
-            ".###.....",
-            "..###....",
-            "...###...",
-            "....###..",
-            ".....###.",
-            "....####.",
-            "...##..##",
-            "...##..##"
+            ".......###..",
+            "......###...",
+            "......##...#",
+            ".......##.##",
+            "......######",
+            ".....###.##.",
+            ".##.###.....",
+            "######......",
+            "##.##.......",
+            "#...##......",
+            "...###......",
+            "..###......."
         };
 
-        wrenchTexture = new Texture2D(WrenchPixelSize, WrenchPixelSize, TextureFormat.RGBA32, false);
+        int textureSize = rows.Length;
+        wrenchTexture = new Texture2D(textureSize, textureSize, TextureFormat.RGBA32, false);
         wrenchTexture.name = "Runtime Pixel Wrench";
         wrenchTexture.filterMode = FilterMode.Point;
         wrenchTexture.wrapMode = TextureWrapMode.Clamp;
 
-        for (int y = 0; y < WrenchPixelSize; y++)
+        for (int y = 0; y < textureSize; y++)
         {
-            for (int x = 0; x < WrenchPixelSize; x++)
+            for (int x = 0; x < textureSize; x++)
             {
-                wrenchTexture.SetPixel(x, y, rows[y][x] == '#' ? Color.white : Color.clear);
+                wrenchTexture.SetPixel(x, textureSize - 1 - y, rows[y][x] == '#' ? Color.white : Color.clear);
             }
         }
 
         wrenchTexture.Apply(false, true);
-        wrenchSprite = Sprite.Create(
+        Sprite wrenchSprite = Sprite.Create(
             wrenchTexture,
-            new Rect(0f, 0f, WrenchPixelSize, WrenchPixelSize),
+            new Rect(0f, 0f, textureSize, textureSize),
             new Vector2(0.5f, 0.5f),
-            WrenchPixelSize);
+            textureSize);
         wrenchSprite.name = "Runtime Pixel Wrench";
+        return wrenchSprite;
     }
 
     private void CreatePermissionSprites()
@@ -3019,4 +3219,208 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         healthFlashSpeed = Mathf.Max(0f, healthFlashSpeed);
     }
 #endif
+}
+
+/// <summary>Five equipped skills plus a separate body-owned slot selected with key 0.</summary>
+public sealed class RuntimeSkillSlots : MonoBehaviour
+{
+    // Preserve indices 0..4 for the existing equipment/save data. Index 5 is displayed as key 0.
+    public const int CharacterSlotIndex = 5;
+    private ZeldaCharacterData observedCharacter;
+    private DominoSkillPreview dominoPreview;
+    private void LateUpdate()
+    {
+        var mover = ZeldaRuntimeRegistry.GetControlledMover();
+        bool show = mover != null && !mover.GetComponent<ZeldaCharacterData>().IsDead && !mover.GetComponent<ZeldaCharacterData>().IsGhostForm &&
+            !DocumentReader.IsInputBlocked && !ClockworkPuppetRuntime.BlocksCharacterInput &&
+            observedEquipment != null && PlayerGrowthAttributes.IsDominoSkill(observedEquipment.GetEquippedSkill(SelectedIndex)) && observedEquipment.HasSkill("domino");
+        if (!show) { if (dominoPreview != null) dominoPreview.Hide(); return; }
+        if (dominoPreview == null) dominoPreview = new GameObject("Domino Skill Preview").AddComponent<DominoSkillPreview>();
+        dominoPreview.Show(mover);
+    }
+    private void OnDisable() { if (dominoPreview != null) dominoPreview.Hide(); }
+    private PlayerGrowthAttributes observedEquipment;
+    private void RefreshEquipment()
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            string id = observedEquipment != null ? observedEquipment.GetEquippedSkill(i) : null;
+            var skill = System.Array.Find(PlayerGrowthAttributes.Skills, entry => entry.id == id);
+            AssignSlot(i, skill != null ? skill.title : "", SkillPageArt.GetAbilitySprite(id));
+        }
+    }
+    private void OnDestroy()
+    {
+        if (dominoPreview != null) Destroy(dominoPreview.gameObject);
+        if (observedEquipment != null) observedEquipment.AttributesChanged -= RefreshEquipment;
+    }
+    public int SelectedIndex { get; private set; } = 0;
+    public event System.Action<int> SelectionChanged;
+    private readonly string[] skillNames = new string[6];
+    private readonly Image[] backgrounds = new Image[6];
+    private readonly Image[] icons = new Image[6];
+    private readonly List<Graphic> tinted = new List<Graphic>();
+    private Text selectedName;
+    private bool ghost;
+    private const float SlotSize = 40f;
+    private const float Pitch = 48f;
+    private static float SlotY(int index) => index == CharacterSlotIndex ? Pitch + 16f : -index * Pitch;
+
+    public void Build(Font font, float leftOffset)
+    {
+        var root = (RectTransform)transform;
+        root.anchorMin = root.anchorMax = new Vector2(0, 0.5f);
+        root.pivot = new Vector2(0, 1);
+        // Place the third slot's center at the screen's vertical midpoint.
+        root.anchoredPosition = new Vector2(leftOffset, Pitch * 2f + SlotSize * 0.5f);
+        root.sizeDelta = new Vector2(SlotSize, Pitch * 4 + SlotSize);
+        for (int i = 0; i < backgrounds.Length; i++)
+        {
+            bool characterSlot = i == CharacterSlotIndex;
+            var slot = Rect(characterSlot ? "Character Skill 0" : "Skill " + (i + 1), root, new Vector2(0, SlotY(i)), Vector2.one * SlotSize);
+            backgrounds[i] = slot.gameObject.AddComponent<Image>();
+            backgrounds[i].raycastTarget = false;
+            Edge(slot, new Vector2(0, 0), new Vector2(SlotSize, 2.5f));
+            Edge(slot, new Vector2(0, -SlotSize + 2.5f), new Vector2(SlotSize, 2.5f));
+            Edge(slot, Vector2.zero, new Vector2(2.5f, SlotSize));
+            Edge(slot, new Vector2(SlotSize - 2.5f, 0), new Vector2(2.5f, SlotSize));
+            icons[i] = Rect("Skill Icon", slot, new Vector2(10, -10), new Vector2(26, 26)).gameObject.AddComponent<Image>();
+            icons[i].preserveAspect = true; icons[i].raycastTarget = false; icons[i].enabled = false;
+            var number = Rect("Shortcut", slot, new Vector2(4f, -2), new Vector2(14, 16)).gameObject.AddComponent<Text>();
+            number.font = font; number.fontSize = 14; number.text = characterSlot ? "0" : (i + 1).ToString();
+            number.alignment = TextAnchor.UpperLeft;
+            number.raycastTarget = false; tinted.Add(number);
+        }
+        selectedName = Rect("Selected Skill Name", root, new Vector2(SlotSize + 10, 0), new Vector2(230, SlotSize)).gameObject.AddComponent<Text>();
+        selectedName.font = font; selectedName.fontSize = 18;
+        selectedName.alignment = TextAnchor.MiddleLeft; selectedName.raycastTarget = false; tinted.Add(selectedName);
+        Refresh();
+    }
+
+    public void AssignSlot(int index, string skillName, Sprite icon = null)
+    {
+        if (index < 0 || index >= icons.Length) return;
+        skillNames[index] = skillName ?? "";
+        icons[index].sprite = icon; icons[index].enabled = icon != null;
+        Refresh();
+    }
+    public void SelectSlot(int index)
+    {
+        if (index < 0 || index >= backgrounds.Length || SelectedIndex == index) return;
+        SelectedIndex = index; Refresh(); SelectionChanged?.Invoke(index);
+    }
+    private void Update()
+    {
+        if (observedEquipment != PlayerGrowthAttributes.Instance)
+        {
+            if (observedEquipment != null) observedEquipment.AttributesChanged -= RefreshEquipment;
+            observedEquipment = PlayerGrowthAttributes.Instance;
+            if (observedEquipment != null) observedEquipment.AttributesChanged += RefreshEquipment;
+            RefreshEquipment();
+        }
+        var mover = ZeldaRuntimeRegistry.GetControlledMover();
+        var character = mover != null ? mover.GetComponent<ZeldaCharacterData>() : null;
+        if (observedCharacter != character)
+        {
+            observedCharacter = character;
+            AssignSlot(CharacterSlotIndex, character != null ? character.CharacterSkillName : "", character != null ? character.CharacterSkillIcon : null);
+        }
+        bool isGhost = mover != null && mover.GetComponent<ZeldaCharacterData>() != null && mover.GetComponent<ZeldaCharacterData>().IsGhostLike;
+        if (ghost != isGhost) { ghost = isGhost; Refresh(); }
+        if (mover == null || DocumentReader.IsInputBlocked || ClockworkPuppetRuntime.BlocksCharacterInput) return;
+        // Resolve selection first so key 0 + skill-use in the same frame cannot cast the previous slot.
+        if (Input.GetKeyDown(KeyCode.Alpha0) || Input.GetKeyDown(KeyCode.Keypad0)) SelectSlot(CharacterSlotIndex);
+        else for (int i = 0; i < 5; i++)
+            if (Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha1 + i)) ||
+                Input.GetKeyDown((KeyCode)((int)KeyCode.Keypad1 + i))) { SelectSlot(i); break; }
+        if (Input.GetKeyDown(KeyCode.LeftControl) && SelectedIndex == CharacterSlotIndex && character != null)
+            character.TryUseCharacterSkill();
+        if (Input.GetKeyDown(KeyCode.LeftControl) && observedEquipment != null && character != null &&
+            PlayerGrowthAttributes.IsCombatExpertiseSkill(observedEquipment.GetEquippedSkill(SelectedIndex)) && observedEquipment.HasSkill("combat_expertise"))
+            character.TryUseCombatExpertise();
+        if (Input.GetKeyDown(KeyCode.LeftControl) && observedEquipment != null && character != null &&
+            PlayerGrowthAttributes.IsFearRoarSkill(observedEquipment.GetEquippedSkill(SelectedIndex)) && observedEquipment.HasSkill("fear_roar"))
+            character.TryUseFearRoar();
+        if (Input.GetKeyDown(KeyCode.LeftControl) && observedEquipment != null && character != null &&
+            PlayerGrowthAttributes.IsRoyalCommandSkill(observedEquipment.GetEquippedSkill(SelectedIndex)) && observedEquipment.HasSkill("royal_command"))
+            character.TryUseRoyalCommand();
+        if (Input.GetKeyDown(KeyCode.LeftControl) && observedEquipment != null &&
+            PlayerGrowthAttributes.IsSoulMarkSkill(observedEquipment.GetEquippedSkill(SelectedIndex)) && observedEquipment.HasSkill("soul_mark"))
+            SoulMarkRuntime.Use(mover);
+        if (Input.GetKeyDown(KeyCode.LeftControl) && observedEquipment != null &&
+            PlayerGrowthAttributes.IsDominoSkill(observedEquipment.GetEquippedSkill(SelectedIndex)) && observedEquipment.HasSkill("domino"))
+            DominoSkillRuntime.Use(mover);
+        if (Input.GetKeyDown(KeyCode.LeftControl) && observedEquipment != null &&
+            PlayerGrowthAttributes.IsGhostFormSkill(observedEquipment.GetEquippedSkill(SelectedIndex)) && observedEquipment.HasSkill("ghost_form"))
+            GhostFormRuntime.Use(mover);
+    }
+    private void Refresh()
+    {
+        if (selectedName == null) return;
+        Color tint = ghost ? ZeldaUiPalette.Ghost : ZeldaUiPalette.Primary;
+        foreach (Graphic graphic in tinted) graphic.color = tint;
+        for (int i = 0; i < backgrounds.Length; i++)
+        {
+            icons[i].color = tint;
+            backgrounds[i].color = new Color(0.015f, 0.04f, 0.06f, 0.85f);
+            float scale = i == SelectedIndex ? 1.18f : 1f;
+            RectTransform slot = backgrounds[i].rectTransform;
+            slot.localScale = Vector3.one * scale;
+            // Compensate the top-left pivot to enlarge around the slot center.
+            float expansion = SlotSize * (scale - 1f) * 0.5f;
+            slot.anchoredPosition = new Vector2(-expansion, SlotY(i) + expansion);
+        }
+        selectedName.text = skillNames[SelectedIndex] ?? "";
+        selectedName.rectTransform.anchoredPosition = new Vector2(SlotSize + 10, SlotY(SelectedIndex));
+    }
+    private static RectTransform Rect(string name, Transform parent, Vector2 position, Vector2 size)
+    {
+        var r = new GameObject(name, typeof(RectTransform)).GetComponent<RectTransform>();
+        r.SetParent(parent, false); r.anchorMin = r.anchorMax = r.pivot = new Vector2(0, 1);
+        r.anchoredPosition = position; r.sizeDelta = size; return r;
+    }
+    private void Edge(Transform parent, Vector2 position, Vector2 size)
+    {
+        var image = Rect("Border", parent, position, size).gameObject.AddComponent<Image>();
+        image.raycastTarget = false; tinted.Add(image);
+    }
+}
+
+/// <summary>Small pooled UI sparks for temporary crystal energy; no particle-system cameras.</summary>
+public sealed class TemporaryEnergyParticles : MonoBehaviour
+{
+    private readonly Image[] sparks = new Image[6];
+    private Color tint;
+    private float clock;
+    public void SetVisible(bool visible, Color color)
+    {
+        tint = color;
+        if (visible && sparks[0] == null)
+        {
+            for (int i = 0; i < sparks.Length; i++)
+            {
+                var obj = new GameObject("Energy Spark " + i, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                obj.transform.SetParent(transform, false);
+                sparks[i] = obj.GetComponent<Image>();
+                sparks[i].raycastTarget = false;
+                sparks[i].rectTransform.sizeDelta = Vector2.one * 1.4f;
+            }
+        }
+        foreach (var spark in sparks) if (spark != null) spark.gameObject.SetActive(visible);
+        enabled = visible;
+    }
+    private void Update()
+    {
+        clock += Time.deltaTime;
+        var rect = ((RectTransform)transform).rect;
+        for (int i = 0; i < sparks.Length; i++)
+        {
+            if (sparks[i] == null) continue;
+            float phase = Mathf.Repeat(clock * 1.2f + i / 6f, 1f);
+            float x = Mathf.Lerp(-rect.width * 0.6f, rect.width * 0.6f, (i * 0.618034f) % 1f);
+            sparks[i].rectTransform.anchoredPosition = new Vector2(x + Mathf.Sin(phase * 5f + i) * 1.2f,
+                Mathf.Lerp(-rect.height * 0.5f, rect.height * 0.5f + 7f, phase));
+            sparks[i].color = new Color(tint.r, tint.g, tint.b, Mathf.Sin(phase * Mathf.PI) * 0.85f);
+        }
+    }
 }

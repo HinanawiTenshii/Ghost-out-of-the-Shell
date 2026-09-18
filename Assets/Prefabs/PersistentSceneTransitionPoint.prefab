@@ -75,7 +75,6 @@ MonoBehaviour:
   destinationAreaName: "\u76EE\u6807\u533A\u57DF"
   targetArrivalPosition: {x: 0, y: 0}
   interactKey: 101
-  interactionDistance: 1.2
   triggerSize: {x: 1.1, y: 0.75}
   triggerOffset: {x: 0, y: 0.25}
   interactionPromptOffset: {x: 0, y: 0.9}

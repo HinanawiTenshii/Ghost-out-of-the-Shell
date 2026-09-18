@@ -119,6 +119,13 @@ public class PickupItemBase : MonoBehaviour
             return;
         }
 
+        // Gameplay selection is independent of the optional HUD prompt.
+        ZeldaInteractionArbiter.OfferInteraction(
+            this,
+            controlledMover,
+            KeyCode.E,
+            transform.position,
+            SetPickupPromptVisible);
         EnsurePickupPrompt();
         if (pickupPromptObject == null)
             return;
@@ -126,13 +133,6 @@ public class PickupItemBase : MonoBehaviour
         pickupPromptObject.transform.position =
             controlledMover.GetOverheadWorldPosition(pickupPromptOffset);
         pickupPromptObject.transform.rotation = Quaternion.identity;
-        ZeldaInteractionArbiter.OfferInteraction(
-            this,
-            controlledMover,
-            KeyCode.E,
-            transform.position,
-            SetPickupPromptVisible);
-
         pickupPromptFont.RequestCharactersInTexture(
             "按[E]拾取",
             72,
@@ -179,6 +179,7 @@ public class PickupItemBase : MonoBehaviour
 
         promptRenderer.sortingLayerID = highestSortingLayerId;
         promptRenderer.sortingOrder = short.MaxValue - 2;
+        ZeldaPossessionProgressBar.ConfigureOverlayRenderer(promptRenderer);
         pickupPromptMaterial = new Material(pickupPromptFont.material)
         {
             name = name + " Pickup Prompt Font Material",
@@ -325,7 +326,7 @@ public class PickupItemBase : MonoBehaviour
     public static bool IsGhostControlledMover(ZeldaFourWayMover mover)
     {
         return mover != null &&
-               mover.GetComponent<GhostZeldaCharacterData>() != null;
+               mover.GetComponent<ZeldaCharacterData>() != null && mover.GetComponent<ZeldaCharacterData>().IsGhostLike;
     }
 
     private ZeldaFourWayMover FindControlledMover()

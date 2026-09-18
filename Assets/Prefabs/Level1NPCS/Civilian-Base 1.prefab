@@ -148,6 +148,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4d086e0b3cdc4c6c92f77e44ea669790, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  cameraOrthographicSize: 7
+  playerVisionRadius: 13
+  sceneCameraOverrides: []
   health: 3
   skillValue: 0
   permissionLevel: 0
@@ -230,7 +233,7 @@ MonoBehaviour:
   attackDistance: 1.1
   attackFacingTolerance: 20
   attackCooldown: 0.35
-  regularHostileLoseSightDelay: 1.5
+  regularHostileLoseSightDelay: 7
   solidCollisionLayers:
     serializedVersion: 2
     m_Bits: 4294967295

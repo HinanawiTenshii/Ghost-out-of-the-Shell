@@ -7,9 +7,10 @@ public class SceneTransitionPoint : MonoBehaviour
 {
     [SerializeField] private string targetSceneName = "NextScene";
     [SerializeField] private KeyCode interactKey = KeyCode.E;
-    [SerializeField] private float interactionDistance = 1.2f;
-    [SerializeField] private Color frameColor = new Color(0.22f, 0.76f, 1f, 1f);
-    [SerializeField] private Color centerColor = new Color(0.08f, 0.22f, 0.46f, 0.85f);
+    [SerializeField, Tooltip("Exact local-space size shared by the trigger collider and interaction test.")]
+    private Vector2 triggerSize = new Vector2(1.1f, 0.75f);
+    [SerializeField, Tooltip("Exact local-space offset shared by the trigger collider and interaction test.")]
+    private Vector2 triggerOffset = new Vector2(0f, 0.25f);
     [SerializeField] private Vector2 interactionPromptOffset = new Vector2(0f, 0.9f);
 
     private SpriteRenderer spriteRenderer;
@@ -17,17 +18,16 @@ public class SceneTransitionPoint : MonoBehaviour
     private TextMesh interactionPromptText;
     private Font interactionPromptFont;
     private Material interactionPromptMaterial;
+    private BoxCollider2D triggerCollider;
 
     public string TargetSceneName => targetSceneName;
-    public float InteractionDistance => interactionDistance;
+    public Vector2 TriggerSize => triggerSize;
+    public Vector2 TriggerOffset => triggerOffset;
 
     private void Awake()
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
-        BoxCollider2D boxCollider = GetComponent<BoxCollider2D>();
-        boxCollider.isTrigger = true;
-        boxCollider.size = new Vector2(1.1f, 0.75f);
-        boxCollider.offset = new Vector2(0f, 0.25f);
+        SynchronizeCollider();
 
         ApplyVisual();
     }
@@ -47,7 +47,7 @@ public class SceneTransitionPoint : MonoBehaviour
                 this,
                 controlledCharacter,
                 interactKey,
-                transform.position,
+                controlledCharacter.transform.position,
                 LoadTargetScene);
         }
     }
@@ -63,6 +63,13 @@ public class SceneTransitionPoint : MonoBehaviour
             return;
         }
 
+        // Keep overlap-based interaction available without the HUD/font.
+        ZeldaInteractionArbiter.OfferInteraction(
+            this,
+            controlledCharacter,
+            interactKey,
+            controlledCharacter.transform.position,
+            SetInteractionPromptVisible);
         EnsureInteractionPrompt();
         if (interactionPromptObject == null)
             return;
@@ -70,13 +77,6 @@ public class SceneTransitionPoint : MonoBehaviour
         interactionPromptObject.transform.position =
             controlledCharacter.GetOverheadWorldPosition(interactionPromptOffset);
         interactionPromptObject.transform.rotation = Quaternion.identity;
-        ZeldaInteractionArbiter.OfferInteraction(
-            this,
-            controlledCharacter,
-            interactKey,
-            transform.position,
-            SetInteractionPromptVisible);
-
         interactionPromptFont.RequestCharactersInTexture(
             "按[E]继续前进",
             72,
@@ -87,12 +87,59 @@ public class SceneTransitionPoint : MonoBehaviour
     private ZeldaFourWayMover GetActiveControlledCharacterNearby()
     {
         ZeldaFourWayMover mover = ZeldaRuntimeRegistry.GetControlledMover();
-        if (mover == null ||
-            Vector2.Distance(transform.position, mover.transform.position) > interactionDistance)
+        if (mover == null || !OverlapsInteractionArea(mover))
             return null;
 
         ZeldaCharacterData characterData = mover.GetComponent<ZeldaCharacterData>();
         return characterData == null || !characterData.IsDead ? mover : null;
+    }
+
+    private bool OverlapsInteractionArea(ZeldaFourWayMover mover)
+    {
+        if (mover == null)
+        {
+            return false;
+        }
+
+        if (triggerCollider == null)
+        {
+            triggerCollider = GetComponent<BoxCollider2D>();
+        }
+
+        if (triggerCollider == null || !triggerCollider.enabled)
+        {
+            return false;
+        }
+
+        Collider2D moverCollider = mover.GetComponent<Collider2D>();
+        if (moverCollider == null || !moverCollider.enabled ||
+            !moverCollider.gameObject.activeInHierarchy)
+        {
+            return triggerCollider.OverlapPoint(mover.transform.position);
+        }
+
+        ColliderDistance2D distance = triggerCollider.Distance(moverCollider);
+        return distance.isValid &&
+            (distance.isOverlapped || distance.distance <= 0.001f);
+    }
+
+    private void SynchronizeCollider()
+    {
+        if (triggerCollider == null)
+        {
+            triggerCollider = GetComponent<BoxCollider2D>();
+        }
+
+        if (triggerCollider == null)
+        {
+            return;
+        }
+
+        triggerCollider.isTrigger = true;
+        triggerCollider.size = new Vector2(
+            Mathf.Max(0.05f, triggerSize.x),
+            Mathf.Max(0.05f, triggerSize.y));
+        triggerCollider.offset = triggerOffset;
     }
 
     private void EnsureInteractionPrompt()
@@ -134,6 +181,7 @@ public class SceneTransitionPoint : MonoBehaviour
 
         promptRenderer.sortingLayerID = highestSortingLayerId;
         promptRenderer.sortingOrder = short.MaxValue - 2;
+        ZeldaPossessionProgressBar.ConfigureOverlayRenderer(promptRenderer);
         interactionPromptMaterial = new Material(interactionPromptFont.material)
         {
             name = name + " Scene Transition Prompt Font Material",
@@ -161,8 +209,11 @@ public class SceneTransitionPoint : MonoBehaviour
             return;
         }
 
-        SceneTravelStateManager.GetOrCreate().ResetAllSceneStates();
-        SceneManager.LoadScene(targetSceneName.Trim());
+        RetroSceneLoadReveal.BeginTransition(targetSceneName.Trim(), () =>
+        {
+            SceneTravelStateManager.GetOrCreate().ResetAllSceneStates();
+            SceneManager.LoadScene(targetSceneName.Trim());
+        });
     }
 
     private void ApplyVisual()
@@ -179,39 +230,87 @@ public class SceneTransitionPoint : MonoBehaviour
 
     private Sprite CreateTransitionSprite()
     {
-        const int width = 20;
-        const int height = 16;
-        Texture2D texture = new Texture2D(width, height);
+        // Keep this geometry in sync with
+        // RuntimeMiniMapGraphic.AddTransitionIcon: a doorway outline with a
+        // left-pointing transition arrow. SceneTransitionPoint represents the
+        // non-persistent transition, so it uses the same Ghost-blue tint as
+        // the corresponding minimap icon.
+        const int width = 32;
+        const int height = 40;
+        const float pixelsPerUnit = 32f;
+        const float lineWidth = 3f;
+        Vector2 center = new Vector2(16f, 20f);
+        Color iconColor = ZeldaUiPalette.Ghost;
+
+        Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+        texture.name = "Scene Transition Map Icon";
         texture.filterMode = FilterMode.Point;
+        texture.wrapMode = TextureWrapMode.Clamp;
 
-        Color clear = new Color(1f, 1f, 1f, 0f);
-        FillRect(texture, 0, 0, width, height, clear);
+        Color[] pixels = new Color[width * height];
+        DrawLine(pixels, width, height, center + new Vector2(-9f, -14f), center + new Vector2(-9f, 14f), lineWidth, iconColor);
+        DrawLine(pixels, width, height, center + new Vector2(-9f, 14f), center + new Vector2(5f, 14f), lineWidth, iconColor);
+        DrawLine(pixels, width, height, center + new Vector2(5f, 14f), center + new Vector2(5f, 5f), lineWidth, iconColor);
+        DrawLine(pixels, width, height, center + new Vector2(5f, -5f), center + new Vector2(5f, -14f), lineWidth, iconColor);
+        DrawLine(pixels, width, height, center + new Vector2(5f, -14f), center + new Vector2(-9f, -14f), lineWidth, iconColor);
 
-        FillRect(texture, 4, 3, 12, 2, frameColor);
-        FillRect(texture, 3, 5, 14, 2, frameColor);
-        FillRect(texture, 2, 7, 16, 3, frameColor);
-        FillRect(texture, 4, 8, 12, 1, centerColor);
-        FillRect(texture, 6, 9, 8, 2, centerColor);
-        FillRect(texture, 8, 11, 4, 2, frameColor);
+        DrawLine(pixels, width, height, center + new Vector2(13f, 5f), center + new Vector2(-1f, 5f), lineWidth, iconColor);
+        DrawLine(pixels, width, height, center + new Vector2(13f, -5f), center + new Vector2(-1f, -5f), lineWidth, iconColor);
+        DrawLine(pixels, width, height, center + new Vector2(13f, 5f), center + new Vector2(13f, -5f), lineWidth, iconColor);
+        DrawLine(pixels, width, height, center + new Vector2(-1f, 9f), center + new Vector2(-8f, 0f), lineWidth, iconColor);
+        DrawLine(pixels, width, height, center + new Vector2(-8f, 0f), center + new Vector2(-1f, -9f), lineWidth, iconColor);
+        DrawLine(pixels, width, height, center + new Vector2(-1f, 9f), center + new Vector2(-1f, 5f), lineWidth, iconColor);
+        DrawLine(pixels, width, height, center + new Vector2(-1f, -9f), center + new Vector2(-1f, -5f), lineWidth, iconColor);
 
+        texture.SetPixels(pixels);
         texture.Apply();
-        return Sprite.Create(texture, new Rect(0, 0, width, height), new Vector2(0.5f, 0.25f), 16f);
+        return Sprite.Create(
+            texture,
+            new Rect(0, 0, width, height),
+            new Vector2(0.5f, 0.3f),
+            pixelsPerUnit);
     }
 
-    private static void FillRect(Texture2D texture, int startX, int startY, int width, int height, Color color)
+    private static void DrawLine(
+        Color[] pixels,
+        int textureWidth,
+        int textureHeight,
+        Vector2 start,
+        Vector2 end,
+        float lineWidth,
+        Color color)
     {
-        for (int y = startY; y < startY + height; y++)
+        float radius = lineWidth * 0.5f;
+        int minX = Mathf.Max(0, Mathf.FloorToInt(Mathf.Min(start.x, end.x) - radius));
+        int maxX = Mathf.Min(textureWidth - 1, Mathf.CeilToInt(Mathf.Max(start.x, end.x) + radius));
+        int minY = Mathf.Max(0, Mathf.FloorToInt(Mathf.Min(start.y, end.y) - radius));
+        int maxY = Mathf.Min(textureHeight - 1, Mathf.CeilToInt(Mathf.Max(start.y, end.y) + radius));
+        Vector2 segment = end - start;
+        float segmentLengthSquared = segment.sqrMagnitude;
+        float radiusSquared = radius * radius;
+
+        for (int y = minY; y <= maxY; y++)
         {
-            for (int x = startX; x < startX + width; x++)
+            for (int x = minX; x <= maxX; x++)
             {
-                texture.SetPixel(x, y, color);
+                Vector2 point = new Vector2(x + 0.5f, y + 0.5f);
+                float t = segmentLengthSquared <= Mathf.Epsilon
+                    ? 0f
+                    : Mathf.Clamp01(Vector2.Dot(point - start, segment) / segmentLengthSquared);
+                Vector2 closest = start + segment * t;
+                if ((point - closest).sqrMagnitude <= radiusSquared)
+                {
+                    pixels[y * textureWidth + x] = color;
+                }
             }
         }
     }
 
     private void OnValidate()
     {
-        interactionDistance = Mathf.Max(0f, interactionDistance);
+        triggerSize.x = Mathf.Max(0.05f, triggerSize.x);
+        triggerSize.y = Mathf.Max(0.05f, triggerSize.y);
+        SynchronizeCollider();
     }
 
     private void OnDisable()

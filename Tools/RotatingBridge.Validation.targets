@@ -1,0 +1,9 @@
+<Project>
+  <!-- Validate new Unity sources before the editor regenerates its .csproj. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Interaction\RotatingBridgeMechanism.cs" />
+    <Compile Include="Assets\Scripts\Interaction\RotatingBridgeMechanism.cs" />
+    <Compile Remove="Assets\Scripts\Map\MiniMapWallGroup.cs" />
+    <Compile Include="Assets\Scripts\Map\MiniMapWallGroup.cs" />
+  </ItemGroup>
+</Project>
