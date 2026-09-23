@@ -18,6 +18,10 @@ public class DoorData : MonoBehaviour
     [SerializeField, Min(0f)] private float investigationRadius = 4f;
     [SerializeField, Min(0.05f)] private float investigationPulseDuration = 0.7f;
     [SerializeField] private Color investigationPulseColor = Color.white;
+    [Header("Visual-only Door Hardware")]
+    [SerializeField, Tooltip("Small child visuals that follow hit shake without enlarging interaction bounds.")]
+    private Transform[] attachedVisuals = new Transform[0];
+    private Vector3[] attachedVisualRestPositions;
 
     private SpriteRenderer spriteRenderer;
     private SpriteRenderer shakeVisual;
@@ -34,7 +38,27 @@ public class DoorData : MonoBehaviour
     private void Awake()
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
+        attachedVisualRestPositions = new Vector3[attachedVisuals.Length];
+        for (int i = 0; i < attachedVisuals.Length; i++)
+            if (attachedVisuals[i] != null)
+                attachedVisualRestPositions[i] = attachedVisuals[i].localPosition;
         EnsureRequirementWindow();
+    }
+
+    public bool IsAttachedVisual(Transform candidate)
+    {
+        for (int i = 0; i < attachedVisuals.Length; i++)
+            if (attachedVisuals[i] == candidate)
+                return true;
+        return false;
+    }
+
+    private void OffsetAttachedVisuals(Vector3 offset)
+    {
+        if (attachedVisualRestPositions == null) return;
+        for (int i = 0; i < attachedVisuals.Length; i++)
+            if (attachedVisuals[i] != null)
+                attachedVisuals[i].localPosition = attachedVisualRestPositions[i] + offset;
     }
 
     private void LateUpdate()
@@ -106,6 +130,7 @@ public class DoorData : MonoBehaviour
                 Mathf.Cos(shakeElapsed * shakeSpeed),
                 Mathf.Sin(shakeElapsed * shakeSpeed * 0.83f), 0f) * shakeAmount;
             shakeVisual.transform.localPosition = transform.InverseTransformVector(worldOffset);
+            OffsetAttachedVisuals(shakeVisual.transform.localPosition);
         }
 
         if (shakeTimer <= 0f)
@@ -116,6 +141,7 @@ public class DoorData : MonoBehaviour
 
     private void StopShake()
     {
+        OffsetAttachedVisuals(Vector3.zero);
         if (isShaking && spriteRenderer != null)
             spriteRenderer.forceRenderingOff = originalForceRenderingOff;
         if (shakeVisual != null)

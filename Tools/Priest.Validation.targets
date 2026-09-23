@@ -1,5 +1,9 @@
 <Project>
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Characters\DesertCivilianZeldaCharacterData.cs" />
+    <Compile Include="Assets\Scripts\Characters\DesertCivilianZeldaCharacterData.cs" />
+    <Compile Remove="Assets\Scripts\Characters\DesertBlacksmithZeldaCharacterData.cs" />
+    <Compile Include="Assets\Scripts\Characters\DesertBlacksmithZeldaCharacterData.cs" />
     <Compile Remove="Assets\Scripts\Characters\DesertStrongmanZeldaCharacterData.cs" />
     <Compile Include="Assets\Scripts\Characters\DesertStrongmanZeldaCharacterData.cs" />
     <Compile Remove="Assets\Scripts\Interaction\SignpostInteraction.cs" />

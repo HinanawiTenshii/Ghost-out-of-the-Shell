@@ -53,8 +53,8 @@ MonoBehaviour:
   boardGap: 0.14
   arrowTipRatio: 0.18
   topPointsLeft: 1
-  poleColor: {r: 0.30, g: 0.22, b: 0.14, a: 1}
-  boardColor: {r: 0.54, g: 0.38, b: 0.20, a: 1}
+  poleColor: {r: 0.55, g: 0.29, b: 0.14, a: 1}
+  boardColor: {r: 0.73, g: 0.44, b: 0.21, a: 1}
   solidBase: 1
   baseCollisionHeight: 0.22
   sortingLayerName: Default

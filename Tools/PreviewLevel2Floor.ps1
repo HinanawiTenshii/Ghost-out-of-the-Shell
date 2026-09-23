@@ -1,7 +1,9 @@
-param([float]$X=0,[float]$Y=0,[float]$Width=0,[float]$Height=0,[switch]$Labels,[switch]$NoGrid)
+param([float]$X=0,[float]$Y=0,[float]$Width=0,[float]$Height=0,[switch]$Labels,[switch]$NoGrid,
+    [string]$ScenePath='Assets/Scenes/Level2/Level2-Floor1.unity',
+    [string]$OutputPath='Docs/Level2-Floor1-layout-preview.png')
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
-$scene=Get-Content -Raw "$root/Assets/Scenes/Level2/Level2-Floor1.unity"
+$scene=Get-Content -Raw (Join-Path $root $ScenePath)
 $blocks=[regex]::Split($scene,'(?m)(?=^--- !u!)')
 $transforms=@{};$objects=@{};$renderers=@();$goTransforms=@{}
 function FieldVector($b,$key) {
@@ -80,6 +82,6 @@ if(!$NoGrid){
     for($a=[Math]::Ceiling($X/10)*10;$a -lt $X+$Width;$a+=10){$px=[float](($a-$X)*$scale);$g.DrawLine($pen,$px,0,$px,$bmp.Height);$g.DrawString("$a",$font,[Drawing.Brushes]::Orange,$px,0)}
     for($a=[Math]::Ceiling($Y/10)*10;$a -lt $Y+$Height;$a+=10){$py=[float](($Y+$Height-$a)*$scale);$g.DrawLine($pen,0,$py,$bmp.Width,$py);$g.DrawString("$a",$font,[Drawing.Brushes]::Orange,0,$py)}
 }
-$path=Join-Path $root 'Docs/Level2-Floor1-layout-preview.png'
+$path=Join-Path $root $OutputPath
 $bmp.Save($path,[Drawing.Imaging.ImageFormat]::Png);$g.Dispose();$bmp.Dispose();$font.Dispose();$pen.Dispose()
 Write-Output $path

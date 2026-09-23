@@ -47,18 +47,23 @@ public class PickupItemBase : MonoBehaviour
         }
     }
     public int MaxStackSize => maxStackSize;
+    protected float PickupDistance => pickupDistance;
+    protected bool IsPickupLocked => Time.unscaledTime < pickupLockedUntil;
     public PickupItemVisualBase ItemVisual => GetComponent<PickupItemVisualBase>();
     public virtual string DescriptionDiscoveryId =>
         "item:" + GetType().FullName + ":" + ItemId + ":" + ItemName;
     public virtual bool CanBeStoredInCardboardBox(ZeldaCharacterData user) => true;
     public virtual bool HasInventoryCharge => false;
     public virtual float InventoryCharge => 0f;
+    public virtual string InventoryState => string.Empty;
+    public virtual bool UsePlacesInWorld => false;
+    protected virtual bool UsesTriggerCollider => true;
     protected virtual bool CanAttemptPickup => true;
 
     protected virtual void Awake()
     {
         triggerCollider = GetComponent<Collider2D>();
-        triggerCollider.isTrigger = true;
+        triggerCollider.isTrigger = UsesTriggerCollider;
         itemName = string.IsNullOrWhiteSpace(itemName) ? "未命名物品" : itemName.Trim();
         itemId = string.IsNullOrWhiteSpace(itemId) ? "unknown_item" : itemId.Trim();
         QuestJournalInteractionMarker.Configure(
@@ -218,7 +223,8 @@ public class PickupItemBase : MonoBehaviour
                 ItemVisual != null,
                 ItemVisual != null ? ItemVisual.DisplayColor : Color.white,
                 HasInventoryCharge,
-                InventoryCharge))
+                InventoryCharge,
+                InventoryState))
         {
             return false;
         }
@@ -274,6 +280,8 @@ public class PickupItemBase : MonoBehaviour
     public virtual void ApplyInventoryCharge(bool hasCharge, float charge)
     {
     }
+
+    public virtual void ApplyInventoryState(string state) { }
 
     /// <summary>
     /// Override in derived item behaviours. The base template consumes and destroys itself.
@@ -407,7 +415,7 @@ public class PickupItemBase : MonoBehaviour
         Collider2D itemCollider = GetComponent<Collider2D>();
         if (itemCollider != null)
         {
-            itemCollider.isTrigger = true;
+            itemCollider.isTrigger = UsesTriggerCollider;
         }
     }
 #endif

@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="Priest.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Characters\DesertMerchantZeldaCharacterData.cs" />
+    <Compile Include="Assets\Scripts\Characters\DesertMerchantZeldaCharacterData.cs" />
+  </ItemGroup>
+</Project>

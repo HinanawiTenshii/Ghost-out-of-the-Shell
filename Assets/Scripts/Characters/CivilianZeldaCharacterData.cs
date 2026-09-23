@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>A configurable-clothing civilian that uses the standard character systems.</summary>
-public sealed class CivilianZeldaCharacterData : ZeldaCharacterData
+public class CivilianZeldaCharacterData : ZeldaCharacterData
 {
     [Header("Civilian Combat")]
     [SerializeField, Min(0)] private int attackPower = 1;
@@ -177,10 +177,15 @@ public sealed class CivilianZeldaCharacterData : ZeldaCharacterData
         "................",
     };
 
+    protected virtual string[] GetBodyRows(Vector2 facing)
+    {
+        return facing == Vector2.up ? BackBody :
+            facing == Vector2.left ? LeftBody : facing == Vector2.right ? RightBody : FrontBody;
+    }
+
     private Texture2D CreateTexture(Vector2 facing, bool attacking)
     {
-        string[] rows = facing == Vector2.up ? BackBody :
-            facing == Vector2.left ? LeftBody : facing == Vector2.right ? RightBody : FrontBody;
+        string[] rows = GetBodyRows(facing);
         var pixels = new Color[16 * 16];
         for (int row = 0; row < 16; row++)
         for (int x = 0; x < 16; x++)
@@ -235,7 +240,7 @@ public sealed class CivilianZeldaCharacterData : ZeldaCharacterData
         }
     }
 
-    private Color PixelColor(char symbol)
+    protected virtual Color PixelColor(char symbol)
     {
         switch (symbol)
         {

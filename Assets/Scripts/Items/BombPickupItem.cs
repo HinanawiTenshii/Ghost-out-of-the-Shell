@@ -23,6 +23,7 @@ public sealed class BombPickupItem : PickupItemBase
         new Color(1f, 0.2f, 0.08f, 0.5f);
 
     [Header("Explosion Audio")]
+    [Tooltip("留空使用项目默认复古炸弹爆炸声；音量为 0 时静音。")]
     [SerializeField] private AudioClip explosionSound;
     [SerializeField, Range(0f, 1f)] private float explosionSoundVolume = 1f;
     [SerializeField, Range(0.1f, 3f)] private float explosionSoundPitch = 1f;
@@ -102,6 +103,11 @@ public sealed class BombPickupItem : PickupItemBase
     {
         GameObject placedObject = new GameObject("Placed Bomb");
         placedObject.transform.position = worldPosition;
+        var placementScene = ZeldaRuntimeRegistry.GetGameplayScene(user != null ? user.gameObject : gameObject);
+        // Save restoration may invoke this method on a prefab asset: in that
+        // case the new object already belongs to the active destination scene.
+        if (placementScene.IsValid() && placementScene.isLoaded)
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(placedObject, placementScene);
         PlacedBomb placedBomb = placedObject.AddComponent<PlacedBomb>();
         placedBomb.SaveSourceItemId = ItemId;
         placedBomb.Configure(

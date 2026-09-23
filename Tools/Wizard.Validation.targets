@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="StorageFurniture.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Characters\WizardZeldaCharacterData.cs" />
+    <Compile Include="Assets\Scripts\Characters\WizardZeldaCharacterData.cs" />
+  </ItemGroup>
+</Project>

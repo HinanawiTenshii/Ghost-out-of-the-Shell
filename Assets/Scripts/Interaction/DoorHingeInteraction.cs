@@ -12,6 +12,9 @@ public class DoorHingeInteraction : MonoBehaviour
     [SerializeField] private float rotationAngle = 90f;
     [SerializeField] private float rotationSpeed = 360f;
     [SerializeField] private bool clockwise;
+    [Header("Door Motion Presentation")]
+    [SerializeField, Tooltip("Opt-in easing for door prefabs. Same angle and duration; leave off on bridges and other mechanisms.")]
+    private bool easeDoorRotation;
     [Header("Optional Double Door Hinges")]
     [SerializeField, Tooltip("Leave empty for the original single door. For a double door, assign its first child hinge.")]
     private Transform primaryHinge;
@@ -55,6 +58,8 @@ public class DoorHingeInteraction : MonoBehaviour
     private Quaternion targetRotation;
     private Quaternion secondaryClosedRotation;
     private Quaternion secondaryTargetRotation;
+    private HingeMotion primaryMotion;
+    private HingeMotion secondaryMotion;
     private Transform PrimaryHinge => primaryHinge != null ? primaryHinge : transform;
     private bool HasSecondaryHinge => secondaryHinge != null && secondaryHinge != PrimaryHinge;
     private bool isOpen;
@@ -225,20 +230,63 @@ public class DoorHingeInteraction : MonoBehaviour
                 HandlePlayerInteraction);
         }
 
-        bool moved = RotateHinge(PrimaryHinge, targetRotation);
+        bool moved = RotateHinge(PrimaryHinge, targetRotation, ref primaryMotion);
         if (HasSecondaryHinge)
-            moved |= RotateHinge(secondaryHinge, secondaryTargetRotation);
+            moved |= RotateHinge(secondaryHinge, secondaryTargetRotation, ref secondaryMotion);
         if (moved)
         {
             NotifyVisionBlockerChanged();
         }
     }
 
-    private bool RotateHinge(Transform hinge, Quaternion target)
+    private bool RotateHinge(Transform hinge, Quaternion target, ref HingeMotion motion)
     {
         Quaternion previous = hinge.localRotation;
-        hinge.localRotation = Quaternion.RotateTowards(previous, target, rotationSpeed * Time.deltaTime);
+        // The real hinge drives both sprite and collider. No visual-only offset,
+        // overshoot, extra collision geometry, or change to interaction distances.
+        hinge.localRotation = easeDoorRotation
+            ? motion.Step(previous, target, rotationSpeed, Time.deltaTime)
+            : Quaternion.RotateTowards(previous, target, rotationSpeed * Time.deltaTime);
         return Quaternion.Angle(previous, hinge.localRotation) > 0.001f;
+    }
+
+    // Per-leaf state: reversing starts at the current pose, loading snaps exactly,
+    // and changing speed affects the next step without restarting the animation.
+    private struct HingeMotion
+    {
+        private bool initialized;
+        private Quaternion start;
+        private Quaternion endpoint;
+        private Quaternion lastPose;
+        private float distance;
+        private float progress;
+
+        public Quaternion Step(Quaternion current, Quaternion target, float speed, float deltaTime)
+        {
+            if (!initialized || Quaternion.Angle(endpoint, target) > 0.001f ||
+                Quaternion.Angle(lastPose, current) > 0.01f)
+            {
+                initialized = true;
+                start = current;
+                endpoint = target;
+                distance = Quaternion.Angle(current, target);
+                progress = 0f;
+            }
+
+            if (distance <= 0.001f)
+                return lastPose = target;
+            if (deltaTime <= 0f || speed <= 0f)
+                return lastPose = current;
+
+            progress = Mathf.Clamp01(progress + speed * deltaTime / distance);
+            // SmoothStep over angular distance keeps the original angle/speed
+            // duration, with no spring overshoot or asymptotic stopping.
+            float eased = progress * progress * (3f - 2f * progress);
+            lastPose = progress >= 1f
+                ? target
+                : Quaternion.Slerp(start, endpoint, eased);
+            return lastPose;
+        }
     }
 
     private void UpdateHingeTargets()
@@ -740,7 +788,17 @@ public class DoorHingeInteraction : MonoBehaviour
             doorColliderInitialStates[i] = doorColliders[i] != null && doorColliders[i].enabled;
         }
 
-        doorRenderers = GetComponentsInChildren<Renderer>(true);
+        // Handles protrude visually, but must not enlarge the original proximity
+        // test (including its renderer fallback while AI disables colliders).
+        Renderer[] candidates = GetComponentsInChildren<Renderer>(true);
+        List<Renderer> interactionRenderers = new List<Renderer>(candidates.Length);
+        for (int i = 0; i < candidates.Length; i++)
+        {
+            DoorData leaf = candidates[i].GetComponentInParent<DoorData>();
+            if (leaf == null || !leaf.IsAttachedVisual(candidates[i].transform))
+                interactionRenderers.Add(candidates[i]);
+        }
+        doorRenderers = interactionRenderers.ToArray();
     }
 
     private void SetDoorCollisionEnabled(bool enabled)

@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="Chef.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Items\ArmedGolemPickupItem.cs;Assets\Scripts\Items\ArmedGolemPickupItemVisual.cs" />
+    <Compile Include="Assets\Scripts\Items\ArmedGolemPickupItem.cs;Assets\Scripts\Items\ArmedGolemPickupItemVisual.cs" />
+  </ItemGroup>
+</Project>

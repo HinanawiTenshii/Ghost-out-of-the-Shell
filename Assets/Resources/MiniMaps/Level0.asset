@@ -882,5 +882,5 @@ MonoBehaviour:
   - questId: level1.escape_castle
     position: {x: 17.43, y: -37.53}
   - questId: level1.find_castle_gate_key
-    position: {x: 17.43206, y: -33.530003}
+    position: {x: 17.43206, y: -33.56}
   bridges: []

@@ -35,6 +35,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
         public bool hasItemSubmissionStation;
         public SpecificItemSubmissionStation.RuntimeState itemSubmissionState;
         public string pickupId, pickupIdentity;
+        public string pickupRuntimeState;
         public List<SavedScalarFields.Value> pickupFields;
         public bool hasPickupColor;
         public Color pickupColor;
@@ -491,6 +492,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
                 }
                 state.pickupId = pickup.ItemId;
                 state.pickupIdentity = pickup.UniqueInstanceId;
+                state.pickupRuntimeState = pickup.InventoryState;
                 state.pickupFields = SavedScalarFields.Capture(pickup, true);
                 state.hasPickupColor = pickup.ItemVisual != null;
                 if (state.hasPickupColor) state.pickupColor = pickup.ItemVisual.DisplayColor;
@@ -664,6 +666,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
             {
                 SavedScalarFields.Apply(pickup, state.pickupFields);
                 pickup.SetUniqueInstanceId(state.pickupIdentity);
+                pickup.ApplyInventoryState(state.pickupRuntimeState);
                 if (state.hasPickupColor && pickup.ItemVisual != null) pickup.ItemVisual.SetDisplayColor(state.pickupColor);
             }
             var document = target.GetComponent<DocumentReader>();
@@ -714,6 +717,10 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
             if (state.hasAi && ai != null)
             {
                 ai.enabled = state.aiEnabled;
+                // A machine's activation is a level condition, not a guard's
+                // transient pursuit. Restore it before the normal return policy.
+                if (ai is AutomatonCharacterAi && state.savedAi != null)
+                    ai.ApplySaveState(state.savedAi);
                 ai.RecoverAfterPersistentSceneReturn(state.aiState);
             }
         }

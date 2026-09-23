@@ -8,7 +8,9 @@ public enum ZeldaAttackVisualShape
     Hammer,
     Rock,
     Shockwave,
-    Book
+    Book,
+    TwinBlades,
+    BattleAxe
 }
 
 [RequireComponent(typeof(SpriteRenderer))]
@@ -27,6 +29,29 @@ public class ZeldaAttackHitbox : MonoBehaviour
     private static Sprite rockSprite;
     private static Sprite shockwaveSprite;
     private static Sprite bookSprite;
+    private static Sprite twinBladesSprite;
+    private static Sprite profileBladeSprite;
+    private static Sprite battleAxeSprite;
+
+    // Symmetric cutting heads, a reinforced socket and a simple wooden haft.
+    private static readonly string[] BattleAxePixels = {
+        "..HH...GG...HH..",
+        ".HHM...GG...MHH.",
+        ".HMMGGGGGGGGMMH.",
+        "HMMMGMHHHHMGMMMH",
+        "HMMMGMHHHHMGMMMH",
+        "HMMMGMHHHHMGMMMH",
+        ".HMMGGGGGGGGMMH.",
+        ".HHM...GG...MHH.",
+        "..HH...GG...HH..",
+        ".......WW.......",
+        ".......WW.......",
+        ".......GG.......",
+        ".......WW.......",
+        ".......WW.......",
+        ".......WW.......",
+        "......GGGG......",
+    };
 
     // Coarse pixels match the characters: a two-tone blade, solid crossguard
     // and plain grip, without fine channels or alternating grip wraps.
@@ -48,6 +73,27 @@ public class ZeldaAttackHitbox : MonoBehaviour
         "...DD...",
         "...DD...",
         "..GGGG..",
+    };
+
+    // Same 16-PPU coarse blocks and neutral four-value palette as the sword.
+    // A broad steel head, solid socket and plain grip, without fine surface texture.
+    private static readonly string[] HammerPixels = {
+        "................",
+        "..GGHHHHHHHHGG..",
+        "..GMHHHHHHHHMG..",
+        "..GMMMMMMMMMMG..",
+        "..GMMMMMMMMMMG..",
+        "..GMMMMMMMMMMG..",
+        "..GGGGDDDDGGGG..",
+        "......GGGG......",
+        "......DDDD......",
+        "......DDDD......",
+        "......DDDD......",
+        "......DDDD......",
+        "......DDDD......",
+        "......DDDD......",
+        "......GGGG......",
+        "................",
     };
 
     // A small bound volume: D=outline/spine, C=cover, G=gold, P=page edges.
@@ -84,6 +130,33 @@ public class ZeldaAttackHitbox : MonoBehaviour
     private Vector3 configuredMaximumScale = Vector3.one;
     private Color configuredTint;
     private float elapsedLifetime;
+
+    // A plain managed result survives destruction of the short-lived hitbox.
+    // Only attacks observed by AI allocate this, and only the intended target counts.
+    public sealed class AttackOutcome
+    {
+        public Object Target { get; internal set; }
+        public bool HitTarget { get; internal set; }
+        public bool IsComplete { get; internal set; }
+    }
+    private AttackOutcome observedOutcome;
+
+    public AttackOutcome ObserveTarget(Object target)
+    {
+        observedOutcome = new AttackOutcome { Target = target };
+        return observedOutcome;
+    }
+
+    private void RecordTargetContact(Object target)
+    {
+        if (observedOutcome != null && observedOutcome.Target == target)
+            observedOutcome.HitTarget = true;
+    }
+
+    private void OnDisable()
+    {
+        if (observedOutcome != null) observedOutcome.IsComplete = true;
+    }
 
     private void Awake()
     {
@@ -195,6 +268,7 @@ public class ZeldaAttackHitbox : MonoBehaviour
             !target.IsDead && !damagedTargets.Contains(target))
         {
             damagedTargets.Add(target);
+            RecordTargetContact(target);
             // Self-inflicted bomb damage should not broadcast the character
             // as its own attacker to AI hostility logic.
             target.TakeDamage(attackPower, target == owner ? null : owner);
@@ -240,6 +314,7 @@ public class ZeldaAttackHitbox : MonoBehaviour
         }
 
         damagedCardboardBoxes.Add(cardboardBox);
+        RecordTargetContact(cardboardBox);
         cardboardBox.ReceiveAttack(attackPower, owner);
     }
 
@@ -248,7 +323,11 @@ public class ZeldaAttackHitbox : MonoBehaviour
         // Do not cancel independent bomb explosions just because their owner is stunned.
         if (canDamageOwner || owner == null) return false;
         var ai = owner.GetComponent<ZeldaCharacterAiBase>();
-        if (!owner.IsGhostForm && (ai == null || !ai.isActiveAndEnabled || !ai.IsStunned)) return false;
+        var automaton = ai as AutomatonCharacterAi;
+        bool dormantAutomaton = automaton != null && automaton.isActiveAndEnabled &&
+            !automaton.HostilityActivated;
+        if (!owner.IsGhostForm && !dormantAutomaton &&
+            (ai == null || !ai.isActiveAndEnabled || !ai.IsStunned)) return false;
         triggerCollider.enabled = false;
         if (spriteRenderer != null) spriteRenderer.enabled = false;
         Destroy(gameObject);
@@ -257,7 +336,28 @@ public class ZeldaAttackHitbox : MonoBehaviour
 
     private void ApplyVisual()
     {
-        if (visualShape == ZeldaAttackVisualShape.Sword)
+        if (visualShape == ZeldaAttackVisualShape.BattleAxe)
+        {
+            if (battleAxeSprite == null) battleAxeSprite = CreateBattleAxeSprite();
+            spriteRenderer.sprite = battleAxeSprite;
+        }
+        else if (visualShape == ZeldaAttackVisualShape.TwinBlades)
+        {
+            // In profile the far blade is hidden behind the near blade, just as
+            // on the owner's side-facing sprite. Hitbox and damage stay unchanged.
+            Vector3 attackDirection = transform.up;
+            if (Mathf.Abs(attackDirection.x) > Mathf.Abs(attackDirection.y))
+            {
+                if (profileBladeSprite == null) profileBladeSprite = CreateTwinBladesSprite(true);
+                spriteRenderer.sprite = profileBladeSprite;
+            }
+            else
+            {
+                if (twinBladesSprite == null) twinBladesSprite = CreateTwinBladesSprite(false);
+                spriteRenderer.sprite = twinBladesSprite;
+            }
+        }
+        else if (visualShape == ZeldaAttackVisualShape.Sword)
         {
             spriteRenderer.sprite = swordSprite;
         }
@@ -282,6 +382,53 @@ public class ZeldaAttackHitbox : MonoBehaviour
         {
             spriteRenderer.sprite = boxSprite;
         }
+    }
+
+    private static Sprite CreateBattleAxeSprite()
+    {
+        var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false) {
+            name = "Coarse Double-Headed Battle Axe", filterMode = FilterMode.Point,
+            wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave
+        };
+        for (int row = 0; row < 16; row++)
+        for (int x = 0; x < 16; x++)
+        {
+            char symbol = BattleAxePixels[row][x];
+            texture.SetPixel(x, 15 - row, symbol == 'W'
+                ? new Color(0.35f, 0.22f, 0.13f, 1f) : SwordPixelColor(symbol));
+        }
+        texture.Apply();
+        Sprite sprite = Sprite.Create(texture, new Rect(0, 0, 16, 16), new Vector2(0.5f, 0.18f), 16f);
+        sprite.name = texture.name;
+        sprite.hideFlags = HideFlags.HideAndDontSave;
+        return sprite;
+    }
+
+    private static Sprite CreateTwinBladesSprite(bool profile)
+    {
+        var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false) {
+            name = profile ? "Automaton Profile Blade Hand" : "Automaton Twin Blade Hands", filterMode = FilterMode.Point,
+            wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave
+        };
+        for (int row = 0; row < 16; row++)
+        for (int x = 0; x < 16; x++)
+        {
+            int localX = profile ? x - 6 : (x < 8 ? x - 3 : x - 9);
+            Color color = Color.clear;
+            if (row == 1 && localX == 2) color = new Color(0.86f, 0.9f, 0.91f, 1f);
+            if (row >= 2 && row <= 11 && localX >= 1 && localX <= 2)
+                color = localX == 2 ? new Color(0.86f, 0.9f, 0.91f, 1f) : new Color(0.46f, 0.5f, 0.5f, 1f);
+            if (row >= 12 && row <= 13 && localX >= 0 && localX <= 3)
+                color = new Color(0.82f, 0.035f, 0.025f, 1f);
+            if (row >= 14 && localX >= 1 && localX <= 2)
+                color = new Color(0.18f, 0.21f, 0.22f, 1f);
+            texture.SetPixel(x, 15 - row, color);
+        }
+        texture.Apply();
+        Sprite sprite = Sprite.Create(texture, new Rect(0, 0, 16, 16), new Vector2(0.5f, 0.18f), 16f);
+        sprite.name = texture.name;
+        sprite.hideFlags = HideFlags.HideAndDontSave;
+        return sprite;
     }
 
     private static Sprite CreateBookSprite()
@@ -314,6 +461,27 @@ public class ZeldaAttackHitbox : MonoBehaviour
             case 'P': return new Color(0.92f, 0.90f, 0.79f, 1f);
             default: return Color.clear;
         }
+    }
+
+    private static Sprite CreateHammerSprite()
+    {
+        var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false)
+        {
+            name = "Coarse Hammer Attack",
+            filterMode = FilterMode.Point,
+            wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        for (int row = 0; row < 16; row++)
+        for (int x = 0; x < 16; x++)
+            texture.SetPixel(x, 15 - row, SwordPixelColor(HammerPixels[row][x]));
+        texture.Apply();
+        // Preserve the original 1x1 world footprint and grip pivot; hitbox is independent.
+        Sprite sprite = Sprite.Create(texture, new Rect(0, 0, 16, 16),
+            new Vector2(0.5f, 0.2f), 16f);
+        sprite.name = texture.name;
+        sprite.hideFlags = HideFlags.HideAndDontSave;
+        return sprite;
     }
 
     private static Sprite CreateSwordSprite()
@@ -350,16 +518,13 @@ public class ZeldaAttackHitbox : MonoBehaviour
 
     private static void CreateSprites()
     {
-        if (boxSprite != null && shockwaveSprite != null && swordSprite != null)
+        if (boxSprite != null && shockwaveSprite != null && swordSprite != null && hammerSprite != null)
         {
             return;
         }
 
         Texture2D boxTexture = new Texture2D(8, 8);
         boxTexture.filterMode = FilterMode.Point;
-
-        Texture2D hammerTexture = new Texture2D(12, 12);
-        hammerTexture.filterMode = FilterMode.Point;
 
         Texture2D rockTexture = new Texture2D(12, 12);
         rockTexture.filterMode = FilterMode.Point;
@@ -379,18 +544,6 @@ public class ZeldaAttackHitbox : MonoBehaviour
                 boxTexture.SetPixel(x, y, border ? white : clear);
             }
         }
-
-        for (int y = 0; y < 12; y++)
-        {
-            for (int x = 0; x < 12; x++)
-            {
-                hammerTexture.SetPixel(x, y, clear);
-            }
-        }
-
-        FillRect(hammerTexture, 2, 7, 8, 4, white);
-        FillRect(hammerTexture, 5, 2, 2, 6, white);
-        FillRect(hammerTexture, 5, 0, 2, 2, white);
 
         for (int y = 0; y < 12; y++)
         {
@@ -437,13 +590,12 @@ public class ZeldaAttackHitbox : MonoBehaviour
         }
 
         boxTexture.Apply();
-        hammerTexture.Apply();
         rockTexture.Apply();
         shockwaveTexture.Apply(false, true);
 
         boxSprite = Sprite.Create(boxTexture, new Rect(0, 0, 8, 8), new Vector2(0.5f, 0.5f), 8f);
         swordSprite = CreateSwordSprite();
-        hammerSprite = Sprite.Create(hammerTexture, new Rect(0, 0, 12, 12), new Vector2(0.5f, 0.2f), 12f);
+        hammerSprite = CreateHammerSprite();
         rockSprite = Sprite.Create(rockTexture, new Rect(0, 0, 12, 12), new Vector2(0.5f, 0.5f), 12f);
         shockwaveSprite = Sprite.Create(
             shockwaveTexture,

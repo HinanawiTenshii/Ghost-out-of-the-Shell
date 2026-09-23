@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="StairFloor.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Items\PuppetRemotePickupItem.cs;Assets\Scripts\Items\PuppetRemotePickupItemVisual.cs" />
+    <Compile Include="Assets\Scripts\Items\PuppetRemotePickupItem.cs;Assets\Scripts\Items\PuppetRemotePickupItemVisual.cs" />
+  </ItemGroup>
+</Project>

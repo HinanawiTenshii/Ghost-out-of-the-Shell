@@ -1,6 +1,6 @@
 # 极简几何树
 
-预制体：`Assets/Prefabs/Decorations/GeometricTree.prefab`，拖入场景即可使用，不替换原有 PixelTree。
+预制体：`Assets/Prefabs/Decorations/Plants/GeometricTree.prefab`，拖入场景即可使用，不替换原有 PixelTree。
 
 沿用极简煤油路灯的平面几何风格，树干宽从 0.22 增至 0.34（约加粗 55%）。树冠改为左右对称、宽高接近的八边形，顶端亮面收进轮廓，并增加左右对称的两块低对比叶簇切面。总计五块几何，仍无像素纹理、叶脉、树皮、描边、粒子或灯光。默认宽 1.9、高约 3.22 世界单位，原点在树干底部。
 

@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: StairFloor-Horizontal
+  m_Shader: {fileID: 4800000, guid: 8d88c060b75743c7a3b483d07e59c667, type: 3}
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _MainTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _Direction: 3
+    - _StepDepth: 0.6
+    - _RiserWidth: 0.12
+    - _EdgeWidth: 0.045
+    m_Colors:
+    - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _TreadColor: {r: 0.235, g: 0.255, b: 0.40, a: 1}
+    - _RiserColor: {r: 0.125, g: 0.15, b: 0.26, a: 1}
+    - _EdgeColor: {r: 0.345, g: 0.375, b: 0.52, a: 1}
+    - _GridOrigin: {r: 0, g: 0, b: 0, a: 0}

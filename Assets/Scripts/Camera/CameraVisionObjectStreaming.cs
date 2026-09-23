@@ -174,6 +174,7 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
 
         RefreshStreamingViewport();
         ProcessDiscoveryScan();
+        RestoreObjectsInRetentionRegions();
         RestoreObjectsNearViewport();
         QueueLeverHighlightsWhenSelectionStarts();
         UpdateStreaming();
@@ -504,6 +505,8 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
         Bounds worldBounds = TransformLocalBoundsToWorld(
             target,
             managedObject.localBounds);
+        if (CameraVisionStreamingRegion.Intersects(managedObject.gameObject.scene, worldBounds))
+            return true;
         if (circularVision != null &&
             circularVision.IsWorldBoundsInsideAdditionalReveal(worldBounds))
         {
@@ -593,6 +596,37 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
             managedObject.gameObject.SetActive(true);
             managedObject.suspendedByManager = false;
             managedObject.outsideTimer = 0f;
+        }
+    }
+
+    /// <summary>Used by newly placed/detonating bombs before sending gameplay events.</summary>
+    public static void RefreshRetentionRegionsNow()
+    {
+        // Only on placement/detonation, not a per-frame scene search.
+        foreach (CameraVisionObjectStreaming manager in FindObjectsOfType<CameraVisionObjectStreaming>())
+        {
+            if (manager.isActiveAndEnabled && manager.enableVisionStreaming)
+                manager.RestoreObjectsInRetentionRegions();
+        }
+    }
+
+    private void RestoreObjectsInRetentionRegions()
+    {
+        if (!CameraVisionStreamingRegion.HasActiveRegions) return;
+        for (int i = 0; i < managedObjects.Count; i++)
+        {
+            ManagedObject item = managedObjects[i];
+            if (item.gameObject == null) continue;
+            Bounds bounds = TransformLocalBoundsToWorld(item.gameObject.transform, item.localBounds);
+            if (!CameraVisionStreamingRegion.Intersects(item.gameObject.scene, bounds)) continue;
+
+            item.outsideTimer = 0f;
+            item.lastVisibilityCheckTime = Time.unscaledTime;
+            // Only undo THIS manager's suspension. Puzzle-disabled objects must
+            // stay disabled, and do not gain permanent exemption components.
+            if (!item.suspendedByManager) continue;
+            item.suspendedByManager = false;
+            item.gameObject.SetActive(true);
         }
     }
 

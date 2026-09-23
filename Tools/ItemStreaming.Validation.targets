@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="Merchant.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Camera\CameraVisionStreamingRegion.cs" />
+    <Compile Include="Assets\Scripts\Camera\CameraVisionStreamingRegion.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="WoodPlankFloor.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Rendering\StairFloorDirection.cs" />
+    <Compile Include="Assets\Scripts\Rendering\StairFloorDirection.cs" />
+  </ItemGroup>
+</Project>

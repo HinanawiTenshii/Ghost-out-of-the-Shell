@@ -663,6 +663,13 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     public bool TryPerformAttack(Vector2 requestedFacingDirection)
     {
+        return TryPerformAttack(requestedFacingDirection, null);
+    }
+
+    public ZeldaAttackHitbox.AttackOutcome LastAttackOutcome { get; private set; }
+
+    public bool TryPerformAttack(Vector2 requestedFacingDirection, UnityEngine.Object observedTarget)
+    {
         if (characterData == null || characterData.IsDead || characterData.IsGhostForm || !characterData.CanAttack || IsAttacking)
         {
             return false;
@@ -700,6 +707,7 @@ public class ZeldaFourWayMover : MonoBehaviour
         }
 
         GameObject attackObject = Instantiate(characterData.AttackPrefab, attackPosition, attackRotation);
+        LastAttackOutcome = null;
 
         ZeldaAttackHitbox hitbox = attackObject.GetComponent<ZeldaAttackHitbox>();
         if (hitbox != null)
@@ -713,6 +721,14 @@ public class ZeldaFourWayMover : MonoBehaviour
                 characterData.AttackVisualShape,
                 false,
                 true);
+            if (observedTarget != null)
+                LastAttackOutcome = hitbox.ObserveTarget(observedTarget);
+        }
+        else if (observedTarget != null)
+        {
+            // A visual-only attack cannot confirm contact; do not lock AI waiting for it.
+            LastAttackOutcome = new ZeldaAttackHitbox.AttackOutcome
+                { Target = observedTarget, IsComplete = true };
         }
 
         characterData.PlayAttackSound();

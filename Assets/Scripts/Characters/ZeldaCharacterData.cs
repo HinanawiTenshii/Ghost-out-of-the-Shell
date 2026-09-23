@@ -86,6 +86,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
     private int spentGrowthPossessionEnergy;
     private int spentBasePossessionEnergy;
     private bool soulDetonationDeath;
+    private bool silentGhostPossessionDeath;
     private int crystalEnergyThirds;
     public int CrystalEnergyThirds => crystalEnergyThirds;
     public int BaseMaxPossessionEnergy => possessionEnergy + spentBasePossessionEnergy + GetControlledGrowthPossessionEnergy();
@@ -124,6 +125,8 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
     private int appliedHealthBonus;
     private AudioSource attackAudioSource;
     private AudioSource damageAudioSource;
+    private static AudioClip defaultDamageSound;
+    private static AudioClip defaultDeathSound;
 
     public int Health => health;
     public int CurrentHealth => currentHealth;
@@ -241,10 +244,19 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
 
     private void PlayDamageSound()
     {
-        if (damageSound == null || damageSoundVolume <= 0f)
+        if (damageSoundVolume <= 0f)
         {
             return;
         }
+
+        AudioClip clip = damageSound;
+        if (clip == null)
+        {
+            if (defaultDamageSound == null)
+                defaultDamageSound = Resources.Load<AudioClip>("Audio/CharacterDamage");
+            clip = defaultDamageSound;
+        }
+        if (clip == null) return;
 
         EnsureDamageAudioSource();
         ConfigureAudioSource(
@@ -252,18 +264,32 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
             damageSoundPitch,
             damageSoundSpatialBlend,
             damageSoundMaxDistance);
-        damageAudioSource.PlayOneShot(damageSound, Mathf.Clamp01(damageSoundVolume));
+        damageAudioSource.PlayOneShot(clip, Mathf.Clamp01(damageSoundVolume));
     }
 
     private void PlayDeathSound()
     {
-        if (deathSound == null || deathSoundVolume <= 0f)
+        if (deathSoundVolume <= 0f)
         {
             return;
         }
 
+        AudioClip clip = deathSound;
+        if (clip == null)
+        {
+            if (defaultDeathSound == null)
+                defaultDeathSound = Resources.Load<AudioClip>("Audio/CharacterDeath");
+            clip = defaultDeathSound;
+        }
+        if (clip == null) return;
+
         GameObject soundObject = new GameObject(name + " Death Sound");
         soundObject.transform.position = transform.position;
+        // The voice survives body destruction, but belongs to the current level
+        // (including when the dying player is stored in DontDestroyOnLoad).
+        UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(
+            soundObject, ZeldaRuntimeRegistry.GetGameplayScene(gameObject));
+        soundObject.AddComponent<CameraVisionStreamingExempt>();
         AudioSource source = soundObject.AddComponent<AudioSource>();
         InitializeAudioSource(source);
         ConfigureAudioSource(
@@ -271,11 +297,11 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
             deathSoundPitch,
             deathSoundSpatialBlend,
             deathSoundMaxDistance);
-        source.clip = deathSound;
+        source.clip = clip;
         source.volume = Mathf.Clamp01(deathSoundVolume);
         source.Play();
 
-        float playbackDuration = deathSound.length /
+        float playbackDuration = clip.length /
             Mathf.Max(0.1f, Mathf.Abs(source.pitch));
         Destroy(soundObject, playbackDuration + 0.1f);
     }
@@ -450,6 +476,9 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
     /// </summary>
     public void DestroyAfterSuccessfulPossession()
     {
+        if (isDead) return;
+        // Transferring consciousness out of a ghost is not an audible death.
+        silentGhostPossessionDeath = IsGhostLike;
         Die();
     }
 
@@ -478,7 +507,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
 
     private void ApplyDamage(int damage, ZeldaCharacterData attacker, bool shared)
     {
-        if (damage <= 0 || currentHealth <= 0)
+        if (isDead || damage <= 0 || currentHealth <= 0)
         {
             return;
         }
@@ -499,7 +528,8 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
 
         currentHealth = Mathf.Max(0, currentHealth - resolvedDamage);
         ValuesChanged?.Invoke();
-        PlayDamageSound();
+        // A fatal hit is communicated by the death cue, not two simultaneous sounds.
+        if (currentHealth > 0) PlayDamageSound();
         if (damagedMover != null)
         {
             damagedMover.InterruptPossessionByDamage();
@@ -510,6 +540,9 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
         if (attacker != null)
         {
             BroadcastMessage("OnCharacterDamagedBy", attacker, SendMessageOptions.DontRequireReceiver);
+            // Dispatch before death/linked deaths remove the victim from the AI registry.
+            // Witnesses must not depend on a surviving victim's next AI update.
+            if (!shared) ZeldaCharacterAiBase.NotifyPlayerAttackWitnesses(attacker, this);
         }
 
         if (!shared) DominoSkillRuntime.ShareDamage(this, resolvedDamage, attacker);
@@ -641,7 +674,8 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
 
         isDead = true;
         DominoSkillRuntime.ShareDeath(this);
-        PlayDeathSound();
+        if (damageAudioSource != null) damageAudioSource.Stop();
+        if (!silentGhostPossessionDeath) PlayDeathSound();
         Debug.Log($"{name} died.", this);
         BroadcastMessage("OnCharacterDied", this, SendMessageOptions.DontRequireReceiver);
         if (!soulDetonationDeath) SpawnDeathExplosion();
@@ -715,11 +749,48 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
 
     private void SpawnDeathExplosion()
     {
+        if (deathExplosionDuration <= 0f || deathExplosionScale <= 0f) return;
+        // Prefer the actual body, not the disabled root sprite or child HUD/weapon sprites.
+        Transform visual = transform.Find(VisualObjectName);
+        SpriteRenderer bodyRenderer = visual != null ? visual.GetComponent<SpriteRenderer>() : null;
+        if (bodyRenderer == null || bodyRenderer.sprite == null) bodyRenderer = damageFeedbackRenderer;
+        if (bodyRenderer == null || bodyRenderer.sprite == null) bodyRenderer = GetComponent<SpriteRenderer>();
+
+        Vector3 center = transform.position;
+        float effectScale;
+        if (bodyRenderer != null && bodyRenderer.sprite != null)
+        {
+            Vector2 localSize = bodyRenderer.drawMode == SpriteDrawMode.Simple
+                ? (Vector2)bodyRenderer.sprite.bounds.size : bodyRenderer.size;
+            effectScale = CalculateDeathExplosionScale(localSize, bodyRenderer.transform.lossyScale, deathExplosionScale);
+            center = bodyRenderer.bounds.center;
+        }
+        else
+        {
+            Collider2D bodyCollider = GetComponent<Collider2D>();
+            effectScale = bodyCollider != null
+                ? CalculateDeathExplosionScale(bodyCollider.bounds.size, Vector3.one, deathExplosionScale)
+                : CalculateDeathExplosionScale(Vector2.one, transform.lossyScale, deathExplosionScale);
+            if (bodyCollider != null) center = bodyCollider.bounds.center;
+        }
         GameObject explosionObject = new GameObject($"{name} Death Explosion");
-        explosionObject.transform.position = transform.position;
+        UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(
+            explosionObject, ZeldaRuntimeRegistry.GetGameplayScene(gameObject));
+        explosionObject.AddComponent<CameraVisionStreamingExempt>();
+        explosionObject.transform.position = center;
 
         explosionObject.AddComponent<SpriteRenderer>();
         ZeldaDeathExplosionVisual explosion = explosionObject.AddComponent<ZeldaDeathExplosionVisual>();
-        explosion.Configure(deathExplosionDuration, deathExplosionScale, deathExplosionTint);
+        explosion.Configure(deathExplosionDuration, effectScale, deathExplosionTint,
+            bodyRenderer != null ? bodyRenderer.sortingLayerID : 0,
+            bodyRenderer != null ? bodyRenderer.sortingOrder + 2 : 4);
+    }
+
+    private static float CalculateDeathExplosionScale(Vector2 localSize, Vector3 worldScale, float effectMultiplier)
+    {
+        // Sprite dimensions already account for pixels-per-unit; include parent/instance scale.
+        // A one-world-unit body preserves the original authored effect scale. No camera/player input.
+        float diameter = Mathf.Max(Mathf.Abs(localSize.x * worldScale.x), Mathf.Abs(localSize.y * worldScale.y));
+        return diameter * Mathf.Max(0f, effectMultiplier);
     }
 }

@@ -3,7 +3,7 @@ $root = Split-Path $PSScriptRoot -Parent
 $prefab = Get-Content -Raw (Join-Path $root 'Assets/Prefabs/Decorations/DoubleDoorHinge.prefab')
 $source = Get-Content -Raw (Join-Path $root 'Assets/Scripts/Interaction/DoorHingeInteraction.cs')
 $anchors = @([regex]::Matches($prefab, '(?m)^--- !u!\d+ &(\d+)') | ForEach-Object { $_.Groups[1].Value })
-if ($anchors.Count -ne 21 -or ($anchors | Select-Object -Unique).Count -ne 21) { throw 'Unexpected or duplicate prefab objects.' }
+if ($anchors.Count -ne 33 -or ($anchors | Select-Object -Unique).Count -ne 33) { throw 'Unexpected or duplicate prefab objects (two handles per leaf).' }
 foreach ($ref in [regex]::Matches($prefab, '\{fileID: (\d+)\}')) {
     if ($ref.Groups[1].Value -ne '0' -and $ref.Groups[1].Value -notin $anchors) { throw "Dangling fileID: $($ref.Value)" }
 }

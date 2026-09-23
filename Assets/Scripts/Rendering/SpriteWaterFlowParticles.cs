@@ -6,6 +6,61 @@ using UnityEngine;
 [AddComponentMenu("Rendering/Sprite Water Flow Particles")]
 public sealed class SpriteWaterFlowParticles : MonoBehaviour
 {
+    [System.Serializable]
+    public sealed class StillWaterSettings
+    {
+        [Header("Ripples / 原地水纹")]
+        [Min(0f), Tooltip("每平方世界单位的同时存活水纹数，不受寿命设置影响。")]
+        public float density = 0.65f;
+        [Min(0.1f)] public float lifetime = 3.5f;
+        [Min(0.01f)] public float length = 0.48f;
+        [Min(0.01f), Tooltip("水纹绘制区域高度，实际亮纹比此值更细。")]
+        public float width = 0.18f;
+        [Range(0f, 2f), Tooltip("仅控制原地伸缩和明暗起伏，不产生定向流动。")]
+        public float animationSpeed = 0.3f;
+        public Color color = new Color(0.3f, 0.75f, 0.95f, 0.38f);
+        [Range(0f, 1f)] public float horizontalVisibilityBoost = 0.65f;
+        public int sortingOrderOffset = 1;
+        [Header("Surface And Budget / 轮廓与数量限制")]
+        public bool followSpriteShape = true;
+        public bool checkReadableAlpha = true;
+        [Range(0f, 1f)] public float alphaThreshold = 0.1f;
+        [Range(4, 512)] public int distributionCells = 64;
+        [Range(256, 16384)] public int particleLimit = 2048;
+    }
+
+    /// <summary>Configure a private helper for calm, surface-anchored water. Existing flow components never call this.</summary>
+    public void ConfigureStillWater(SpriteRenderer surface, StillWaterSettings settings)
+    {
+        if (settings == null) settings = new StillWaterSettings();
+        sourceRenderer = surface;
+        stationarySurface = true;
+        flowDirection = Vector2.right;
+        localDirection = false;
+        speed = 0f;
+        speedRandomness = 0f;
+        directionSpread = 0f;
+        currentSway = 0f;
+        lifetime = Mathf.Max(0.1f, settings.lifetime);
+        particlesPerSquareUnit = Mathf.Max(0f, settings.density) / lifetime;
+        ribbonDensityMultiplier = 1f;
+        particleSize = Mathf.Max(0.01f, settings.width);
+        particleLength = Mathf.Max(0.01f, settings.length) / particleSize;
+        ribbonLengthScale = ribbonWidthScale = 1f;
+        particleColor = settings.color;
+        shapeAnimationSpeed = Mathf.Clamp(settings.animationSpeed, 0f, 2f);
+        horizontalVisibilityBoost = Mathf.Clamp01(settings.horizontalVisibilityBoost);
+        sortingOrderOffset = settings.sortingOrderOffset;
+        followSpriteShape = settings.followSpriteShape;
+        checkReadableAlpha = settings.checkReadableAlpha;
+        alphaThreshold = Mathf.Clamp01(settings.alphaThreshold);
+        keepInsideSprite = true;
+        distributionCells = Mathf.Clamp(settings.distributionCells, 4, 512);
+        particleSafetyLimit = Mathf.Clamp(settings.particleLimit, 256, 16384);
+        maximumParticles = 128;
+        refreshRequired = true;
+    }
+
     [Header("Surface / 水流区域")]
     [SerializeField, Tooltip("留空时自动查找自身或子对象的 SpriteRenderer。")]
     private SpriteRenderer sourceRenderer;
@@ -76,6 +131,8 @@ public sealed class SpriteWaterFlowParticles : MonoBehaviour
     private float flowTime;
     private Vector4 uvOrigin, uvAxisX, uvAxisY;
     private bool hasSpriteUv;
+    private bool stationarySurface;
+    private Matrix4x4 previousSurfaceToWorld;
 
     private void OnEnable()
     {
@@ -174,6 +231,7 @@ public sealed class SpriteWaterFlowParticles : MonoBehaviour
         cachedSprite = sourceRenderer.sprite;
         cachedDrawMode = sourceRenderer.drawMode;
         surfaceBounds = bounds;
+        previousSurfaceToWorld = sourceRenderer.transform.localToWorldMatrix;
         vertices = cachedSprite.vertices;
         uvs = cachedSprite.uv;
         triangles = cachedSprite.triangles;
@@ -348,12 +406,17 @@ public sealed class SpriteWaterFlowParticles : MonoBehaviour
     {
         int count = particles.GetParticles(buffer);
         int active = 0;
+        Matrix4x4 surfaceToWorld = sourceRenderer.transform.localToWorldMatrix;
+        Matrix4x4 surfaceDelta = stationarySurface
+            ? surfaceToWorld * previousSurfaceToWorld.inverse : Matrix4x4.identity;
         Vector3 forward = WorldFlowDirection();
         Vector3 sideways = new Vector3(-forward.y, forward.x, 0f);
         float rippleRotation = -Mathf.Atan2(forward.y, forward.x) * Mathf.Rad2Deg;
         for (int i = 0; i < count; i++)
         {
             if (buffer[i].remainingLifetime <= 0f) continue;
+            // Still water belongs to its surface: moving/scaling a pool never leaves ripples behind.
+            if (stationarySurface) buffer[i].position = surfaceDelta.MultiplyPoint3x4(buffer[i].position);
             if (keepInsideSprite && !IsInsideSurface(sourceRenderer.transform.InverseTransformPoint(buffer[i].position)))
             {
                 // Re-enter at the opposite edge without restarting the fade/lifetime.
@@ -390,6 +453,7 @@ public sealed class SpriteWaterFlowParticles : MonoBehaviour
             buffer[active++] = buffer[i];
         }
         if (count > 0) particles.SetParticles(buffer, active);
+        previousSurfaceToWorld = surfaceToWorld;
         return active;
     }
 

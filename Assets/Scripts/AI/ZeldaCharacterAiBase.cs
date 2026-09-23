@@ -59,6 +59,10 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     [SerializeField, Min(0f)] private float attackDistance = 1.1f;
     [SerializeField, Range(0f, 180f)] private float attackFacingTolerance = 20f;
     [SerializeField, Min(0f)] private float attackCooldown = 0.35f;
+    [Tooltip("Hostile attack initiation radius multiplier; does not enlarge damage hitboxes.")]
+    [SerializeField, Min(1f)] private float hostileAttackStartRangeMultiplier = 1.4f;
+    [Tooltip("Minimum pursuit time after a missed attack before trying again.")]
+    [SerializeField, Min(0.05f)] private float missedAttackPursuitDuration = 0.22f;
     [SerializeField, Min(0f)] private float regularHostileLoseSightDelay = 7f;
     [SerializeField] private LayerMask solidCollisionLayers = ~0;
     [SerializeField, Min(0f)] private float collisionSkinWidth = 0.01f;
@@ -102,6 +106,14 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     [SerializeField] private Vector2 stateIndicatorOffset = new Vector2(0f, 1.15f);
     [SerializeField, Min(0.1f)] private float stateIndicatorScale = 0.65f;
     [SerializeField, Min(0f)] private float hostileIndicatorDuration = 0.7f;
+
+    [Header("Awareness Sound / 发现提示音")]
+    [SerializeField] private bool enableAwarenessSound = true;
+    [Tooltip("为空时使用 Resources/Audio/NpcAwarenessAlert。可指定其他音效替换默认测试素材。")]
+    [SerializeField] private AudioClip awarenessSound;
+    [SerializeField, Range(0f, 1f)] private float awarenessSoundVolume = 0.55f;
+    [Tooltip("按与玩家的平面距离衰减，避免远处 NPC 的状态变化干扰提示。")]
+    [SerializeField, Min(0.1f)] private float awarenessSoundMaxDistance = 18f;
 
     [Header("Possession Lock")]
     [SerializeField, Min(0f)] private float possessionShakeAmount = 0.025f;
@@ -217,11 +229,18 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     private bool hasBuiltVisionMesh;
     private ZeldaAiStateIndicator stateIndicator;
     private ZeldaAiState currentState = ZeldaAiState.Idle;
+    private AudioSource awarenessAudioSource;
+    private static AudioClip defaultAwarenessSound;
     private ZeldaFourWayMover targetMover;
     private Vector2 facingDirection = Vector2.down;
     private Vector2 moveDirection;
     private Vector2 lastKnownTargetPosition;
     private float attackCooldownTimer;
+    private Object attackCycleTarget;
+    private ZeldaAttackHitbox.AttackOutcome pendingAttackOutcome;
+    private bool attackChainConnected;
+    private bool pursueAfterMiss;
+    private float missedAttackPursuitTimer;
     private Vector2 avoidanceDirection;
     private float avoidanceDirectionTimer;
     private bool isFollowingObstacle;
@@ -337,13 +356,13 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     private float royalCommandRemaining;
     private ZeldaPossessionProgressBar royalCommandBar;
     public bool IsIgnoringPlayer => royalCommandRemaining > 0f;
-    public bool CanReceiveRoyalCommand(ZeldaFourWayMover player)
+    public virtual bool CanReceiveRoyalCommand(ZeldaFourWayMover player)
     {
         return isActiveAndEnabled && characterData != null && !characterData.IsDead &&
             !mover.isActiveAndEnabled && targetMover == player &&
             (currentState == ZeldaAiState.Alert || currentState == ZeldaAiState.Hostile);
     }
-    public void ReceiveRoyalCommand()
+    public virtual void ReceiveRoyalCommand()
     {
         mover.CancelAttackForStun();
         rb.velocity = Vector2.zero;
@@ -425,8 +444,9 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         public Vector2 facing, home, homeFacing, lastKnownTarget, searchCenter, searchWaypoint;
         public float suspicion, warning, lostSight, searchTime, attackCooldown;
         public bool targetsPlayer, retaliation, regular, untilDeath, retained;
+        public bool automatonHostilityActivated;
     }
-    public SaveState CaptureSaveState()
+    public virtual SaveState CaptureSaveState()
     {
         return new SaveState {
             state = currentState, facing = facingDirection, home = initialScenePosition,
@@ -441,12 +461,13 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             untilDeath = hostileUntilTargetDeath, retained = retainLoadedUntilIdle
         };
     }
-    public void ApplySaveState(SaveState state)
+    public virtual void ApplySaveState(SaveState state)
     {
         if (state == null) return;
+        ResetHostileAttackCycle();
         royalCommandRemaining = Mathf.Clamp(state.royalCommandRemaining, 0f, 5f);
         if (IsStunned) currentState = stateBeforeStun;
-        ChangeState(state.state);
+        ChangeState(state.state, false);
         stateBeforeStun = state.stateBeforeStun == ZeldaAiState.Stunned ? ZeldaAiState.Idle : state.stateBeforeStun;
         stunRemaining = Mathf.Max(0f, state.stunRemaining);
         facingDirection = state.facing; initialScenePosition = state.home;
@@ -481,6 +502,58 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     protected virtual float AiMovementSpeedMultiplier => 1f;
     protected virtual bool EnforcesPermissionAreas => true;
     protected virtual int MinimumPermissionViolationDifference => 1;
+    public virtual bool IsUniversalThreat => false;
+    protected virtual bool RemainsStationary => false;
+    // Derived NPCs may tint vision without changing perception or other characters.
+    protected virtual Color VisionVisualColor => visionColor;
+    protected void ConfigureOmnidirectionalVision()
+    {
+        visionAngle = 360f;
+        peripheralVisionAngle = 360f;
+        peripheralVisionRadius = visionRadius;
+    }
+    private ZeldaCharacterAiBase universalThreatTarget;
+
+    // NPCs have disabled player-movement components, but are still valid targets.
+    protected bool CanSeeCharacter(ZeldaFourWayMover candidate)
+    {
+        if (candidate == null || candidate.gameObject == gameObject ||
+            !candidate.gameObject.activeInHierarchy ||
+            ZeldaRuntimeRegistry.GetGameplayScene(candidate.gameObject) !=
+                ZeldaRuntimeRegistry.GetGameplayScene(gameObject)) return false;
+        ZeldaCharacterData data = candidate.GetComponent<ZeldaCharacterData>();
+        return data != null && !data.IsDead && data.CanBeDetectedByAi &&
+            CanSeeWorldPoint(candidate.transform.position, candidate.transform);
+    }
+
+    private bool TryRespondToUniversalThreat()
+    {
+        ZeldaCharacterAiBase nearest = null;
+        float nearestDistance = float.MaxValue;
+        foreach (AutomatonCharacterAi threat in AutomatonCharacterAi.Instances)
+        {
+            if (threat == null || threat == this || !threat.IsUniversalThreat) continue;
+            ZeldaFourWayMover candidate = threat.GetComponent<ZeldaFourWayMover>();
+            if (!CanSeeCharacter(candidate)) continue;
+            if (threat == universalThreatTarget) { nearest = threat; break; }
+            float distance = ((Vector2)threat.transform.position - AiPosition).sqrMagnitude;
+            if (distance < nearestDistance) { nearest = threat; nearestDistance = distance; }
+        }
+        if (nearest != null)
+        {
+            royalCommandRemaining = 0f;
+            universalThreatTarget = nearest;
+            BeginTemporaryHostility(nearest.GetComponent<ZeldaFourWayMover>(), true);
+            return true;
+        }
+        if (universalThreatTarget != null)
+        {
+            universalThreatTarget = null;
+            mover.CancelAttackForStun();
+            ResetPermissionResponse();
+        }
+        return false;
+    }
 
     /// <summary>
     /// Applies the surprise-hit bonus before this AI has become suspicious,
@@ -736,7 +809,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
     /// a transient response state to the position and facing captured by its
     /// scene-authored instance in Awake.
     /// </summary>
-    public void RecoverAfterPersistentSceneReturn(ZeldaAiState capturedState)
+    public virtual void RecoverAfterPersistentSceneReturn(ZeldaAiState capturedState)
     {
         if (!isActiveAndEnabled ||
             mover == null ||
@@ -813,6 +886,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void OnEnable()
     {
+        ResetHostileAttackCycle();
         // Normal activation initializes AI afresh; save restoration reapplies
         // the suspended state and remaining duration through ApplySaveState.
         if (IsStunned) currentState = stateBeforeStun;
@@ -849,6 +923,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void OnDisable()
     {
+        ResetHostileAttackCycle();
         if (royalCommandBar != null) royalCommandBar.Hide();
         moveDirection = Vector2.zero;
         SetPossessionLock(false);
@@ -893,7 +968,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         mover.AdvanceExternalAttackTimer(Time.deltaTime);
         UpdateTargetAndState(Time.deltaTime);
         TickCurrentState(Time.deltaTime);
-        moveDirection = ApplyCharacterSeparation(moveDirection);
+        moveDirection = RemainsStationary ? Vector2.zero : ApplyCharacterSeparation(moveDirection);
         UpdateFacingFromMovement();
         UpdateCharacterVisual();
         UpdateStateIndicator();
@@ -902,6 +977,13 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void FixedUpdate()
     {
+        if (RemainsStationary)
+        {
+            rb.velocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+            previousFixedPosition = rb.position;
+            return;
+        }
         if (IsStunned)
         {
             rb.velocity = Vector2.zero;
@@ -1372,68 +1454,109 @@ public class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void TickHostile(float deltaTime)
     {
+        Object combatTarget;
+        Object followTarget;
+        Vector2 targetCenter;
         if (hostileCardboardBox != null)
         {
-            if (hostileCardboardBox.IsDestroyed ||
-                !hostileCardboardBox.isActiveAndEnabled)
+            if (hostileCardboardBox.IsDestroyed || !hostileCardboardBox.isActiveAndEnabled)
             {
                 hostileCardboardBox = null;
+                ResetHostileAttackCycle();
                 moveDirection = Vector2.zero;
                 return;
             }
+            combatTarget = hostileCardboardBox;
+            followTarget = hostileCardboardBox;
+            targetCenter = hostileCardboardBox.WorldCenter;
+        }
+        else
+        {
+            if (targetMover == null)
+            {
+                ResetHostileAttackCycle();
+                moveDirection = Vector2.zero;
+                return;
+            }
+            combatTarget = targetMover.GetComponent<ZeldaCharacterData>();
+            followTarget = targetMover;
+            targetCenter = targetMover.transform.position;
+        }
 
-            Vector2 toBox = hostileCardboardBox.WorldCenter - rb.position;
-            float boxDistance = toBox.magnitude;
-            SetFacingDirection(toBox);
-            if (boxDistance <= attackDistance &&
-                Vector2.Angle(facingDirection, toBox) <= attackFacingTolerance)
+        if (attackCycleTarget != combatTarget)
+        {
+            ResetHostileAttackCycle();
+            attackCycleTarget = combatTarget;
+        }
+
+        Vector2 toTarget = targetCenter - rb.position;
+        SetFacingDirection(toTarget);
+        if (!AdvanceHostileAttackCycle(deltaTime))
+        {
+            // Wait for the hitbox's whole lifetime, not just an early empty overlap.
+            moveDirection = Vector2.zero;
+            return;
+        }
+
+        float startRange = attackDistance * Mathf.Max(1f, hostileAttackStartRangeMultiplier);
+        bool canAttempt = missedAttackPursuitTimer <= 0f &&
+            (attackChainConnected || toTarget.magnitude <= startRange) &&
+            Vector2.Angle(facingDirection, toTarget) <= attackFacingTolerance;
+        if (canAttempt && attackCooldownTimer <= 0f && characterData.CanAttack)
+        {
+            TryAttackTarget(toTarget);
+            if (pendingAttackOutcome != null)
             {
                 moveDirection = Vector2.zero;
-                TryAttackTarget(toBox);
                 return;
             }
-
-            float approachRadius = Mathf.Max(
-                gridWaypointTolerance,
-                attackDistance - gridWaypointTolerance);
-            Vector2 followPosition = ResolveSharedFollowPosition(
-                hostileCardboardBox,
-                hostileCardboardBox.WorldCenter,
-                approachRadius);
-            moveDirection = PlanDirectionTo(
-                followPosition,
-                gridWaypointTolerance);
-            return;
         }
 
-        if (targetMover == null)
+        if (attackChainConnected)
         {
+            // A confirmed hit holds this position through the normal cooldown.
+            // If the target escapes, the next swing misses and re-enables pursuit.
             moveDirection = Vector2.zero;
             return;
         }
 
-        Vector2 toTarget = (Vector2)targetMover.transform.position - rb.position;
-        float distance = toTarget.magnitude;
-        SetFacingDirection(toTarget);
+        // A miss must not stop again at the original attack-distance ring.
+        // Chase the live target center; existing navigation/collision/separation
+        // still prevent walking through walls or overlapping characters.
+        Vector2 followPosition = pursueAfterMiss
+            ? targetCenter
+            : ResolveSharedFollowPosition(followTarget, targetCenter,
+                Mathf.Max(gridWaypointTolerance, attackDistance - gridWaypointTolerance));
+        moveDirection = PlanDirectionTo(followPosition, gridWaypointTolerance);
+    }
 
-        if (distance <= attackDistance &&
-            Vector2.Angle(facingDirection, toTarget) <= attackFacingTolerance)
+    private bool AdvanceHostileAttackCycle(float deltaTime)
+    {
+        if (pendingAttackOutcome != null)
         {
-            moveDirection = Vector2.zero;
-            TryAttackTarget(toTarget);
-            return;
+            if (!pendingAttackOutcome.IsComplete) return false;
+            attackChainConnected = pendingAttackOutcome.HitTarget;
+            pursueAfterMiss = !attackChainConnected;
+            missedAttackPursuitTimer = pursueAfterMiss
+                ? Mathf.Max(0.05f, missedAttackPursuitDuration) : 0f;
+            pendingAttackOutcome = null;
+            InvalidateNavigationPlan();
         }
+        else
+        {
+            missedAttackPursuitTimer = Mathf.Max(0f,
+                missedAttackPursuitTimer - Mathf.Max(0f, deltaTime));
+        }
+        return true;
+    }
 
-        float hostileApproachRadius = Mathf.Max(
-            gridWaypointTolerance,
-            attackDistance - gridWaypointTolerance);
-        Vector2 hostileFollowPosition = ResolveSharedFollowPosition(
-            targetMover,
-            targetMover.transform.position,
-            hostileApproachRadius);
-        moveDirection = PlanDirectionTo(
-            hostileFollowPosition,
-            gridWaypointTolerance);
+    private void ResetHostileAttackCycle()
+    {
+        attackCycleTarget = null;
+        pendingAttackOutcome = null;
+        attackChainConnected = false;
+        pursueAfterMiss = false;
+        missedAttackPursuitTimer = 0f;
     }
 
     private Vector2 ResolveSharedFollowPosition(
@@ -1602,10 +1725,47 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             return;
         }
 
-        if (mover.TryPerformAttack(toTarget))
+        Object observedTarget = currentState == ZeldaAiState.Hostile ? attackCycleTarget : null;
+        if (mover.TryPerformAttack(toTarget, observedTarget))
         {
             attackCooldownTimer = Mathf.Max(attackCooldown, characterData.AttackDuration);
+            if (observedTarget != null) pendingAttackOutcome = mover.LastAttackOutcome;
         }
+    }
+
+    public static void NotifyPlayerAttackWitnesses(ZeldaCharacterData attacker, ZeldaCharacterData victim)
+    {
+        if (attacker == null || victim == null || attacker == victim || attacker.IsDead || attacker.IsGhostLike)
+            return;
+        ZeldaFourWayMover player = attacker.GetComponent<ZeldaFourWayMover>();
+        if (player == null || !player.isActiveAndEnabled || ZeldaRuntimeRegistry.GetControlledMover() != player)
+            return;
+        if (ZeldaRuntimeRegistry.GetGameplayScene(attacker.gameObject) !=
+            ZeldaRuntimeRegistry.GetGameplayScene(victim.gameObject)) return;
+
+        foreach (ZeldaCharacterAiBase witness in ZeldaRuntimeRegistry.AiCharacters)
+        {
+            if (witness != null) witness.OnPlayerAttackedCharacter(attacker, victim);
+        }
+    }
+
+    /// <summary>Immediate witness response independent of whether the victim survives this hit.</summary>
+    public virtual void OnPlayerAttackedCharacter(ZeldaCharacterData attacker, ZeldaCharacterData victim)
+    {
+        if (!isActiveAndEnabled || IsIgnoringPlayer || IsStunned || possessionLocked ||
+            characterData == null || characterData.IsDead || mover == null || mover.isActiveAndEnabled ||
+            attacker == null || victim == null || attacker == victim ||
+            characterData == victim || characterData == attacker || attacker.IsDead || attacker.IsGhostLike)
+            return;
+        if (ZeldaRuntimeRegistry.GetGameplayScene(gameObject) != ZeldaRuntimeRegistry.GetGameplayScene(attacker.gameObject) ||
+            ZeldaRuntimeRegistry.GetGameplayScene(gameObject) != ZeldaRuntimeRegistry.GetGameplayScene(victim.gameObject))
+            return;
+        ZeldaFourWayMover player = attacker.GetComponent<ZeldaFourWayMover>();
+        if (player == null || ZeldaRuntimeRegistry.GetControlledMover() != player || !CanSeePlayer(player)) return;
+
+        // Match existing hostility propagation's perception and pursuit rules.
+        // Do not restart an already active attack cycle on every player hit.
+        if (!IsActivelyHostileTo(player)) BeginTemporaryHostility(player, false);
     }
 
     public virtual void OnCharacterDamagedBy(ZeldaCharacterData attacker)
@@ -1752,7 +1912,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         hasPossessionVisualBase = false;
     }
 
-    protected void ChangeState(ZeldaAiState newState)
+    protected virtual void ChangeState(ZeldaAiState newState, bool playAwarenessCue = true)
     {
         if (IsIgnoringPlayer && (newState == ZeldaAiState.Suspicious || newState == ZeldaAiState.Alert || newState == ZeldaAiState.Hostile)) return;
         if (IsStunned) return;
@@ -1762,6 +1922,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         }
 
         ZeldaAiState previousState = currentState;
+        ResetHostileAttackCycle();
         OnStateExited(previousState, newState);
         currentState = newState;
         if (newState == ZeldaAiState.Hostile)
@@ -1779,6 +1940,54 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             hostileIndicatorTimer = hostileIndicatorDuration;
         }
         OnStateEntered(previousState, newState);
+        if (playAwarenessCue && ShouldPlayAwarenessCue(previousState, newState))
+            PlayAwarenessCue();
+    }
+
+    private static bool ShouldPlayAwarenessCue(ZeldaAiState previousState, ZeldaAiState newState)
+    {
+        // Repeated AI ticks are not entries. Alert -> Hostile is the same
+        // detection escalating, so it must not produce a second alert sound.
+        return previousState != newState &&
+            (newState == ZeldaAiState.Alert || newState == ZeldaAiState.Hostile) &&
+            !(previousState == ZeldaAiState.Alert && newState == ZeldaAiState.Hostile);
+    }
+
+    private void PlayAwarenessCue()
+    {
+        if (!enableAwarenessSound || awarenessSoundVolume <= 0f || !isActiveAndEnabled ||
+            !Application.isPlaying || GameSaveSystem.IsLoading)
+            return;
+
+        var player = ZeldaRuntimeRegistry.GetControlledMover();
+        if (player == null || ZeldaRuntimeRegistry.GetGameplayScene(player.gameObject) !=
+            ZeldaRuntimeRegistry.GetGameplayScene(gameObject)) return;
+
+        float distance = Vector2.Distance(transform.position, player.transform.position);
+        float range = Mathf.Max(0.1f, awarenessSoundMaxDistance);
+        if (distance >= range) return;
+        // Full clarity nearby, gentle fade in the outer third. Use 2D playback
+        // so camera Z/zoom cannot accidentally muffle this gameplay cue.
+        float gain = Mathf.Clamp01((range - distance) / (range * 0.35f));
+        AudioClip clip = awarenessSound;
+        if (clip == null)
+        {
+            if (defaultAwarenessSound == null)
+                defaultAwarenessSound = Resources.Load<AudioClip>("Audio/NpcAwarenessAlert");
+            clip = defaultAwarenessSound;
+        }
+        if (clip == null) return;
+
+        if (awarenessAudioSource == null)
+        {
+            awarenessAudioSource = gameObject.AddComponent<AudioSource>();
+            awarenessAudioSource.playOnAwake = false;
+            awarenessAudioSource.loop = false;
+            awarenessAudioSource.spatialBlend = 0f;
+            awarenessAudioSource.dopplerLevel = 0f;
+            awarenessAudioSource.priority = 96;
+        }
+        awarenessAudioSource.PlayOneShot(clip, Mathf.Clamp01(awarenessSoundVolume) * gain);
     }
 
     protected void SetFacingDirection(Vector2 direction)
@@ -1797,8 +2006,9 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         }
     }
 
-    private void UpdateTargetAndState(float deltaTime)
+    protected virtual void UpdateTargetAndState(float deltaTime)
     {
+        if (TryRespondToUniversalThreat()) return;
         if (IsIgnoringPlayer) return;
         ZeldaFourWayMover visiblePossessingPlayer = FindVisiblePossessingPlayer();
         if (visiblePossessingPlayer != null)
@@ -2077,9 +2287,9 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         return false;
     }
 
-    private void BeginTemporaryHostility(ZeldaFourWayMover hostileTarget, bool allowGhostTarget)
+    protected void BeginTemporaryHostility(ZeldaFourWayMover hostileTarget, bool allowGhostTarget)
     {
-        if (hostileTarget == null || !hostileTarget.isActiveAndEnabled)
+        if (hostileTarget == null || !hostileTarget.gameObject.activeInHierarchy)
         {
             return;
         }
@@ -2387,7 +2597,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         return targetData != null && !targetData.IsDead;
     }
 
-    private void ResetPermissionResponse()
+    protected void ResetPermissionResponse()
     {
         targetMover = null;
         activePermissionArea = null;
@@ -2854,7 +3064,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         return closest;
     }
 
-    private bool CanSeeWorldPoint(Vector2 worldPoint, Transform target)
+    protected bool CanSeeWorldPoint(Vector2 worldPoint, Transform target)
     {
         Vector2 origin = rb.position;
         Vector2 toTarget = worldPoint - origin;
@@ -4840,7 +5050,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         visionMesh.MarkDynamic();
         filter.sharedMesh = visionMesh;
         visionMaterial = new Material(Shader.Find("Sprites/Default"));
-        visionMaterial.color = visionColor;
+        visionMaterial.color = VisionVisualColor;
         visionRenderer.sharedMaterial = visionMaterial;
         visionRenderer.sortingOrder = 0;
     }
@@ -4935,7 +5145,7 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             visionMesh.triangles = visionTriangles;
         }
         visionMesh.RecalculateBounds();
-        visionMaterial.color = visionColor;
+        visionMaterial.color = VisionVisualColor;
     }
 
     private bool EnsureVisionMeshBuffers(int rayCount)
@@ -5146,6 +5356,8 @@ public class ZeldaCharacterAiBase : MonoBehaviour
             Mathf.Max(0f, cardboardBoxSightMemoryDuration);
         attackDistance = Mathf.Max(0f, attackDistance);
         attackCooldown = Mathf.Max(0f, attackCooldown);
+        hostileAttackStartRangeMultiplier = Mathf.Max(1f, hostileAttackStartRangeMultiplier);
+        missedAttackPursuitDuration = Mathf.Max(0.05f, missedAttackPursuitDuration);
         regularHostileLoseSightDelay = Mathf.Max(0f, regularHostileLoseSightDelay);
         searchDuration = Mathf.Max(0f, searchDuration);
         searchRadius = Mathf.Max(0.1f, searchRadius);
@@ -5179,6 +5391,8 @@ public class ZeldaCharacterAiBase : MonoBehaviour
         suspicionIncreasePerSecond = Mathf.Max(0f, suspicionIncreasePerSecond);
         suspicionDecreasePerSecond = Mathf.Max(0f, suspicionDecreasePerSecond);
         hostileIndicatorDuration = Mathf.Max(0f, hostileIndicatorDuration);
+        awarenessSoundVolume = Mathf.Clamp01(awarenessSoundVolume);
+        awarenessSoundMaxDistance = Mathf.Max(0.1f, awarenessSoundMaxDistance);
         stateIndicatorScale = Mathf.Max(0.1f, stateIndicatorScale);
         possessionShakeAmount = Mathf.Max(0f, possessionShakeAmount);
         possessionShakeSpeed = Mathf.Max(0f, possessionShakeSpeed);

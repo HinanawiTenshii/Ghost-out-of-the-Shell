@@ -1,0 +1,129 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &864100000000000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 864100000000000002}
+  - component: {fileID: 864100000000000003}
+  - component: {fileID: 864100000000000004}
+  m_Layer: 0
+  m_Name: Table-QuarterArc
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &864100000000000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 864100000000000001}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!60 &864100000000000003
+PolygonCollider2D:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 864100000000000001}
+  m_Enabled: 1
+  m_Density: 1
+  m_Material: {fileID: 0}
+  m_IsTrigger: 0
+  m_UsedByEffector: 0
+  m_UsedByComposite: 0
+  m_Offset: {x: 0, y: 0}
+  m_Points:
+    m_Paths:
+    - - {x: 1.6, y: 0}
+      - {x: 1.5965743, y: 0.104645}
+      - {x: 1.5863118, y: 0.2088419}
+      - {x: 1.5692564, y: 0.3121445}
+      - {x: 1.5454813, y: 0.4141105}
+      - {x: 1.5150882, y: 0.5143031}
+      - {x: 1.4782073, y: 0.6122935}
+      - {x: 1.4349964, y: 0.7076619}
+      - {x: 1.3856406, y: 0.8}
+      - {x: 1.3303514, y: 0.8889124}
+      - {x: 1.2693653, y: 0.9740183}
+      - {x: 1.2029437, y: 1.0549533}
+      - {x: 1.1313708, y: 1.1313708}
+      - {x: 1.0549533, y: 1.2029437}
+      - {x: 0.9740183, y: 1.2693653}
+      - {x: 0.8889124, y: 1.3303514}
+      - {x: 0.8, y: 1.3856406}
+      - {x: 0.7076619, y: 1.4349964}
+      - {x: 0.6122935, y: 1.4782073}
+      - {x: 0.5143031, y: 1.5150882}
+      - {x: 0.4141105, y: 1.5454813}
+      - {x: 0.3121445, y: 1.5692564}
+      - {x: 0.2088419, y: 1.5863118}
+      - {x: 0.104645, y: 1.5965743}
+      - {x: 0, y: 1.6}
+      - {x: 0, y: 0.95}
+      - {x: 0.062133, y: 0.947966}
+      - {x: 0.1239999, y: 0.9418726}
+      - {x: 0.1853358, y: 0.931746}
+      - {x: 0.2458781, y: 0.9176295}
+      - {x: 0.3053675, y: 0.8995836}
+      - {x: 0.3635493, y: 0.8776856}
+      - {x: 0.4201743, y: 0.8520291}
+      - {x: 0.475, y: 0.8227241}
+      - {x: 0.5277917, y: 0.7898961}
+      - {x: 0.5783234, y: 0.7536857}
+      - {x: 0.6263785, y: 0.7142478}
+      - {x: 0.6717514, y: 0.6717514}
+      - {x: 0.7142478, y: 0.6263785}
+      - {x: 0.7536857, y: 0.5783234}
+      - {x: 0.7898961, y: 0.5277917}
+      - {x: 0.8227241, y: 0.475}
+      - {x: 0.8520291, y: 0.4201743}
+      - {x: 0.8776856, y: 0.3635493}
+      - {x: 0.8995836, y: 0.3053675}
+      - {x: 0.9176295, y: 0.2458781}
+      - {x: 0.931746, y: 0.1853358}
+      - {x: 0.9418726, y: 0.1239999}
+      - {x: 0.947966, y: 0.062133}
+      - {x: 0.95, y: 0}
+  m_UseDelaunayMesh: 0
+--- !u!114 &864100000000000004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 864100000000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f15ea45f45b74dcc9bc01f2cbdc82811, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  shape: 1
+  radius: 1.6
+  arcWidth: 0.65
+  startAngle: 0
+  curveSegments: 24
+  rimWidth: 0.08
+  thickness: 0.06
+  woodColor: {r: 0.52, g: 0.28, b: 0.14, a: 1}
+  edgeColor: {r: 0.38, g: 0.2, b: 0.11, a: 1}
+  surfaceColor: {r: 0.22, g: 0.57, b: 0.56, a: 1}
+  insetEdgeColor: {r: 0.33, g: 0.67, b: 0.63, a: 1}
+  solid: 1
+  sortingOrder: -3
+  sortingLayerName: Default
+  sourceMaterial: {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}

@@ -60,6 +60,7 @@ public abstract class ZeldaCharacterCommonData : MonoBehaviour
     }
     [Header("Death Feedback / 死亡表现")]
     [SerializeField] protected float deathExplosionDuration = 0.35f;
+    [Tooltip("死亡爆散相对死者身体最大世界尺寸的倍率，不使用当前控制角色或摄像机的尺寸。")]
     [SerializeField] protected float deathExplosionScale = 1.9f;
     [SerializeField] protected Color deathExplosionTint = new Color(1f, 0.65f, 0.12f, 1f);
     [Header("Damage Feedback / 受击表现")]
@@ -74,12 +75,14 @@ public abstract class ZeldaCharacterCommonData : MonoBehaviour
     [SerializeField, Range(0f, 1f)] protected float attackSoundSpatialBlend = 0.75f;
     [SerializeField, Min(0.01f)] protected float attackSoundMaxDistance = 16f;
     [Header("Damage Audio")]
+    [Tooltip("为空时使用项目默认 8-bit 受击音效；音量设为 0 可静音。")]
     [SerializeField] protected AudioClip damageSound;
     [SerializeField, Range(0f, 1f)] protected float damageSoundVolume = 1f;
     [SerializeField, Range(0.1f, 3f)] protected float damageSoundPitch = 1f;
     [SerializeField, Range(0f, 1f)] protected float damageSoundSpatialBlend = 0.75f;
     [SerializeField, Min(0.01f)] protected float damageSoundMaxDistance = 16f;
     [Header("Death Audio")]
+    [Tooltip("为空时使用项目默认 8-bit 死亡音效；音量设为 0 可静音。")]
     [SerializeField] protected AudioClip deathSound;
     [SerializeField, Range(0f, 1f)] protected float deathSoundVolume = 1f;
     [SerializeField, Range(0.1f, 3f)] protected float deathSoundPitch = 1f;

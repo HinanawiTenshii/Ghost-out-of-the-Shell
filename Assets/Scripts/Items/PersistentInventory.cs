@@ -22,6 +22,7 @@ public sealed class PersistentInventory : MonoBehaviour
         public Color visualColor;
         public bool hasStoredCharge;
         public float storedCharge;
+        public string itemState;
     }
 
     [Serializable]
@@ -43,6 +44,7 @@ public sealed class PersistentInventory : MonoBehaviour
         [SerializeField] private Color visualColor = Color.white;
         [SerializeField] private bool hasStoredCharge;
         [SerializeField] private float storedCharge;
+        [SerializeField] private string itemState = string.Empty;
 
         public string ItemId => itemId;
         public string ItemName => itemName;
@@ -53,6 +55,7 @@ public sealed class PersistentInventory : MonoBehaviour
         public Color VisualColor => visualColor;
         public bool HasStoredCharge => hasStoredCharge;
         public float StoredCharge => storedCharge;
+        public string ItemState => itemState ?? string.Empty;
         public bool IsEmpty => string.IsNullOrEmpty(itemId) || quantity <= 0;
 
         internal void Set(
@@ -64,7 +67,8 @@ public sealed class PersistentInventory : MonoBehaviour
             bool newHasVisualColor = false,
             Color newVisualColor = default(Color),
             bool newHasStoredCharge = false,
-            float newStoredCharge = 0f)
+            float newStoredCharge = 0f,
+            string newItemState = "")
         {
             itemId = newQuantity > 0 && !string.IsNullOrWhiteSpace(newItemId)
                 ? newItemId.Trim()
@@ -86,6 +90,7 @@ public sealed class PersistentInventory : MonoBehaviour
             storedCharge = hasStoredCharge
                 ? Mathf.Max(0f, newStoredCharge)
                 : 0f;
+            itemState = string.IsNullOrEmpty(itemId) ? string.Empty : (newItemState ?? string.Empty);
         }
 
         internal void Clear()
@@ -99,6 +104,7 @@ public sealed class PersistentInventory : MonoBehaviour
             visualColor = Color.white;
             hasStoredCharge = false;
             storedCharge = 0f;
+            itemState = string.Empty;
         }
     }
 
@@ -144,7 +150,8 @@ public sealed class PersistentInventory : MonoBehaviour
                 hasVisualColor = slots[i].HasVisualColor,
                 visualColor = slots[i].VisualColor,
                 hasStoredCharge = slots[i].HasStoredCharge,
-                storedCharge = slots[i].StoredCharge
+                storedCharge = slots[i].StoredCharge,
+                itemState = slots[i].ItemState
             };
         }
 
@@ -172,7 +179,8 @@ public sealed class PersistentInventory : MonoBehaviour
                     savedSlot.hasVisualColor,
                     savedSlot.visualColor,
                     savedSlot.hasStoredCharge,
-                    savedSlot.storedCharge);
+                    savedSlot.storedCharge,
+                    savedSlot.itemState);
             }
             else
             {
@@ -404,7 +412,8 @@ public sealed class PersistentInventory : MonoBehaviour
         bool hasVisualColor = false,
         Color visualColor = default(Color),
         bool hasStoredCharge = false,
-        float storedCharge = 0f)
+        float storedCharge = 0f,
+        string itemState = "")
     {
         if (string.IsNullOrWhiteSpace(itemId) ||
             string.IsNullOrWhiteSpace(itemInstanceId) ||
@@ -433,7 +442,8 @@ public sealed class PersistentInventory : MonoBehaviour
                     hasVisualColor,
                     visualColor,
                     hasStoredCharge,
-                    storedCharge);
+                    storedCharge,
+                    itemState);
                 NotifyChanged();
                 SelectSlot(i);
                 return true;
@@ -569,6 +579,11 @@ public sealed class PersistentInventory : MonoBehaviour
     {
         ZeldaFourWayMover controlledMover =
             ZeldaRuntimeRegistry.GetControlledMover();
+        Slot placementSlot = GetSlot(SelectedSlotIndex);
+        // Character-items have identical R/Q semantics, even beside/inside a box.
+        if (placementSlot != null && !placementSlot.IsEmpty &&
+            ResolveItemPrefab(placementSlot.ItemId)?.UsePlacesInWorld == true)
+            return TryDropSelectedItem();
         if (controlledMover != null &&
             controlledMover.ActiveCardboardBox != null)
         {
@@ -631,6 +646,13 @@ public sealed class PersistentInventory : MonoBehaviour
         runtimeItem.ApplyInventoryCharge(
             slot.HasStoredCharge,
             slot.StoredCharge);
+        try { runtimeItem.ApplyInventoryState(slot.ItemState); }
+        catch (Exception exception)
+        {
+            Destroy(runtimeItem.gameObject);
+            Debug.LogWarning("Could not restore item state: " + exception.Message, this);
+            return false;
+        }
         bool consumed = runtimeItem.ExecuteUse(user);
         if (!consumed)
         {
@@ -662,10 +684,17 @@ public sealed class PersistentInventory : MonoBehaviour
         string droppedItemName = slot.ItemName;
         string droppedItemDescription = slot.ItemDescription;
         string droppedItemInstanceId = slot.ItemInstanceId;
+        string droppedItemState = slot.ItemState;
         bool droppedItemHasVisualColor = slot.HasVisualColor;
         Color droppedItemVisualColor = slot.VisualColor;
         bool droppedItemHasStoredCharge = slot.HasStoredCharge;
         float droppedItemStoredCharge = slot.StoredCharge;
+        if (itemPrefab.UsePlacesInWorld)
+        {
+            ZeldaFourWayMover mover = ZeldaRuntimeRegistry.GetControlledMover();
+            ZeldaCharacterData user = mover != null ? mover.GetComponent<ZeldaCharacterData>() : null;
+            if (user == null || user.IsDead) return false;
+        }
         Vector3 position = GetControlledCharacterPosition();
         PickupItemBase droppedItem = Instantiate(itemPrefab.gameObject, position, Quaternion.identity)
             .GetComponent<PickupItemBase>();
@@ -686,6 +715,13 @@ public sealed class PersistentInventory : MonoBehaviour
         droppedItem.ApplyInventoryCharge(
             droppedItemHasStoredCharge,
             droppedItemStoredCharge);
+        try { droppedItem.ApplyInventoryState(droppedItemState); }
+        catch (Exception exception)
+        {
+            Destroy(droppedItem.gameObject);
+            Debug.LogWarning("Could not restore dropped item state: " + exception.Message, this);
+            return false;
+        }
         droppedItem.MarkAsDropped();
 
         bool removed = string.IsNullOrEmpty(droppedItemInstanceId)
@@ -784,7 +820,8 @@ public sealed class PersistentInventory : MonoBehaviour
                         data.slots[i].HasVisualColor,
                         data.slots[i].VisualColor,
                         data.slots[i].HasStoredCharge,
-                        data.slots[i].StoredCharge);
+                        data.slots[i].StoredCharge,
+                        data.slots[i].ItemState);
                 }
                 else
                 {

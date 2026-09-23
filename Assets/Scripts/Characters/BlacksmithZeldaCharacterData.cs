@@ -5,7 +5,7 @@ using UnityEngine;
 /// It keeps the civilian combat and AI contract while drawing an apron,
 /// work gloves and a directional forging hammer.
 /// </summary>
-public sealed class BlacksmithZeldaCharacterData : ZeldaCharacterData
+public class BlacksmithZeldaCharacterData : ZeldaCharacterData
 {
     [Header("Civilian Combat")]
     [SerializeField, Min(0)] private int attackPower = 1;
@@ -195,11 +195,16 @@ public sealed class BlacksmithZeldaCharacterData : ZeldaCharacterData
         "................",
     };
 
+    protected virtual string[] GetBodyRows(Vector2 facing)
+    {
+        return facing == Vector2.up ? BackBody :
+            facing == Vector2.left ? LeftBody : facing == Vector2.right ? RightBody : FrontBody;
+    }
+
     private Texture2D CreateTexture(Vector2 facing, bool attacking)
     {
         const int size = 16;
-        string[] rows = facing == Vector2.up ? BackBody :
-            facing == Vector2.left ? LeftBody : facing == Vector2.right ? RightBody : FrontBody;
+        string[] rows = GetBodyRows(facing);
         var pixels = new Color[size * size];
         for (int row = 0; row < size; row++)
         for (int x = 0; x < size; x++)
@@ -256,7 +261,7 @@ public sealed class BlacksmithZeldaCharacterData : ZeldaCharacterData
             pixels[py * 16 + px] = PixelColor(symbol);
     }
 
-    private Color PixelColor(char symbol)
+    protected virtual Color PixelColor(char symbol)
     {
         switch (symbol)
         {

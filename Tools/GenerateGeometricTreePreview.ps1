@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 $root = Split-Path $PSScriptRoot -Parent
 $source = Get-Content -Raw (Join-Path $root 'Assets/Scripts/Decorations/GeometricTreeDecoration.cs')
-$prefab = Get-Content -Raw (Join-Path $root 'Assets/Prefabs/Decorations/GeometricTree.prefab')
+$prefab = Get-Content -Raw (Join-Path $root 'Assets/Prefabs/Decorations/Plants/GeometricTree.prefab')
 $culture = [Globalization.CultureInfo]::InvariantCulture
 function Num([string]$s) { [float]::Parse($s.TrimEnd('f'), $culture) }
 function Scalar([string]$name) { Num ([regex]::Match($prefab, ($name + ': ([\d.]+)')).Groups[1].Value) }

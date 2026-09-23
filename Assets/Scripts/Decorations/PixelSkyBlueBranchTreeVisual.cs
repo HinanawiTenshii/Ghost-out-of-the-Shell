@@ -1,210 +1,222 @@
 using UnityEngine;
 
 /// <summary>
-/// Generates a leafless, branching pixel tree with a vertical sky-blue gradient.
+/// An asymmetric, translucent geometric tree with a vertical blue gradient. The legacy class name is
+/// retained so existing prefab and scene references keep working.
 /// </summary>
 [ExecuteAlways]
 [RequireComponent(typeof(SpriteRenderer))]
 public sealed class PixelSkyBlueBranchTreeVisual : MonoBehaviour
 {
-    private const int TextureSize = 48;
-    private const float PixelsPerUnit = 16f;
-    private static readonly Vector3 EditorBoundsSize = new Vector3(3f, 3f, 0f);
-
     [SerializeField] private int sortingOrder = 1;
+    [ColorUsage(false)]
+    [Tooltip("Tint multiplied over the blue gradient. White retains the original gradient.")]
+    [SerializeField] private Color branchColor = Color.white;
+    [Range(0f, 1f)]
+    [Tooltip("Uniform transparency, including branch junctions.")]
+    [SerializeField] private float opacity = 0.65f;
 
-    private static Sprite treeSprite;
-
-    private void Awake()
+    // One connected silhouette, triangulated without overlapping faces.
+    // Coordinates retain the original 3 x 3 footprint and bottom-center pivot.
+    private static readonly Vector2[] Outline =
     {
-        ApplyVisual();
-    }
+        new Vector2(0.12f, 0.01f),
+        new Vector2(0.035f, 0.89f),
+        new Vector2(0.59f, 1.61f),
+        new Vector2(1.08f, 1.9f),
+        new Vector2(1.28f, 2.36f),
+        new Vector2(1.23f, 2.38f),
+        new Vector2(1f, 1.96f),
+        new Vector2(0.6f, 1.73f),
+        new Vector2(0.65f, 2.25f),
+        new Vector2(1.13f, 2.68f),
+        new Vector2(1.09f, 2.72f),
+        new Vector2(0.62f, 2.34f),
+        new Vector2(0.57f, 2.97f),
+        new Vector2(0.505f, 2.965f),
+        new Vector2(0.535f, 2.25f),
+        new Vector2(0.43f, 1.665f),
+        new Vector2(-0.07f, 1.06f),
+        new Vector2(-0.1f, 1.55f),
+        new Vector2(-0.39f, 2.17f),
+        new Vector2(-0.44f, 2.15f),
+        new Vector2(-0.215f, 1.53f),
+        new Vector2(-0.21f, 1.075f),
+        new Vector2(-0.65f, 1.45f),
+        new Vector2(-0.83f, 1.92f),
+        new Vector2(-0.72f, 2.52f),
+        new Vector2(-0.78f, 2.53f),
+        new Vector2(-0.915f, 1.99f),
+        new Vector2(-1.41f, 2.23f),
+        new Vector2(-1.435f, 2.18f),
+        new Vector2(-0.945f, 1.91f),
+        new Vector2(-0.83f, 1.5f),
+        new Vector2(-1.18f, 1.62f),
+        new Vector2(-1.425f, 1.84f),
+        new Vector2(-1.46f, 1.8f),
+        new Vector2(-1.245f, 1.535f),
+        new Vector2(-0.71f, 1.32f),
+        new Vector2(-0.175f, 0.91f),
+        new Vector2(-0.12f, 0.01f),
+    };
+
+    private static readonly ushort[] Triangles =
+    {
+        37, 0, 1, 3, 4, 5, 3, 5, 6, 2, 3, 6,
+        2, 6, 7, 1, 2, 7, 8, 9, 10, 8, 10, 11,
+        7, 8, 11, 7, 11, 12, 7, 12, 13, 7, 13, 14,
+        7, 14, 15, 1, 7, 15, 1, 15, 16, 37, 1, 16,
+        37, 16, 17, 17, 18, 19, 17, 19, 20, 17, 20, 21,
+        23, 24, 25, 23, 25, 26, 22, 23, 26, 26, 27, 28,
+        26, 28, 29, 22, 26, 29, 22, 29, 30, 21, 22, 30,
+        21, 30, 31, 31, 32, 33, 31, 33, 34, 31, 34, 35,
+        21, 31, 35, 21, 35, 36, 17, 21, 36, 17, 36, 37,
+    };
+
+    private const int GradientSize = 64;
+    private static readonly Color GradientBottom = new Color(0.10f, 0.35f, 0.56f, 1f);
+    private static readonly Color GradientTop = new Color(0.53f, 0.82f, 0.92f, 1f);
+    private static Sprite treeSprite;
+    private static Texture2D treeTexture;
+    private static int activeUsers;
+    private SpriteRenderer treeRenderer;
+    private bool ownsSharedVisual;
+    private bool visualDirty;
 
     private void OnEnable()
     {
-        ApplyVisual();
+        if (!ownsSharedVisual)
+        {
+            activeUsers++;
+            ownsSharedVisual = true;
+        }
+        treeRenderer = GetComponent<SpriteRenderer>();
+        // Scene loading / OnEnable can run outside Unity's player loop.
+        // OverrideGeometry is only safe later, during Update.
+        visualDirty = true;
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
+#endif
+    }
+
+    private void OnValidate()
+    {
+        opacity = Mathf.Clamp01(opacity);
+        // OnValidate can run during deserialization; create Unity objects later.
+        visualDirty = true;
+    }
+
+    private void Update()
+    {
+        if (visualDirty)
+            ApplyVisual();
     }
 
     private void ApplyVisual()
     {
         EnsureSprite();
-        SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
-        spriteRenderer.sprite = treeSprite;
-        spriteRenderer.color = Color.white;
-        spriteRenderer.sortingOrder = sortingOrder;
+        if (treeRenderer == null)
+            treeRenderer = GetComponent<SpriteRenderer>();
+
+        Color tint = branchColor;
+        tint.a = opacity;
+        treeRenderer.sprite = treeSprite;
+        treeRenderer.color = tint;
+        treeRenderer.sortingOrder = sortingOrder;
+        visualDirty = false;
     }
 
     private static void EnsureSprite()
     {
         if (treeSprite != null)
-        {
             return;
-        }
 
-        Texture2D texture = new Texture2D(
-            TextureSize,
-            TextureSize,
-            TextureFormat.RGBA32,
-            false);
-        texture.name = "Sky Blue Gradient Branch Tree";
-        texture.filterMode = FilterMode.Point;
-        texture.wrapMode = TextureWrapMode.Clamp;
-        FillRect(texture, 0, 0, TextureSize, TextureSize, new Color(1f, 1f, 1f, 0f));
-
-        // Main trunk and its two dominant forks.
-        DrawBranch(texture, 24, 1, 24, 14, 4);
-        DrawBranch(texture, 24, 14, 17, 26, 3);
-        DrawBranch(texture, 24, 14, 31, 27, 3);
-
-        // Left crown: long, sparse and slightly cropped like the reference.
-        DrawBranch(texture, 17, 26, 8, 29, 2);
-        DrawBranch(texture, 8, 29, 1, 35, 2);
-        DrawBranch(texture, 1, 35, 0, 41, 1);
-        DrawBranch(texture, 8, 29, 4, 23, 1);
-        DrawBranch(texture, 4, 23, 0, 20, 1);
-        DrawBranch(texture, 17, 26, 19, 37, 2);
-        DrawBranch(texture, 19, 37, 15, 45, 1);
-        DrawBranch(texture, 15, 45, 13, 47, 1);
-        DrawBranch(texture, 19, 37, 24, 44, 1);
-        DrawBranch(texture, 24, 44, 24, 47, 1);
-        DrawBranch(texture, 13, 28, 10, 36, 1);
-        DrawBranch(texture, 10, 36, 5, 41, 1);
-        DrawBranch(texture, 10, 36, 12, 44, 1);
-
-        // Right crown: broader main branch with several thin upward forks.
-        DrawBranch(texture, 31, 27, 40, 30, 2);
-        DrawBranch(texture, 40, 30, 47, 36, 1);
-        DrawBranch(texture, 40, 30, 45, 27, 1);
-        DrawBranch(texture, 45, 27, 47, 27, 1);
-        DrawBranch(texture, 31, 27, 34, 38, 2);
-        DrawBranch(texture, 34, 38, 31, 47, 1);
-        DrawBranch(texture, 34, 38, 40, 44, 1);
-        DrawBranch(texture, 40, 44, 43, 47, 1);
-        DrawBranch(texture, 29, 24, 27, 35, 1);
-        DrawBranch(texture, 27, 35, 30, 43, 1);
-        DrawBranch(texture, 27, 35, 23, 40, 1);
-
-        // A few short secondary twigs keep the silhouette organic.
-        DrawBranch(texture, 5, 32, 1, 30, 1);
-        DrawBranch(texture, 15, 32, 20, 33, 1);
-        DrawBranch(texture, 20, 33, 23, 36, 1);
-        DrawBranch(texture, 37, 29, 41, 34, 1);
-        DrawBranch(texture, 41, 34, 46, 33, 1);
-        DrawBranch(texture, 36, 42, 35, 47, 1);
-
-        texture.Apply(false, true);
-        treeSprite = Sprite.Create(
-            texture,
-            new Rect(0f, 0f, TextureSize, TextureSize),
-            new Vector2(0.5f, 0f),
-            PixelsPerUnit);
-        treeSprite.name = "Sky Blue Gradient Branch Tree";
-    }
-
-    private static void DrawBranch(
-        Texture2D texture,
-        int startX,
-        int startY,
-        int endX,
-        int endY,
-        int thickness)
-    {
-        int x = startX;
-        int y = startY;
-        int deltaX = Mathf.Abs(endX - startX);
-        int stepX = startX < endX ? 1 : -1;
-        int deltaY = -Mathf.Abs(endY - startY);
-        int stepY = startY < endY ? 1 : -1;
-        int error = deltaX + deltaY;
-        int totalSteps = Mathf.Max(Mathf.Abs(endX - startX), Mathf.Abs(endY - startY));
-        int currentStep = 0;
-        int endThickness = Mathf.Max(1, thickness - 1);
-
-        while (true)
+        // A small gradient texture supplies color, while the mesh defines clean
+        // geometric edges. This method is called only from Update, never OnEnable.
+        treeTexture = new Texture2D(GradientSize, GradientSize, TextureFormat.RGBA32, false)
         {
-            float progress = totalSteps > 0 ? currentStep / (float)totalSteps : 1f;
-            int taperedThickness = Mathf.RoundToInt(
-                Mathf.Lerp(thickness, endThickness, progress));
-            DrawBranchPixel(texture, x, y, taperedThickness);
-            if (x == endX && y == endY)
-            {
-                break;
-            }
-
-            int doubledError = error * 2;
-            if (doubledError >= deltaY)
-            {
-                error += deltaY;
-                x += stepX;
-            }
-            if (doubledError <= deltaX)
-            {
-                error += deltaX;
-                y += stepY;
-            }
-            currentStep++;
-        }
-    }
-
-    private static void DrawBranchPixel(Texture2D texture, int centerX, int centerY, int thickness)
-    {
-        thickness = Mathf.Max(1, thickness);
-        int minimumOffset = -thickness / 2;
-        int maximumOffset = minimumOffset + thickness - 1;
-        Color color = GetSkyGradient(centerY);
-        for (int offsetY = minimumOffset; offsetY <= maximumOffset; offsetY++)
-        for (int offsetX = minimumOffset; offsetX <= maximumOffset; offsetX++)
+            name = "Geometric Sky Blue Branch Tree Gradient",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        Color[] pixels = new Color[GradientSize * GradientSize];
+        for (int y = 0; y < GradientSize; y++)
         {
-            SetPixelSafe(texture, centerX + offsetX, centerY + offsetY, color);
+            Color color = Color.Lerp(GradientBottom, GradientTop, y / (GradientSize - 1f));
+            for (int x = 0; x < GradientSize; x++)
+                pixels[y * GradientSize + x] = color;
         }
+        treeTexture.SetPixels(pixels);
+        treeTexture.Apply(false, false);
+
+        Sprite generatedSprite = Sprite.Create(treeTexture,
+            new Rect(0f, 0f, GradientSize, GradientSize),
+            new Vector2(0.5f, 0f), GradientSize / 3f, 0, SpriteMeshType.Tight);
+        generatedSprite.name = "Geometric Sky Blue Branch Tree";
+        // FullRect sprites reject geometry overrides in Unity 2021.3.
+        // OverrideGeometry takes pixel coordinates relative to Sprite.rect,
+        // NOT the pivot-relative world-unit coordinates returned by vertices.
+        Vector2[] rectVertices = new Vector2[Outline.Length];
+        for (int i = 0; i < Outline.Length; i++)
+            rectVertices[i] = (Outline[i] + new Vector2(1.5f, 0f)) * (GradientSize / 3f);
+        generatedSprite.OverrideGeometry(rectVertices, Triangles);
+        generatedSprite.hideFlags = HideFlags.HideAndDontSave;
+        // Publish only after the geometry is ready; later instances share it.
+        treeSprite = generatedSprite;
+        treeTexture.Apply(false, true);
     }
 
-    private static Color GetSkyGradient(int pixelY)
+    private void OnDisable()
     {
-        float height = Mathf.Clamp01(pixelY / (TextureSize - 1f));
-        Color bottom = new Color(0.08f, 0.38f, 0.68f, 0.58f);
-        Color middle = new Color(0.16f, 0.67f, 0.94f, 0.72f);
-        Color top = new Color(0.65f, 0.91f, 1f, 0.82f);
-        return height < 0.55f
-            ? Color.Lerp(bottom, middle, height / 0.55f)
-            : Color.Lerp(middle, top, (height - 0.55f) / 0.45f);
+        ReleaseVisual();
     }
 
-    private static void FillRect(
-        Texture2D texture,
-        int startX,
-        int startY,
-        int width,
-        int height,
-        Color color)
+    private void OnDestroy()
     {
-        for (int y = startY; y < startY + height; y++)
-        for (int x = startX; x < startX + width; x++)
-        {
-            texture.SetPixel(x, y, color);
-        }
+        ReleaseVisual();
     }
 
-    private static void SetPixelSafe(Texture2D texture, int x, int y, Color color)
+    private void ReleaseVisual()
     {
-        if (x >= 0 && x < TextureSize && y >= 0 && y < TextureSize)
-        {
-            texture.SetPixel(x, y, color);
-        }
+        if (!ownsSharedVisual)
+            return;
+
+        if (treeRenderer != null && treeRenderer.sprite == treeSprite)
+            treeRenderer.sprite = null;
+
+        ownsSharedVisual = false;
+        activeUsers--;
+        if (activeUsers > 0)
+            return;
+
+        DestroyGenerated(treeSprite);
+        DestroyGenerated(treeTexture);
+        treeSprite = null;
+        treeTexture = null;
+        activeUsers = 0;
+    }
+
+    private static void DestroyGenerated(Object resource)
+    {
+        if (resource == null)
+            return;
+        if (Application.isPlaying)
+            Destroy(resource);
+        else
+            DestroyImmediate(resource);
     }
 
     private void OnDrawGizmos()
     {
         if (Application.isPlaying)
-        {
             return;
-        }
 
         Matrix4x4 previousMatrix = Gizmos.matrix;
         Color previousColor = Gizmos.color;
         Gizmos.matrix = transform.localToWorldMatrix;
         Gizmos.color = new Color(0.35f, 0.9f, 1f, 0.8f);
-        Gizmos.DrawWireCube(new Vector3(0f, 1.5f, 0f), EditorBoundsSize);
+        Gizmos.DrawWireCube(new Vector3(0f, 1.5f, 0f), new Vector3(3f, 3f, 0f));
         Gizmos.matrix = previousMatrix;
         Gizmos.color = previousColor;
     }

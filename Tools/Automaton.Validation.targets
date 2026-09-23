@@ -1,0 +1,9 @@
+<Project>
+  <Import Project="Wizard.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\AI\AutomatonCharacterAi.cs" />
+    <Compile Include="Assets\Scripts\AI\AutomatonCharacterAi.cs" />
+    <Compile Remove="Assets\Scripts\Characters\AutomatonZeldaCharacterData.cs" />
+    <Compile Include="Assets\Scripts\Characters\AutomatonZeldaCharacterData.cs" />
+  </ItemGroup>
+</Project>

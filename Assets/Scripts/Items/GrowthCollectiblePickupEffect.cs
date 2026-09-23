@@ -272,7 +272,10 @@ public sealed class GrowthCollectiblePickupEffect : MonoBehaviour
             var visual = mover != null ? mover.transform.Find("Visual") : null;
             targetVisual = visual != null ? visual.GetComponent<SpriteRenderer>() : null;
         }
-        changedScene = mover != null && mover.gameObject.scene != gameObject.scene;
+        // Traveling players live in DontDestroyOnLoad while still collecting in
+        // the active level. Compare gameplay scenes, not Unity storage scenes.
+        changedScene = mover != null &&
+            ZeldaRuntimeRegistry.GetGameplayScene(mover.gameObject) != gameObject.scene;
         position = Vector3.zero;
         if (mover == null || changedScene || !mover.isActiveAndEnabled || (targetData != null && targetData.IsDead))
             return false;

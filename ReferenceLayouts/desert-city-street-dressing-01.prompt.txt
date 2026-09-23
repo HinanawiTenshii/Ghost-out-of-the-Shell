@@ -1,0 +1,31 @@
+Generation mode: built-in image_gen
+
+Create a detailed TOP-DOWN ORTHOGRAPHIC FLOOR PLAN for environmental prop placement in a fantasy medieval DESERT CITY street, a Unity level design reference. Landscape 1536x1024-style composition, high clarity. Main map 82% of canvas and narrow legend on right. Absolutely straight overhead, NO perspective or isometric view. Architectural site plan with thin precise outlines, flat warm sand colors, limited subtle shading, white/light ivory sheet. Not a cinematic illustration. Show individually readable props with simplified recognizable footprints. Chinese labels in clean readable type, moderate number, no label overlaps.
+
+Title: 沙漠城市街道 · 装饰布置平面参考
+Design a connected roughly 65 by 40 metre urban street slice, not entire city. Main street enters lower left edge, bends gently through a central widening MARKET/WELL SQUARE, then leaves upper right edge. Several irregular angular sandstone building footprints flank the street. Thick building walls in muted sand ochre; interiors mostly quiet pale fill so outdoor furnishing is the focus. Clearly visible entrances, threshold steps and door swing cues. One narrow residential alley branches toward upper left into a small courtyard and reconnects to main street farther east; another alley branches lower right ending at a courtyard. Maintain visible uninterrupted pale cream pedestrian circulation, main street 4–6m conceptual clear width, alleys 2–3m. Show isolated width callouts rather than claiming exact scale. No objects obstruct doorways or the continuous central walking lane.
+
+Three themed stretches:
+LEFT MARKET APPROACH: 5 distinct individual merchant stalls tucked along street edges, rectangular counters, behind-counter vendor working gaps, baskets and pottery in neat small groups, folded rugs at carpet seller, fabric awnings attached to facades and supported by small circular posts. Show overhead awnings as transparent muted orange hatch shapes so objects beneath remain visible. A spice shop, textile shop, and ceramic shop suggested with concise labels 香料铺, 织物铺, 陶器铺. Small water jars by doors, wall lamps and hanging sign locations as small symbols.
+CENTRAL WIDENING SQUARE labelled 井泉小广场: simple OCTAGONAL well basin with low rim, four small shaded seating places at edge of square, two palm tree circles with visible trunk centers and pale semitransparent canopy outline, not a forest. Small fantasy element: one compact hexagonal rune-lamp pedestal near well, labelled 符文灯. Keep broad circulation around well on both sides. A public noticeboard against wall, two low planters, rugs under benches, a tethering post and trough tucked to a side recess, not in walking lane.
+RIGHT TRADE/WORKSHOP APPROACH: cargo unloading recess outside warehouse labelled 货栈; 6 wooden crates and 3 barrels, one small two-wheeled cart parked PARALLEL to building in its dedicated bay, sacks against rear wall, no chaotic debris. Opposite a small tea house labelled 茶馆 with 3 low round tables and seat cushions under an awning in a recessed terrace. Road leads out upper right.
+UPPER LEFT RESIDENTIAL ALLEY labelled 住宅支巷: three recessed doorways, paired clay water jars, small benches, one overhead clothesline indicated dotted line with small fabric rectangles. At rear small shared courtyard with a single shade canopy and planter.
+LOWER RIGHT COURTYARD labelled 工坊小院: a workbench, timber stack, two pottery drying racks, a few stone blocks tucked to walls; actual doorways connect yard to alley. One short service dead end has a discreet refuse basket alcove.
+
+Ground-level detailing: thin sandstone paving edge bands, a few irregular paving stone patches at thresholds, a narrow covered drainage line along one street edge marked 排水沟, three gratings. Tiny dark circles for awning posts placed outside clear walking lane. No massive sand dunes in street. Limited windblown sand pockets only in wall corners. Some small repeated facade buttress rectangles create silhouette variation. Sparse fantasy details only rune lamp and small geometric ward tile at one entrance, no sci-fi.
+Make prop placements deliberate and visually legible, roughly 60–90 props of varied sizes, no excessive clutter. Dashed thin brown envelopes indicate 3 prop groups labelled 摊位组, 休憩组, 装卸组. Dashed pale gray WALKING CENTERLINE can trace main path without arrows hiding props.
+
+Right legend with simple symbols and Chinese:
+建筑轮廓
+棚布（半透明）
+摊位与货物
+座椅与矮桌
+水缸与陶罐
+棕榈与花池
+灯具与立柱
+通行净区
+Bottom small notes exact text:
+主街净宽建议 4–6m｜支巷 2–3m
+门前留空，货堆贴墙，转角保留视线
+概念布置示意 · 非严格比例
+The result should look like a detailed professional game environment dressing layout sheet, with functional connected streets and readable object footprints, not a city map, not an exterior perspective painting.

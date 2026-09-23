@@ -1,0 +1,22 @@
+fileFormatVersion: 2
+guid: f364770eb83947be9186bf367196a4ca
+AudioImporter:
+  externalObjects: {}
+  serializedVersion: 6
+  defaultSettings:
+    loadType: 0
+    sampleRateSetting: 0
+    sampleRateOverride: 44100
+    compressionFormat: 0
+    quality: 1
+    conversionMode: 0
+  platformSettingOverrides: {}
+  forceToMono: 1
+  normalize: 0
+  preloadAudioData: 1
+  loadInBackground: 0
+  ambisonic: 0
+  3D: 1
+  userData: CC0 - Deva / @Shades, 8-Bit Sound Effect Pack Vol.001, Explosion 3. See Docs/BombExplosionAudio.md.
+  assetBundleName:
+  assetBundleVariant:

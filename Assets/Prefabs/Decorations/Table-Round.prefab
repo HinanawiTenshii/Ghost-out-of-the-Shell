@@ -1,0 +1,119 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &864100000000000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 864100000000000002}
+  - component: {fileID: 864100000000000003}
+  - component: {fileID: 864100000000000004}
+  m_Layer: 0
+  m_Name: Table-Round
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &864100000000000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 864100000000000001}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!60 &864100000000000003
+PolygonCollider2D:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 864100000000000001}
+  m_Enabled: 1
+  m_Density: 1
+  m_Material: {fileID: 0}
+  m_IsTrigger: 0
+  m_UsedByEffector: 0
+  m_UsedByComposite: 0
+  m_Offset: {x: 0, y: 0}
+  m_Points:
+    m_Paths:
+    - - {x: 0.9, y: 0}
+      - {x: 0.8889195, y: 0.140791}
+      - {x: 0.8559509, y: 0.2781153}
+      - {x: 0.8019059, y: 0.4085914}
+      - {x: 0.7281153, y: 0.5290067}
+      - {x: 0.6363961, y: 0.6363961}
+      - {x: 0.5290067, y: 0.7281153}
+      - {x: 0.4085914, y: 0.8019059}
+      - {x: 0.2781153, y: 0.8559509}
+      - {x: 0.140791, y: 0.8889195}
+      - {x: 0, y: 0.9}
+      - {x: -0.140791, y: 0.8889195}
+      - {x: -0.2781153, y: 0.8559509}
+      - {x: -0.4085914, y: 0.8019059}
+      - {x: -0.5290067, y: 0.7281153}
+      - {x: -0.6363961, y: 0.6363961}
+      - {x: -0.7281153, y: 0.5290067}
+      - {x: -0.8019059, y: 0.4085914}
+      - {x: -0.8559509, y: 0.2781153}
+      - {x: -0.8889195, y: 0.140791}
+      - {x: -0.9, y: 0}
+      - {x: -0.8889195, y: -0.140791}
+      - {x: -0.8559509, y: -0.2781153}
+      - {x: -0.8019059, y: -0.4085914}
+      - {x: -0.7281153, y: -0.5290067}
+      - {x: -0.6363961, y: -0.6363961}
+      - {x: -0.5290067, y: -0.7281153}
+      - {x: -0.4085914, y: -0.8019059}
+      - {x: -0.2781153, y: -0.8559509}
+      - {x: -0.140791, y: -0.8889195}
+      - {x: 0, y: -0.9}
+      - {x: 0.140791, y: -0.8889195}
+      - {x: 0.2781153, y: -0.8559509}
+      - {x: 0.4085914, y: -0.8019059}
+      - {x: 0.5290067, y: -0.7281153}
+      - {x: 0.6363961, y: -0.6363961}
+      - {x: 0.7281153, y: -0.5290067}
+      - {x: 0.8019059, y: -0.4085914}
+      - {x: 0.8559509, y: -0.2781153}
+      - {x: 0.8889195, y: -0.140791}
+  m_UseDelaunayMesh: 0
+--- !u!114 &864100000000000004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 864100000000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f15ea45f45b74dcc9bc01f2cbdc82811, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  shape: 0
+  radius: 0.9
+  arcWidth: 0.65
+  startAngle: 0
+  curveSegments: 40
+  rimWidth: 0.08
+  thickness: 0.06
+  woodColor: {r: 0.52, g: 0.28, b: 0.14, a: 1}
+  edgeColor: {r: 0.38, g: 0.2, b: 0.11, a: 1}
+  surfaceColor: {r: 0.22, g: 0.57, b: 0.56, a: 1}
+  insetEdgeColor: {r: 0.33, g: 0.67, b: 0.63, a: 1}
+  solid: 1
+  sortingOrder: -3
+  sortingLayerName: Default
+  sourceMaterial: {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}

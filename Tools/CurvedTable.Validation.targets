@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="ItemStreaming.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Decorations\GeometricCurvedTable.cs" />
+    <Compile Include="Assets\Scripts\Decorations\GeometricCurvedTable.cs" />
+  </ItemGroup>
+</Project>

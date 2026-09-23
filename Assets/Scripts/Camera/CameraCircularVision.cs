@@ -51,9 +51,10 @@ public class CameraCircularVision : MonoBehaviour
     [SerializeField, Range(24, 192), InspectorName("Streaming Boundary Ray Count")]
     [Tooltip("Ray count used by object streaming. The visible shader uses a separate fixed 64-ray fan.")]
     private int rayCount = 96;
-    [SerializeField, Tooltip("Vision occluders. Hidden Blocks is always included, but is never redrawn above the vision mask.")]
+    [SerializeField, Tooltip("Vision occluders. Hidden Blocks is always included but not redrawn above the mask. Visible Non Blocking is always excluded from occlusion and redrawn above the mask.")]
     private LayerMask blockLayers;
     private int hiddenBlocksLayerMask;
+    private int visibleNonBlockingLayerMask;
     [SerializeField] private Color darknessColor = new Color(5f / 255f, 18f / 255f, 37f / 255f, 1f);
     [SerializeField] private float blockerSkin = 0.03f;
     [SerializeField] private float coverPadding = 2f;
@@ -313,6 +314,13 @@ public class CameraCircularVision : MonoBehaviour
 
     private void EnsureBlockLayerConfiguration()
     {
+        int visibleNonBlockingLayer = LayerMask.NameToLayer("Visible Non Blocking");
+        visibleNonBlockingLayerMask = visibleNonBlockingLayer >= 0
+            ? 1 << visibleNonBlockingLayer : 0;
+        // Keep display-only geometry out of every player/puppet visibility query,
+        // even if an inspector mask includes it (for example, Everything).
+        blockLayers = blockLayers.value & ~visibleNonBlockingLayerMask;
+
         if (blockLayers.value == 0)
         {
             int blocksLayer = LayerMask.NameToLayer("Blocks");
@@ -607,7 +615,9 @@ public class CameraCircularVision : MonoBehaviour
         // Ordinary Blocks are intentionally visible above darkness. Hidden
         // Blocks render only in the main world pass, beneath the same mask
         // that hides characters and props outside the visible polygon.
-        return blockLayers.value & ~hiddenBlocksLayerMask;
+        // Display-only geometry uses the same overlay pass without becoming
+        // a raycast occluder. Physical collision is independent of this mask.
+        return (blockLayers.value & ~hiddenBlocksLayerMask) | visibleNonBlockingLayerMask;
     }
 
     private void EnsureUiCompositeCamera()

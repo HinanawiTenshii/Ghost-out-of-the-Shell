@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="ArmedGolem.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Rendering\SpriteStillWaterSurface.cs;Assets\Scripts\Rendering\SpriteWaterFlowParticles.cs" />
+    <Compile Include="Assets\Scripts\Rendering\SpriteStillWaterSurface.cs;Assets\Scripts\Rendering\SpriteWaterFlowParticles.cs" />
+  </ItemGroup>
+</Project>

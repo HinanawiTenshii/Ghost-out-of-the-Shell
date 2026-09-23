@@ -27,6 +27,12 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
     private Sprite runtimeSprite;
     private Texture2D runtimeTexture;
     private int lastVisibleEnergySegments = -1;
+    private int lastVisibleWalkPose = -1;
+    private int walkPose;
+    private float walkElapsed;
+    private float walkMotionRemaining;
+    private Vector2 previousWalkPosition;
+    private bool hasWalkPosition;
     private float magic;
     private float operationTimer;
     private bool attached;
@@ -114,11 +120,13 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
 
     private void OnEnable()
     {
+        ResetWalkAnimation();
         ActiveSet.Add(this);
     }
 
     private void OnDisable()
     {
+        ResetWalkAnimation();
         ActiveSet.Remove(this);
         EndRemoteControl();
         RestoreMovingDoorCollisions();
@@ -352,6 +360,47 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
             if (!broken && physicsBody != null)
                 physicsBody.position = targetLever.PuppetMountPoint;
         }
+    }
+
+    private void LateUpdate()
+    {
+        if (runtimeTexture == null) return;
+        Vector2 position = physicsBody != null ? physicsBody.position : (Vector2)transform.position;
+        float travelled = hasWalkPosition ? (position - previousWalkPosition).magnitude : 0f;
+        previousWalkPosition = position;
+        hasWalkPosition = true;
+        bool mayWalk = !broken && !attached && !DocumentReader.IsInputBlocked && Time.deltaTime > 0f &&
+            (manualControlMode
+                ? IsUnderRemoteControl && manualMoveDirection.sqrMagnitude > 0.0001f
+                : targetLever != null && targetLever.isActiveAndEnabled);
+        // Sample actual displacement, not input: a puppet pushing a wall must stop stepping.
+        // A short grace bridges render frames between physics steps; ignore teleport-sized jumps.
+        float maximumStep = Mathf.Max(0.1f, moveSpeed * Time.deltaTime * 3f);
+        if (mayWalk && travelled > 0.0001f && travelled <= maximumStep)
+            walkMotionRemaining = 0.06f;
+        else
+            walkMotionRemaining = Mathf.Max(0f, walkMotionRemaining - Time.deltaTime);
+        if (mayWalk && walkMotionRemaining > 0f)
+        {
+            walkElapsed = Mathf.Repeat(walkElapsed + Time.deltaTime, 0.24f);
+            walkPose = walkElapsed < 0.12f ? 1 : 2;
+        }
+        else
+        {
+            walkElapsed = 0f;
+            walkMotionRemaining = 0f;
+            walkPose = 0;
+        }
+        UpdateMagicVisual();
+    }
+
+    private void ResetWalkAnimation()
+    {
+        hasWalkPosition = false;
+        walkElapsed = 0f;
+        walkMotionRemaining = 0f;
+        walkPose = 0;
+        UpdateMagicVisual();
     }
 
     private void BeginRemoteControl()
@@ -1223,6 +1272,9 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
         bodyRenderer.sprite = runtimeSprite;
         bodyRenderer.color = Color.white;
         bodyRenderer.sortingOrder = 20;
+        lastVisibleEnergySegments = -1;
+        lastVisibleWalkPose = -1;
+        ResetWalkAnimation();
         UpdateMagicVisual();
     }
 
@@ -1232,11 +1284,15 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
         {
             return;
         }
-        float normalized = Mathf.Clamp01(magic / maximumMagic);
+        float normalized = Mathf.Clamp01(magic / Mathf.Max(0.0001f, maximumMagic));
         int visibleSegments = Mathf.Clamp(Mathf.CeilToInt(normalized * 6f), 0, 6);
-        if (visibleSegments == lastVisibleEnergySegments) return;
+        if (visibleSegments == lastVisibleEnergySegments && walkPose == lastVisibleWalkPose) return;
+        if (walkPose != lastVisibleWalkPose)
+            ClockworkPuppetPickupItemVisual.ApplyRuntimePose(runtimeTexture, normalized, walkPose);
+        else
+            ClockworkPuppetPickupItemVisual.ApplyRuntimeEnergy(runtimeTexture, normalized);
         lastVisibleEnergySegments = visibleSegments;
-        ClockworkPuppetPickupItemVisual.ApplyRuntimeEnergy(runtimeTexture, normalized);
+        lastVisibleWalkPose = walkPose;
     }
 
     private void OnDestroy()

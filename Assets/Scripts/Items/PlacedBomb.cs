@@ -7,7 +7,12 @@ public sealed class PlacedBomb : MonoBehaviour
 {
     public string SaveSourceItemId { get; set; }
     public ZeldaCharacterData SaveOwner => owner;
-    public void RestoreSavedOwner(ZeldaCharacterData savedOwner) { owner = savedOwner; }
+    public void RestoreSavedOwner(ZeldaCharacterData savedOwner)
+    {
+        owner = savedOwner;
+        // Saved scalar configuration is applied after the prefab's Configure.
+        if (configured && !exploded) RefreshStreamingRetention();
+    }
     private SpriteRenderer bombRenderer;
     private SpriteRenderer highlightRenderer;
     private SpriteRenderer fuseRenderer;
@@ -28,6 +33,7 @@ public sealed class PlacedBomb : MonoBehaviour
     private float hitboxDuration;
     private Color hitboxColor;
     private AudioClip explosionSound;
+    private static AudioClip defaultExplosionSound;
     private float explosionSoundVolume;
     private float explosionSoundPitch;
     private float explosionSoundSpatialBlend;
@@ -39,6 +45,11 @@ public sealed class PlacedBomb : MonoBehaviour
     private ZeldaCharacterData owner;
     private bool configured;
     private bool exploded;
+    private CameraVisionStreamingRegion streamingRegion;
+
+    // Cover both sound attraction and the corners of the rectangular damage box.
+    // This is in world units, independent of the bomb sprite's visual scale.
+    private float StreamingRetentionRadius => Mathf.Max(investigationRadius, explosionSize.magnitude * 0.5f);
 
     private void Awake()
     {
@@ -98,7 +109,8 @@ public sealed class PlacedBomb : MonoBehaviour
             Mathf.Max(0.05f, configuredExplosionSize.y));
         hitboxDuration = Mathf.Max(0.02f, configuredHitboxDuration);
         hitboxColor = configuredHitboxColor;
-        explosionSound = configuredExplosionSound;
+        // Resolve/preload at placement, not on the first frame of detonation.
+        explosionSound = ResolveExplosionSound(configuredExplosionSound);
         explosionSoundVolume = Mathf.Clamp01(configuredExplosionSoundVolume);
         explosionSoundPitch = Mathf.Clamp(configuredExplosionSoundPitch, 0.1f, 3f);
         explosionSoundSpatialBlend = Mathf.Clamp01(configuredExplosionSoundSpatialBlend);
@@ -131,6 +143,16 @@ public sealed class PlacedBomb : MonoBehaviour
                 effectSortingOrder - 1);
         }
         configured = true;
+        RefreshStreamingRetention();
+    }
+
+    private void RefreshStreamingRetention()
+    {
+        if (streamingRegion == null)
+            streamingRegion = GetComponent<CameraVisionStreamingRegion>();
+        if (streamingRegion == null)
+            streamingRegion = gameObject.AddComponent<CameraVisionStreamingRegion>();
+        streamingRegion.Configure(StreamingRetentionRadius);
     }
 
     private void Update()
@@ -164,6 +186,9 @@ public sealed class PlacedBomb : MonoBehaviour
         }
         exploded = true;
         Vector3 explosionPosition = transform.position;
+        // Re-evaluate the region (including soul-mark radius upgrades) before
+        // notifying AI or creating damage, including immediate/chain detonation.
+        RefreshStreamingRetention();
         CreateAttackHitbox(explosionPosition);
         CreateExplosionVisual(explosionPosition);
         PlayExplosionSound(explosionPosition);
@@ -192,6 +217,14 @@ public sealed class PlacedBomb : MonoBehaviour
         DetonateImmediately();
     }
 
+    private static AudioClip ResolveExplosionSound(AudioClip configuredSound)
+    {
+        if (configuredSound != null) return configuredSound;
+        if (defaultExplosionSound == null)
+            defaultExplosionSound = Resources.Load<AudioClip>("Audio/BombExplosion");
+        return defaultExplosionSound;
+    }
+
     private void PlayExplosionSound(Vector3 explosionPosition)
     {
         if (explosionSound == null || explosionSoundVolume <= 0f)
@@ -200,6 +233,8 @@ public sealed class PlacedBomb : MonoBehaviour
         }
 
         GameObject soundObject = new GameObject("Bomb Explosion Sound");
+        UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(soundObject, gameObject.scene);
+        soundObject.AddComponent<CameraVisionStreamingExempt>();
         soundObject.transform.position = explosionPosition;
         AudioSource source = soundObject.AddComponent<AudioSource>();
         source.playOnAwake = false;
@@ -226,6 +261,10 @@ public sealed class PlacedBomb : MonoBehaviour
             typeof(SpriteRenderer),
             typeof(BoxCollider2D));
         hitboxObject.transform.position = explosionPosition;
+        UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(hitboxObject, gameObject.scene);
+        // Hand off the lease until the short damage trigger expires. Otherwise
+        // LateUpdate could unload colliders before the next physics step.
+        hitboxObject.AddComponent<CameraVisionStreamingRegion>().Configure(StreamingRetentionRadius);
         ZeldaAttackHitbox hitbox = hitboxObject.AddComponent<ZeldaAttackHitbox>();
         hitbox.Configure(
             hitboxDuration,
@@ -256,6 +295,7 @@ public sealed class PlacedBomb : MonoBehaviour
         foreach (ZeldaCharacterAiBase ai in ZeldaRuntimeRegistry.AiCharacters)
         {
             if (ai == null || !ai.isActiveAndEnabled ||
+                ZeldaRuntimeRegistry.GetGameplayScene(ai.gameObject) != gameObject.scene ||
                 ((Vector2)ai.transform.position - explosionPosition).sqrMagnitude >
                 radiusSquared)
             {

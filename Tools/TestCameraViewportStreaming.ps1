@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $source = Get-Content -Raw "$root/Assets/Scripts/Camera/CameraVisionObjectStreaming.cs"
-$methods = [regex]::Match($source, '(?s)    private bool IsInsideStreamingRetentionRange.*?(?=    private static Bounds TransformLocalBoundsToWorld)').Value
+$methods = [regex]::Match($source, '(?s)    private bool IsInsideStreamingRetentionRange.*?(?=    /// <summary>Used by newly placed)').Value
 if (!$methods) { throw 'Streaming methods not found' }
 if ($source.Contains('VisionMaskRadius') -or $source.Contains('IsWorldBoundsVisible(')) {
     throw 'Streaming must not depend on character vision radius or occlusion'
@@ -32,6 +32,7 @@ public static class Mathf {
 }
 public class Transform {public Vector3 position;}
 public class GameObject {
+    public int scene;
     public Transform transform=new Transform(); public bool activeSelf;
     public void SetActive(bool value){activeSelf=value;}
 }
@@ -54,6 +55,8 @@ public static class GeometryUtility {
     }
 }
 public class Reveal {public bool enabled; public bool IsWorldBoundsInsideAdditionalReveal(Bounds b){return enabled;}}
+// Region behavior is exercised separately in TestItemStreaming.ps1.
+public static class CameraVisionStreamingRegion { public static bool Intersects(int scene,Bounds b){return false;} }
 public class ViewportStreamingRegression {
     private class ManagedObject {
         public GameObject gameObject=new GameObject(); public Bounds localBounds;

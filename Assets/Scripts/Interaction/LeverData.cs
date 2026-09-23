@@ -18,6 +18,7 @@ public class LeverData : MonoBehaviour
     [SerializeField, InspectorName("Linked Mechanism 3")] private GameObject linkedObject3;
     [SerializeField] private Color baseColor = new Color(0.42f, 0.28f, 0.16f, 1f);
     [SerializeField] private Color leverColor = new Color(0.72f, 0.12f, 0.08f, 1f);
+    [SerializeField] private Color metalColor = new Color(0.46f, 0.5f, 0.5f, 1f);
     [SerializeField] private Vector2 interactionPromptOffset = new Vector2(0f, 0.9f);
 
     private SpriteRenderer spriteRenderer;
@@ -361,14 +362,18 @@ public class LeverData : MonoBehaviour
     {
         const int width = 24;
         const int height = 24;
-        Texture2D texture = new Texture2D(width, height);
+        Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+        texture.name = pulled ? "Pixel Lever On" : "Pixel Lever Off";
         texture.filterMode = FilterMode.Point;
         texture.wrapMode = TextureWrapMode.Clamp;
 
-        Color clear = new Color(1f, 1f, 1f, 0f);
-        Color darkBase = Color.Lerp(baseColor, Color.black, 0.45f);
+        Color darkBase = Color.Lerp(baseColor, Color.black, 0.35f);
+        Color woodEdge = Color.Lerp(baseColor, new Color(0.66f, 0.39f, 0.2f, 1f), 0.4f);
+        Color metalShadow = Color.Lerp(metalColor, Color.black, 0.55f);
+        Color metalHighlight = Color.Lerp(metalColor, new Color(0.78f, 0.82f, 0.83f, 1f), 0.5f);
+        Color gripShadow = Color.Lerp(leverColor, Color.black, 0.35f);
 
-        FillRect(texture, 0, 0, width, height, clear);
+        FillRect(texture, 0, 0, width, height, Color.clear);
 
         Vector2 pivot = new Vector2(12f, 8f);
         Vector2 end = pulled
@@ -378,76 +383,50 @@ public class LeverData : MonoBehaviour
         Vector2 leverCenter = (pivot + end) * 0.5f;
         float leverLength = Vector2.Distance(pivot, end) + 2f;
 
-        // Draw the rectangular lever behind the base so its lower end looks
-        // mechanically seated inside the semicircular housing.
+        // Keep the original pivot/end coordinates: puppet mount and reach remain unchanged.
+        // Draw the shaft behind the housing; two broad tones avoid a thin white glint.
         FillOrientedRectangle(
             texture,
             leverCenter,
             leverDirection,
             leverLength,
-            4f,
-            darkBase);
+            3f,
+            metalShadow);
         FillOrientedRectangle(
             texture,
             leverCenter,
             leverDirection,
             leverLength - 1f,
-            2f,
-            Color.white);
+            1.5f,
+            metalColor);
 
-        // A compact square head replaces the previous wide handle.
-        FillOrientedRectangle(
-            texture,
-            end,
-            Vector2.up,
-            5f,
-            5f,
-            darkBase);
-        FillOrientedRectangle(
-            texture,
-            end,
-            Vector2.up,
-            3f,
-            3f,
-            leverColor);
+        // Six-pixel round grip: clipped corners and a darker underside, no tiny highlights.
+        // Its center and outer size still match the original puppet attachment point.
+        int gripX = Mathf.RoundToInt(end.x) - 3;
+        FillRect(texture, gripX + 1, 17, 4, 6, gripShadow);
+        FillRect(texture, gripX, 18, 6, 4, gripShadow);
+        FillRect(texture, gripX, 19, 6, 2, leverColor);
+        FillRect(texture, gripX + 1, 21, 4, 2, leverColor);
 
-        FillUpperSemicircle(texture, new Vector2(12f, 4f), 8f, darkBase);
-        FillUpperSemicircle(texture, new Vector2(12f, 4f), 6.5f, baseColor);
-        // Even pixel counts around x=12 keep both sides of the base as exact
-        // mirrors; the previous odd-width strips left one sharp extra pixel
-        // on the right edge.
-        FillRect(texture, 4, 3, 16, 2, darkBase);
-        FillRect(texture, 6, 5, 12, 1, baseColor);
+        // Rectangular wooden plinth with a steel cap and a square axle block.
+        // Like current props, materials read through broad color blocks, not tiny grain/rivets.
+        FillRect(texture, 3, 3, 18, 6, darkBase);
+        FillRect(texture, 4, 5, 16, 4, baseColor);
+        FillRect(texture, 4, 7, 16, 2, woodEdge);
+        FillRect(texture, 4, 9, 16, 2, metalShadow);
+        FillRect(texture, 5, 10, 14, 2, metalColor);
+        FillRect(texture, 9, 7, 6, 6, metalShadow);
+        FillRect(texture, 10, 8, 4, 4, metalColor);
+        FillRect(texture, 10, 10, 4, 2, metalHighlight);
 
-        texture.Apply();
-        return Sprite.Create(
+        texture.Apply(false, true);
+        Sprite sprite = Sprite.Create(
             texture,
             new Rect(0, 0, width, height),
             new Vector2(0.5f, 0.22f),
             26.666667f);
-    }
-
-    private static void FillUpperSemicircle(
-        Texture2D texture,
-        Vector2 center,
-        float radius,
-        Color color)
-    {
-        float radiusSquared = radius * radius;
-        for (int y = Mathf.Max(0, Mathf.FloorToInt(center.y));
-             y < texture.height;
-             y++)
-        {
-            for (int x = 0; x < texture.width; x++)
-            {
-                Vector2 offset =
-                    new Vector2(x + 0.5f, y + 0.5f) - center;
-                if (offset.sqrMagnitude <= radiusSquared)
-                {
-                    texture.SetPixel(x, y, color);
-                }
-            }
-        }
+        sprite.name = texture.name;
+        return sprite;
     }
 
     private static void FillOrientedRectangle(
@@ -523,6 +502,17 @@ public class LeverData : MonoBehaviour
     private void OnDestroy()
     {
         ActiveLevers.Remove(this);
+        // Each lever owns its two generated sprites/textures.
+        if (offSprite != null)
+        {
+            Destroy(offSprite.texture);
+            Destroy(offSprite);
+        }
+        if (onSprite != null)
+        {
+            Destroy(onSprite.texture);
+            Destroy(onSprite);
+        }
         if (interactionPromptObject != null)
         {
             Destroy(interactionPromptObject);

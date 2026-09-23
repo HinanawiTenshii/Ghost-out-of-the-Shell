@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="HeavyPaladin.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Characters\ChefZeldaCharacterData.cs" />
+    <Compile Include="Assets\Scripts\Characters\ChefZeldaCharacterData.cs" />
+  </ItemGroup>
+</Project>
