@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="ButtonHover.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Interaction\WaterwayGate.cs" />
+    <Compile Include="Assets\Scripts\Interaction\WaterwayGate.cs" />
+  </ItemGroup>
+</Project>

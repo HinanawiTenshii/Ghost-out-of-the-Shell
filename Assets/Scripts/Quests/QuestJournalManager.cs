@@ -54,6 +54,7 @@ public sealed class QuestJournalManager : MonoBehaviour
     [Serializable] public sealed class SavedEntry
     {
         public string id, title, details, scene;
+        public bool isLevelObjective;
     }
     [Serializable] public sealed class SavedEvidence
     {
@@ -78,7 +79,7 @@ public sealed class QuestJournalManager : MonoBehaviour
             tracked = TrackedEntryId, initialTracked = InitialTrackedEntryId
         };
         foreach (var e in entries)
-            state.entries.Add(new SavedEntry { id = e.Id, title = e.Title, details = e.Details, scene = e.SourceScene });
+            state.entries.Add(new SavedEntry { id = e.Id, title = e.Title, details = e.Details, scene = e.SourceScene, isLevelObjective = e.IsLevelObjective });
         foreach (var e in pendingDetailEvidence)
             state.evidence.Add(new SavedEvidence { id = e.Key, details = new List<string>(e.Value) });
         foreach (var e in pendingUpdateEvidence) state.updates.Add(e.Value);
@@ -90,7 +91,12 @@ public sealed class QuestJournalManager : MonoBehaviour
         if (state == null) return;
         entries.Clear(); initializedScenes.Clear(); completedEntryIds.Clear();
         pendingCompletionEvidence.Clear(); pendingDetailEvidence.Clear(); pendingUpdateEvidence.Clear();
-        foreach (var e in state.entries) entries.Add(new Entry(e.id, e.title, e.details, e.scene));
+        // Older saves predate the explicit flag but already record the initial
+        // level objective separately from the currently tracked side quest.
+        foreach (var e in state.entries)
+            entries.Add(new Entry(e.id, e.title, e.details, e.scene,
+                e.isLevelObjective || (!string.IsNullOrWhiteSpace(state.initialTracked) &&
+                string.Equals(e.id, state.initialTracked, StringComparison.Ordinal))));
         if (state.initialized != null) initializedScenes.UnionWith(state.initialized);
         if (state.completed != null) completedEntryIds.UnionWith(state.completed);
         if (state.pendingCompleted != null) pendingCompletionEvidence.UnionWith(state.pendingCompleted);
@@ -106,9 +112,11 @@ public sealed class QuestJournalManager : MonoBehaviour
         public string Title { get; private set; }
         public string Details { get; private set; }
         public string SourceScene { get; private set; }
+        public bool IsLevelObjective { get; internal set; }
 
-        internal Entry(string id, string title, string details, string sourceScene)
+        internal Entry(string id, string title, string details, string sourceScene, bool isLevelObjective = false)
         {
+            IsLevelObjective = isLevelObjective;
             Update(id, title, details, sourceScene);
         }
 
@@ -607,6 +615,7 @@ public sealed class QuestJournalManager : MonoBehaviour
             string existingDetails = MergePendingDetailEvidence(
                 normalizedId,
                 effectiveDetails);
+            entries[index].IsLevelObjective = true;
             entries[index].Update(
                 normalizedId,
                 normalizedTitle,
@@ -622,7 +631,7 @@ public sealed class QuestJournalManager : MonoBehaviour
         string mergedDetails = MergePendingDetailEvidence(
             normalizedId,
             effectiveDetails);
-        entries.Add(new Entry(normalizedId, normalizedTitle, mergedDetails, sourceScene));
+        entries.Add(new Entry(normalizedId, normalizedTitle, mergedDetails, sourceScene, true));
         if (pendingCompletionEvidence.Remove(normalizedId))
         {
             completedEntryIds.Add(normalizedId);

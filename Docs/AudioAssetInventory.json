@@ -1,0 +1,377 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-09-25",
+  "sourceRegister": "Docs/AudioSources.md",
+  "note": "Inventory identity snapshot, not proof of permission. Source IDs refer to the source register; UNKNOWN requires further research.",
+  "assets": [
+    {
+      "path": "Assets/BGMS/m-art_Jimejime.mp3",
+      "sourceId": "M-ART",
+      "guid": "c5a37358037af6f4d8ec93420f50821f",
+      "sha256": "2CB609D7A5FBC6E929EEC8DF0591DD0D321F9AF2F50C3D9F0B548B85125B9E38",
+      "bytes": 2347862,
+      "durationSeconds": 97.5,
+      "tags": {
+        "artist": "Napi",
+        "title": "じめじめ地面",
+        "comment": "M-ART(https://mart.kitunebi.com)",
+        "date": "2022"
+      },
+      "originalBackup": null
+    },
+    {
+      "path": "Assets/BGMS/m-art_RoyalGarden.mp3",
+      "sourceId": "M-ART",
+      "guid": "c3f19dc606e35d948a8422d443a2c48d",
+      "sha256": "21ACBD77CF2F92F25DB522133A03A33CF6E6282FFF4A020791A454CC202CE1F3",
+      "bytes": 2424720,
+      "durationSeconds": 104.392857,
+      "tags": {
+        "artist": "Napi",
+        "title": "ロイヤルガーデン",
+        "comment": "M-ART(https://mart.kitunebi.com)",
+        "date": "2022"
+      },
+      "originalBackup": null
+    },
+    {
+      "path": "Assets/BGMS/m-art_UndergroundInvasion.mp3",
+      "sourceId": "M-ART",
+      "guid": "a1e3ed5a7ee7bfd438bfb219d52e86d7",
+      "sha256": "0D9E5ABE4DA079AE1DE204317296FA9A2F7BCE44CE6EE8B06F2596FDB1E7D74F",
+      "bytes": 2109142,
+      "durationSeconds": 88.027029,
+      "tags": {
+        "artist": "Napi",
+        "title": "地下攻略",
+        "comment": "M-ART(https://mart.kitunebi.com)",
+        "date": "2022"
+      },
+      "originalBackup": null
+    },
+    {
+      "path": "Assets/BGMS/MusMus-BGM-157.mp3",
+      "sourceId": "S5",
+      "guid": "266a2151892e3154baf5f52d559b32b5",
+      "sha256": "60052DB14AF600E7495D539387CD413FB405720BF785D7256A3FA8251AD3A73B",
+      "bytes": 5533386,
+      "durationSeconds": 345.500023,
+      "tags": {
+        "TBPM": "60",
+        "encoder": "Studio One 5.1.0.61423",
+        "album": "MusMus",
+        "artist": "watson",
+        "album_artist": "watson",
+        "title": "世界は灰色だったのに",
+        "date": "2022"
+      },
+      "originalBackup": null
+    },
+    {
+      "path": "Assets/BGMS/MusMus-PKPK-002.mp3",
+      "sourceId": "S5",
+      "guid": "4b05af66a66650945b1e2f307cfc844e",
+      "sha256": "27B49DABDD512818895AA3A03993E1A410632CACF781BDD6B8FE5FB43A297232",
+      "bytes": 1261796,
+      "durationSeconds": 78.602438,
+      "tags": {
+        "album": "MusMus",
+        "album_artist": "watson",
+        "title": "MusMus Quest ～城～",
+        "artist": "watson",
+        "genre": "ピコピコ",
+        "date": "2021"
+      },
+      "originalBackup": null
+    },
+    {
+      "path": "Assets/Resources/Audio/BombExplosion.wav",
+      "sourceId": "S1",
+      "guid": "f364770eb83947be9186bf367196a4ca",
+      "sha256": "DC0E718AA9145ED38C8B069FB0C62A551D74B3FC9122CB891DC946698E7A1CE2",
+      "bytes": 47706,
+      "durationSeconds": 0.54,
+      "tags": {
+        "encoder": "Lavf63.1.101"
+      },
+      "originalBackup": null
+    },
+    {
+      "path": "Assets/Resources/Audio/CharacterDamage.wav",
+      "sourceId": "S1",
+      "guid": "a17c3a49fbcf473083f4f1dd7fd81937",
+      "sha256": "27751D0E18664025BDA91D394548B4410521B22E8DFE70D34E49FB858B6FD472",
+      "bytes": 18684,
+      "durationSeconds": 0.210952,
+      "tags": {
+        "encoder": "Lavf63.1.101"
+      },
+      "originalBackup": null
+    },
+    {
+      "path": "Assets/Resources/Audio/CharacterDeath.wav",
+      "sourceId": "S1",
+      "guid": "e2a1b1451b81462ea6c3993835d46e7a",
+      "sha256": "E6493FF432A9DB5F9EE69881841BFCA905B2A9CB0BB0F5F1AB11B35690BE902F",
+      "bytes": 23450,
+      "durationSeconds": 0.264989,
+      "tags": {
+        "encoder": "Lavf63.1.101"
+      },
+      "originalBackup": null
+    },
+    {
+      "path": "Assets/Resources/Audio/DoorBreak.wav",
+      "sourceId": "S6",
+      "guid": "3f22ed120148407796e6087c9db90849",
+      "sha256": "5C478035E606D375CA3669ECF52CCAAC037053E6C87178BA8ED03D056D4F613B",
+      "bytes": 117736,
+      "durationSeconds": 1.333991,
+      "tags": {
+        "encoder": "Lavf63.1.101"
+      },
+      "originalBackup": null,
+      "previousVersions": [
+        {
+          "sourceId": "S2",
+          "sha256": "37A8D1F2ED4C2BB75E72268583086277B200F0C106F26726B1359068FDDB0345",
+          "bytes": 30326,
+          "durationSeconds": 0.342948,
+          "note": "Replaced 2026-09-25: stronger destruction recording. See Docs/DestructionAudio.md for original source."
+        }
+      ]
+    },
+    {
+      "path": "Assets/Resources/Audio/GlassBreak.wav",
+      "sourceId": "S7",
+      "guid": "e29d6d35122645fdaca034b6e11b8966",
+      "sha256": "7358C76A6598C95476789740394E071F79A0F7703865753B12F00A765926DC0F",
+      "bytes": 110594,
+      "durationSeconds": 1.253016,
+      "tags": {
+        "encoder": "Lavf63.1.101"
+      },
+      "originalBackup": null,
+      "previousVersions": [
+        {
+          "sourceId": "S3",
+          "sha256": "3493974E4F61565255A5C6379B9AEBF7D84C3F1E07BE38125300A2634B4CCBF8",
+          "bytes": 75048,
+          "durationSeconds": 0.85,
+          "note": "Replaced 2026-09-25: stronger destruction recording. See Docs/DestructionAudio.md for original source."
+        }
+      ]
+    },
+    {
+      "path": "Assets/Resources/Audio/NpcAwarenessAlert.wav",
+      "sourceId": "S4",
+      "guid": "2c396c3f92de495ba5f316f5d5dd5d60",
+      "sha256": "9A005B1700A9D0C47742E719136DF08ADE560B57BA22E67BBEA178C0EC96F9E5",
+      "bytes": 127716,
+      "durationSeconds": 1.447143,
+      "tags": {
+        "encoder": "Lavf63.1.101"
+      },
+      "originalBackup": null
+    },
+    {
+      "path": "Assets/SoundEffect/cncl01.wav",
+      "sourceId": "S5",
+      "guid": "aa6c3c9180d76034583f02cbc82ec3bf",
+      "sha256": "12C214270F55FC064286CC93B117E1DAEABFE0BF7D409E0F4A0C416557A4E1F0",
+      "bytes": 61832,
+      "durationSeconds": 0.349819,
+      "tags": {
+        "artist": "watson",
+        "date": "2014",
+        "album": "MusMus",
+        "encoder": "Lavf63.1.101"
+      },
+      "originalBackup": {
+        "path": ".codex-temp/Audio/OnsetTrim-20260919-124956-590/cncl01.mp3",
+        "sha256": "DDFDAF1DFB69467F17DD9DCE0A7297E60E1D8DCB8432543FA645799392F62FB5",
+        "tags": {
+          "album": "MusMus",
+          "artist": "watson",
+          "album_artist": "watson",
+          "date": "2014"
+        }
+      }
+    },
+    {
+      "path": "Assets/SoundEffect/cncl02.wav",
+      "sourceId": "S5",
+      "guid": "aeb480a29c46b6f48af18e906299a5f7",
+      "sha256": "D94EE29AAA1E0FCD5C7E7EF2E78EC5D68E06796674ACEDDC141D3D77BADF2C64",
+      "bytes": 92688,
+      "durationSeconds": 0.524739,
+      "tags": {
+        "artist": "watson",
+        "date": "2014",
+        "album": "MusMus",
+        "encoder": "Lavf63.1.101"
+      },
+      "originalBackup": {
+        "path": ".codex-temp/Audio/OnsetTrim-20260919-124956-590/cncl02.mp3",
+        "sha256": "F3E765A70095DA4D769C62DFC335285BCCF66EB8EB98DAA164D377A83DCA8B79",
+        "tags": {
+          "album": "MusMus",
+          "artist": "watson",
+          "album_artist": "watson",
+          "date": "2014"
+        }
+      }
+    },
+    {
+      "path": "Assets/SoundEffect/cncl04.wav",
+      "sourceId": "S5",
+      "guid": "405dc3a6d7539434986f2fce6db746a6",
+      "sha256": "6956243E17BA4BB60B64D5BFCAB1170C9D7CF6F75DA9A3D0C0580192CBE175E9",
+      "bytes": 126432,
+      "durationSeconds": 0.716032,
+      "tags": {
+        "artist": "watson",
+        "date": "2014",
+        "album": "MusMus",
+        "encoder": "Lavf63.1.101"
+      },
+      "originalBackup": {
+        "path": ".codex-temp/Audio/OnsetTrim-20260919-124956-590/cncl04.mp3",
+        "sha256": "41561B3E75E2619CEC5966B632FD3AD94949BEE3DA6A4C17DABDB2EAFD61FB5C",
+        "tags": {
+          "album": "MusMus",
+          "artist": "watson",
+          "album_artist": "watson",
+          "date": "2014"
+        }
+      }
+    },
+    {
+      "path": "Assets/SoundEffect/cncl05.wav",
+      "sourceId": "S5",
+      "guid": "8d51395eabe593544b0a793eb51f77fd",
+      "sha256": "9F429E0889EF3C48BCF07DE989EE3B9A976C350A40F017841E4E85E3C24545BE",
+      "bytes": 28372,
+      "durationSeconds": 0.160136,
+      "tags": {
+        "artist": "watson",
+        "date": "2014",
+        "album": "MusMus",
+        "encoder": "Lavf63.1.101"
+      },
+      "originalBackup": {
+        "path": ".codex-temp/Audio/OnsetTrim-20260919-124956-590/cncl05.mp3",
+        "sha256": "84895AF6FFAAEC292AB585CAE4D63CA4F5671B57981CF1A7DFD9DEEDC22EEB35",
+        "tags": {
+          "album": "MusMus",
+          "artist": "watson",
+          "album_artist": "watson",
+          "date": "2014"
+        }
+      }
+    },
+    {
+      "path": "Assets/SoundEffect/cncl06.wav",
+      "sourceId": "S5",
+      "guid": "51c05f0391c761f4d8a1a72d71b43a97",
+      "sha256": "8EED55195B2D16D3D5A41653FB554B1A25F68510F9ED380698B0DFB12FDD17BD",
+      "bytes": 143004,
+      "durationSeconds": 0.809977,
+      "tags": {
+        "artist": "watson",
+        "date": "2014",
+        "album": "MusMus",
+        "encoder": "Lavf63.1.101"
+      },
+      "originalBackup": {
+        "path": ".codex-temp/Audio/OnsetTrim-20260919-124956-590/cncl06.mp3",
+        "sha256": "CE0062F7021BCFCEBF287B0B3521DC2DC8FA1CFF0AB1502850331CC361B3B43E",
+        "tags": {
+          "album": "MusMus",
+          "artist": "watson",
+          "album_artist": "watson",
+          "date": "2014"
+        }
+      }
+    },
+    {
+      "path": "Assets/SoundEffect/cncl07.wav",
+      "sourceId": "S5",
+      "guid": "aec7b25afa8a16d418995af322ef6b9d",
+      "sha256": "D65BC488ADDFF455A78347455BDF41503F40B3D16D54835F94D4BA318010AFE3",
+      "bytes": 86072,
+      "durationSeconds": 0.487234,
+      "tags": {
+        "artist": "watson",
+        "date": "2014",
+        "album": "MusMus",
+        "encoder": "Lavf63.1.101"
+      },
+      "originalBackup": {
+        "path": ".codex-temp/Audio/OnsetTrim-20260919-124956-590/cncl07.mp3",
+        "sha256": "A659125803FAADE6A9EF4A2130B05F200BCE91EAAD34E29A5B3A63FF34893061",
+        "tags": {
+          "album": "MusMus",
+          "artist": "watson",
+          "album_artist": "watson",
+          "date": "2014"
+        }
+      }
+    },
+    {
+      "path": "Assets/SoundEffect/glassbrokechanged.wav",
+      "sourceId": "UNKNOWN",
+      "guid": "93bf4cef59a02b9468783c28dc705be7",
+      "sha256": "9E1836DF2C8B6183DD028DCC341AA78EB2C33B6D9C5B62BCBAF7E2DC4CBB6C31",
+      "bytes": 170964,
+      "durationSeconds": 0.890208,
+      "tags": null,
+      "originalBackup": null
+    },
+    {
+      "path": "Assets/SoundEffect/Hit.wav",
+      "sourceId": "S5",
+      "guid": "f870327fc4b287448a8fe336bcb9421b",
+      "sha256": "F77D5E4644BB87D6213EED56809A61D4127ADD96ECB43556E990DD4251A83A63",
+      "bytes": 78000,
+      "durationSeconds": 0.441474,
+      "tags": {
+        "artist": "watson",
+        "date": "2014",
+        "album": "MusMus",
+        "encoder": "Lavf63.1.101"
+      },
+      "originalBackup": {
+        "path": ".codex-temp/Audio/OnsetTrim-20260919-124956-590/Hit.mp3",
+        "sha256": "23A5AA3C9557B6533E1E3813D21384303BE1EBE2A6B4F801C2706697C91AB0F1",
+        "tags": {
+          "album": "MusMus",
+          "artist": "watson",
+          "album_artist": "watson",
+          "date": "2014"
+        }
+      }
+    },
+    {
+      "path": "Assets/SoundEffect/MGS 驚嘆號音效.wav",
+      "sourceId": "UNKNOWN",
+      "guid": "ac58db20dd4248d4fab0bb07169cff60",
+      "sha256": "12E3E2869A97FEE35833238C9BE0DF2A6BACF8AC5B7D5EACFE105B8E38E738F3",
+      "bytes": 264534,
+      "durationSeconds": 1.499184,
+      "tags": {
+        "encoder": "Lavf63.1.101"
+      },
+      "originalBackup": {
+        "path": ".codex-temp/Audio/OnsetTrim-20260919-124956-590/MGS 驚嘆號音效.mp3",
+        "sha256": "E4B68408EB5EABE851A7D5FFFA42D53C5C1B3BD1A9CD69290EF6903CA618815D",
+        "tags": {
+          "major_brand": "mp42",
+          "minor_version": "0",
+          "compatible_brands": "isommp42",
+          "encoder": "Lavf57.25.100"
+        }
+      }
+    }
+  ]
+}

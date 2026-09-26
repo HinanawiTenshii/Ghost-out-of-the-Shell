@@ -132,5 +132,6 @@ MonoBehaviour:
   shakeDuration: 0.28
   shakeAmount: 0.03
   shakeSpeed: 95
-  breakSound: {fileID: 8300000, guid: 93bf4cef59a02b9468783c28dc705be7, type: 3}
-  breakSoundVolume: 5
+  breakMaterial: 1
+  breakSound: {fileID: 8300000, guid: e29d6d35122645fdaca034b6e11b8966, type: 3}
+  breakSoundVolume: 0.65

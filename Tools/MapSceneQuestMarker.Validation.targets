@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="WaterwayGate.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\UI\MapSceneQuestMarkerGraphic.cs" />
+    <Compile Include="Assets\Scripts\UI\MapSceneQuestMarkerGraphic.cs" />
+  </ItemGroup>
+</Project>

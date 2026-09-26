@@ -9,6 +9,7 @@ $expected = @{
     'NpcAwarenessAlert'='2c396c3f92de495ba5f316f5d5dd5d60'
     'CharacterDamage'='a17c3a49fbcf473083f4f1dd7fd81937'; 'CharacterDeath'='e2a1b1451b81462ea6c3993835d46e7a'
     'BombExplosion'='f364770eb83947be9186bf367196a4ca'
+    'DoorBreak'='3f22ed120148407796e6087c9db90849'; 'GlassBreak'='e29d6d35122645fdaca034b6e11b8966'
 }
 $files = @(Get-ChildItem "$root/Assets/SoundEffect","$root/Assets/Resources/Audio" -File -Filter '*.wav')
 if ($files.Count -ne $expected.Count) { throw 'Unexpected short audio asset inventory' }

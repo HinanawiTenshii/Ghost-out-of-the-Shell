@@ -333,6 +333,7 @@ public sealed class PersistentInventory : MonoBehaviour
 
         string normalizedId = itemId.Trim();
         int safeMaxStack = Mathf.Max(1, maxStackSize);
+        if (normalizedId == BatteryPickupItem.DefaultItemId) safeMaxStack = 1;
         // Older crystal pickups incorrectly carried unique IDs. They are still
         // fungible crystals and may join a stack without changing keys/charged items.
         bool legacyCrystalStack = normalizedId == "stability_crystal";
@@ -580,6 +581,11 @@ public sealed class PersistentInventory : MonoBehaviour
         ZeldaFourWayMover controlledMover =
             ZeldaRuntimeRegistry.GetControlledMover();
         Slot placementSlot = GetSlot(SelectedSlotIndex);
+        // Passive components (e.g. batteries) use E at their receiving mechanism,
+        // never R, including the nearby cardboard-box storage shortcut.
+        if (placementSlot != null && !placementSlot.IsEmpty &&
+            ResolveItemPrefab(placementSlot.ItemId)?.CanUseFromInventory == false)
+            return false;
         // Character-items have identical R/Q semantics, even beside/inside a box.
         if (placementSlot != null && !placementSlot.IsEmpty &&
             ResolveItemPrefab(placementSlot.ItemId)?.UsePlacesInWorld == true)

@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="PuppetRemote.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\UI\TitleScreenGlow.cs" />
+    <Compile Include="Assets\Scripts\UI\TitleScreenGlow.cs" />
+  </ItemGroup>
+</Project>

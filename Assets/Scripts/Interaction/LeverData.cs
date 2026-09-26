@@ -35,6 +35,7 @@ public class LeverData : MonoBehaviour
 
     public int Complexity => complexity;
     public bool IsOn => isOn;
+    public bool HasBatteryPower => BatterySocket.IsPowered(this);
     public static IReadOnlyCollection<LeverData> WorldLevers => ActiveLevers;
     public SpriteRenderer VisualRenderer => spriteRenderer;
     public Vector2 PuppetMountPoint
@@ -121,6 +122,7 @@ public class LeverData : MonoBehaviour
 
     public void ActivateFromClockworkPuppet()
     {
+        if (!HasBatteryPower) return;
         isOn = !isOn;
         ApplyVisual();
         SignalEmitted?.Invoke(this, isOn);
@@ -129,7 +131,7 @@ public class LeverData : MonoBehaviour
 
     private void Update()
     {
-        if (DocumentReader.IsInputBlocked)
+        if (DocumentReader.IsInputBlocked || !HasBatteryPower)
         {
             return;
         }
@@ -171,7 +173,7 @@ public class LeverData : MonoBehaviour
 
     private bool TryInteract(ZeldaCharacterData characterData)
     {
-        if (characterData == null || characterData.FinalSkillValue < complexity)
+        if (characterData == null || !HasBatteryPower || characterData.FinalSkillValue < complexity)
         {
             return false;
         }
@@ -196,7 +198,7 @@ public class LeverData : MonoBehaviour
 
     private void UpdateInteractionPrompt()
     {
-        ZeldaCharacterData characterData = DocumentReader.IsInputBlocked
+        ZeldaCharacterData characterData = DocumentReader.IsInputBlocked || !HasBatteryPower
             ? null
             : FindNearbyActiveCharacter();
         if (characterData == null)
@@ -291,6 +293,7 @@ public class LeverData : MonoBehaviour
 
     private void SetInteractionPromptVisible(bool visible)
     {
+        visible &= HasBatteryPower;
         if (interactionPromptObject != null
             && interactionPromptObject.activeSelf != visible)
         {
@@ -325,6 +328,13 @@ public class LeverData : MonoBehaviour
         if (bridgeMechanism != null)
         {
             bridgeMechanism.ToggleFromExternal();
+            return;
+        }
+
+        WaterwayGate waterwayGate = target.GetComponent<WaterwayGate>();
+        if (waterwayGate != null)
+        {
+            waterwayGate.ToggleFromExternal();
             return;
         }
 

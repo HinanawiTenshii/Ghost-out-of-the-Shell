@@ -31,7 +31,8 @@ public sealed class GrowthCollectible : MonoBehaviour
     [SerializeField, Min(0.1f)] private float pickupBurstLifetime = 0.65f;
     [SerializeField, Min(0.1f)] private float pickupBurstSpeed = 1.25f;
     [SerializeField, Min(0.1f)] private float pickupHomingSpeed = 12f;
-    [SerializeField, Range(0.005f, 0.6f)] private float pickupTrailDuration = 0.02f;
+    [Tooltip("Ribbon history and absorption time. Legacy shorter values use a 0.18 second minimum.")]
+    [SerializeField, Range(0.18f, 0.45f)] private float pickupTrailDuration = 0.24f;
     [SerializeField, Range(0.05f, 0.5f)] private float pickupFlashDuration = 0.16f;
 
     private bool collected;
@@ -414,7 +415,7 @@ public sealed class GrowthCollectible : MonoBehaviour
         pickupBurstLifetime = Mathf.Max(0.1f, pickupBurstLifetime);
         pickupBurstSpeed = Mathf.Max(0.1f, pickupBurstSpeed);
         pickupHomingSpeed = Mathf.Max(0.1f, pickupHomingSpeed);
-        pickupTrailDuration = Mathf.Clamp(pickupTrailDuration, 0.005f, 0.6f);
+        pickupTrailDuration = Mathf.Clamp(pickupTrailDuration, 0.18f, 0.45f);
         pickupFlashDuration = Mathf.Clamp(pickupFlashDuration, 0.05f, 0.5f);
     }
 #endif

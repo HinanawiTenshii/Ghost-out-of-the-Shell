@@ -66,6 +66,8 @@ public sealed class TabJournalMenuController : MonoBehaviour
     private Text mapAreaNameText;
     private RuntimeMiniMapGraphic miniMapGraphic;
     private RectTransform mapSceneListContent;
+    private readonly Dictionary<string, GameObject> mapSceneQuestMarkers =
+        new Dictionary<string, GameObject>(StringComparer.OrdinalIgnoreCase);
     private RectTransform mapTransitionLabelLayer;
     private RectTransform mapPointLayer;
     private GameObject mapPointTooltipRoot;
@@ -86,6 +88,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
     private Image questTrackButtonBackground;
     private Text questTrackButtonText;
     private readonly List<Image> questEntryBackgrounds = new List<Image>();
+    private readonly List<Image> levelObjectiveCorners = new List<Image>();
     private string selectedQuestId;
     private float previousTimeScale = 1f;
     private bool previousCursorVisible;
@@ -185,6 +188,10 @@ public sealed class TabJournalMenuController : MonoBehaviour
             {
                 UpdateMiniMapTransitionLabels();
                 UpdateMiniMapPointPositions();
+            }
+            else if (selectedTab == 1)
+            {
+                UpdateLevelObjectiveCorners();
             }
         }
     }
@@ -319,6 +326,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
             selectButton.targetGraphic = slot.GetComponent<Image>();
             selectButton.transition = Selectable.Transition.None;
             selectButton.navigation = new Navigation { mode = Navigation.Mode.None };
+            ButtonHoverHighlight.AttachIfMissing(selectButton);
             int slotIndex = index;
             selectButton.onClick.AddListener(() => BeginEquipmentSelection(slotIndex));
             var equippedIcon = CreateUiObject("Equipped Icon", slotRect, typeof(Image)).GetComponent<Image>();
@@ -816,8 +824,11 @@ public sealed class TabJournalMenuController : MonoBehaviour
 
         for (int index = mapSceneListContent.childCount - 1; index >= 0; index--)
         {
-            Destroy(mapSceneListContent.GetChild(index).gameObject);
+            GameObject oldRow = mapSceneListContent.GetChild(index).gameObject;
+            oldRow.SetActive(false);
+            Destroy(oldRow);
         }
+        mapSceneQuestMarkers.Clear();
 
         const float rowHeight = 64f;
         const float rowSpacing = 12f;
@@ -871,8 +882,9 @@ public sealed class TabJournalMenuController : MonoBehaviour
                 typeof(Text));
             RectTransform labelRect = labelObject.GetComponent<RectTransform>();
             Stretch(labelRect);
-            labelRect.offsetMin = new Vector2(12f, 5f);
-            labelRect.offsetMax = new Vector2(-12f, -5f);
+            // Symmetrical padding keeps names centered and clear of the badge.
+            labelRect.offsetMin = new Vector2(42f, 5f);
+            labelRect.offsetMax = new Vector2(-42f, -5f);
             Text label = labelObject.GetComponent<Text>();
             label.text = GetMapSceneDisplayName(sceneName, activeScene);
             label.font = menuFont;
@@ -881,6 +893,16 @@ public sealed class TabJournalMenuController : MonoBehaviour
             label.alignment = TextAnchor.MiddleCenter;
             label.color = GhostBlue;
             label.raycastTarget = false;
+
+            GameObject markerObject = CreateUiObject(
+                "Quest Target", rowRect, typeof(MapSceneQuestMarkerGraphic));
+            RectTransform markerRect = markerObject.GetComponent<RectTransform>();
+            markerRect.anchorMin = markerRect.anchorMax = new Vector2(1f, 0.5f);
+            markerRect.anchoredPosition = new Vector2(-24f, 0f);
+            markerRect.sizeDelta = new Vector2(24f, 24f);
+            markerObject.GetComponent<MapSceneQuestMarkerGraphic>().raycastTarget = false;
+            markerObject.SetActive(false);
+            mapSceneQuestMarkers.Add(sceneName, markerObject);
         }
 
         bool selectedIsCurrent = selectedMapSceneName == activeScene.name;
@@ -901,6 +923,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
             miniMapGraphic.RebuildFromSnapshot(snapshot);
         }
         ApplyTrackedQuestTargetToMap(selectedMapSceneName, miniMapGraphic, false);
+        RefreshMapSceneQuestMarkers();
         miniMapGraphic.ResetView();
         if (selectedIsCurrent)
         {
@@ -938,6 +961,40 @@ public sealed class TabJournalMenuController : MonoBehaviour
             questJournal.TrackedEntryId,
             out target);
         mapGraphic.SetTrackedQuestTarget(found, target, clampToBorder);
+    }
+
+    private void RefreshMapSceneQuestMarkers()
+    {
+        string questId = questJournal != null ? questJournal.TrackedEntryId : null;
+        bool eligible = !string.IsNullOrWhiteSpace(questId) &&
+            !questJournal.IsEntryCompleted(questId);
+        Scene activeScene = SceneManager.GetActiveScene();
+        foreach (KeyValuePair<string, GameObject> entry in mapSceneQuestMarkers)
+        {
+            bool visible = eligible && SceneHasQuestTarget(entry.Key, activeScene, questId);
+            if (entry.Value != null && entry.Value.activeSelf != visible)
+                entry.Value.SetActive(visible);
+        }
+    }
+
+    private static bool SceneHasQuestTarget(string sceneName, Scene activeScene, string questId)
+    {
+        if (string.IsNullOrWhiteSpace(questId))
+            return false;
+        if (string.Equals(sceneName, activeScene.name, StringComparison.OrdinalIgnoreCase))
+            return RuntimeMiniMapGraphic.TryGetSceneQuestTarget(activeScene, questId, out _);
+
+        // Use the same snapshot as selecting that region, not the journal's
+        // source scene (which is where a quest was received, not its target).
+        RuntimeMiniMapSceneData snapshot = GetMiniMapSnapshot(sceneName);
+        if (snapshot == null || snapshot.QuestTargets == null)
+            return false;
+        foreach (RuntimeMiniMapQuestTargetData target in snapshot.QuestTargets)
+        {
+            if (target.questId == questId)
+                return true;
+        }
+        return false;
     }
 
     private void RebuildMiniMapTransitionLabels(Scene activeScene)
@@ -1516,6 +1573,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
 
     private void RefreshQuestJournal()
     {
+        HandleTrackedQuestChanged();
         if (questListContent == null || questTitleText == null || questDetailsText == null)
         {
             return;
@@ -1531,6 +1589,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
             Destroy(questListContent.GetChild(index).gameObject);
         }
         questEntryBackgrounds.Clear();
+        levelObjectiveCorners.Clear();
 
         IReadOnlyList<QuestJournalManager.Entry> entries = questJournal.Entries;
         QuestJournalManager.Entry selectedEntry = null;
@@ -1560,6 +1619,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
         {
             QuestJournalManager.Entry entry = entries[index];
             bool selected = entry.Id == selectedQuestId;
+            bool levelObjective = entry.IsLevelObjective;
             GameObject rowObject = CreateUiObject(
                 "Quest " + entry.Id,
                 questListContent,
@@ -1576,6 +1636,8 @@ public sealed class TabJournalMenuController : MonoBehaviour
             background.color = selected ? selectedColor : TabBlue;
             questEntryBackgrounds.Add(background);
             CreateBorder(rowRect, GhostBlue, 2f, out _);
+            if (levelObjective)
+                CreateLevelObjectiveCorners(rowRect);
 
             Button button = rowObject.GetComponent<Button>();
             button.targetGraphic = background;
@@ -1624,6 +1686,45 @@ public sealed class TabJournalMenuController : MonoBehaviour
         UpdateQuestTrackButton(selectedEntry);
     }
 
+    private void CreateLevelObjectiveCorners(RectTransform row)
+    {
+        // Larger cyan brackets stay separate from the blue selected/hover fill.
+        // Their pulse changes only color, so the title and row never shift.
+        const float length = 32f;
+        const float height = 20f;
+        const float thickness = 5f;
+        for (int x = 0; x <= 1; x++)
+        {
+            for (int y = 0; y <= 1; y++)
+            {
+                Vector2 anchor = new Vector2(x, y);
+                string corner = "Objective Corner " + x + y;
+                levelObjectiveCorners.Add(CreateBorderEdge(row, corner + " Horizontal", ZeldaUiPalette.Primary,
+                    anchor, anchor,
+                    new Vector2(x == 0 ? 0f : -length, y == 0 ? 0f : -thickness),
+                    new Vector2(x == 0 ? length : 0f, y == 0 ? thickness : 0f)));
+                levelObjectiveCorners.Add(CreateBorderEdge(row, corner + " Vertical", ZeldaUiPalette.Primary,
+                    anchor, anchor,
+                    new Vector2(x == 0 ? 0f : -thickness, y == 0 ? 0f : -height),
+                    new Vector2(x == 0 ? thickness : 0f, y == 0 ? height : 0f)));
+            }
+        }
+        UpdateLevelObjectiveCorners();
+    }
+
+    private void UpdateLevelObjectiveCorners()
+    {
+        // The journal pauses gameplay. Unscaled time keeps a slow, continuous
+        // two-second breath; the cyan base remains fully visible at its trough.
+        float pulse = (1f + Mathf.Sin(Time.unscaledTime * Mathf.PI)) * 0.5f;
+        Color color = Color.Lerp(ZeldaUiPalette.Primary, Color.white, pulse * 0.45f);
+        foreach (Image corner in levelObjectiveCorners)
+        {
+            if (corner != null)
+                corner.color = color;
+        }
+    }
+
     private void SelectQuestEntry(string entryId)
     {
         selectedQuestId = entryId;
@@ -1640,6 +1741,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
 
     private void HandleTrackedQuestChanged()
     {
+        RefreshMapSceneQuestMarkers();
         if (miniMapGraphic == null)
             return;
 
@@ -1703,6 +1805,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
         button.targetGraphic = background;
         button.interactable = true;
         button.transition = Selectable.Transition.ColorTint;
+        ButtonHoverHighlight.AttachOverlay(button);
         int selectedIndex = index;
         button.onClick.AddListener(() => SetSelectedTab(selectedIndex));
         tabButtons[index] = button;
@@ -2182,6 +2285,7 @@ public sealed class CharacterSkillPage : MonoBehaviour
         var image = rect.gameObject.AddComponent<Image>(); image.color = Dark;
         var button = rect.gameObject.AddComponent<Button>(); button.targetGraphic = image;
         button.transition = Selectable.Transition.None;
+        ButtonHoverHighlight.AttachIfMissing(button);
         if (action != null) button.onClick.AddListener(() => action());
         Border(rect); Label(rect, label, Vector2.zero, size, 18); return button;
     }

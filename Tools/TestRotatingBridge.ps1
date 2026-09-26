@@ -24,6 +24,10 @@ public class DoorHingeInteraction {
     public int toggles;
     public void ToggleFromExternal() { toggles++; IsOpen = !IsOpen; IsChangingOpenState = true; }
 }
+public class WaterwayGate {
+    public int toggles;
+    public void ToggleFromExternal() { toggles++; }
+}
 public class DoubleSlidingDoor {
     public bool IsOpenRequested, IsFullyOpen, IsFullyClosed = true;
     public bool SafetyBlocked;
@@ -83,6 +87,8 @@ public static class BridgeRegression {
         ApplyLinkedObjectChange(normalDoor); Check(normalHinge.toggles == 1, "Ordinary hinged door behavior unchanged");
         var slidingObject = new UnityEngine.GameObject(); var sliding = new DoubleSlidingDoor(); slidingObject.components[typeof(DoubleSlidingDoor)] = sliding;
         ApplyLinkedObjectChange(slidingObject); Check(sliding.toggles == 1, "Ordinary sliding door behavior unchanged");
+        var gateObject = new UnityEngine.GameObject(); var gate = new WaterwayGate(); gateObject.components[typeof(WaterwayGate)] = gate;
+        ApplyLinkedObjectChange(gateObject); Check(gate.toggles == 1 && gateObject.activeSelf, "Waterway gate toggles through its interface, not SetActive");
         var generic = new UnityEngine.GameObject(); ApplyLinkedObjectChange(generic); Check(!generic.activeSelf, "Generic linked object behavior unchanged");
         ApplyLinkedObjectChange(null);
         return checks;

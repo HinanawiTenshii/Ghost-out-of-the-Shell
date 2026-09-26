@@ -4,6 +4,7 @@ using UnityEngine;
 [RequireComponent(typeof(BoxCollider2D))]
 public class DoorData : MonoBehaviour
 {
+    public enum BreakMaterial { Wood, Glass }
     [SerializeField] private int durability = 1;
     [SerializeField] private int fragmentCount = 18;
     [SerializeField] private float fragmentLifetime = 0.85f;
@@ -12,8 +13,14 @@ public class DoorData : MonoBehaviour
     [SerializeField] private float shakeDuration = 0.28f;
     [SerializeField] private float shakeAmount = 0.09f;
     [SerializeField] private float shakeSpeed = 95f;
-    [SerializeField] private AudioClip breakSound;
-    [SerializeField] private float breakSoundVolume = 5f;
+    [Header("Destruction Audio")]
+    [SerializeField] private BreakMaterial breakMaterial;
+    [SerializeField, Tooltip("Optional override. Empty uses the material's default destruction clip.")]
+    private AudioClip breakSound;
+    [SerializeField, Range(0f, 1f)] private float breakSoundVolume = 0.7f;
+    [SerializeField, Range(0f, 1f)] private float breakSoundSpatialBlend = 0.8f;
+    [SerializeField, Min(1f)] private float breakSoundMaxDistance = 22f;
+    private static AudioClip defaultWoodBreakSound, defaultGlassBreakSound;
     [Header("AI Destruction Investigation")]
     [SerializeField, Min(0f)] private float investigationRadius = 4f;
     [SerializeField, Min(0.05f)] private float investigationPulseDuration = 0.7f;
@@ -38,6 +45,7 @@ public class DoorData : MonoBehaviour
     private void Awake()
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
+        ResolveBreakSound(); // Preload before the impact frame; clips use preloaded PCM.
         attachedVisualRestPositions = new Vector3[attachedVisuals.Length];
         for (int i = 0; i < attachedVisuals.Length; i++)
             if (attachedVisuals[i] != null)
@@ -202,19 +210,50 @@ public class DoorData : MonoBehaviour
             destructionPosition,
             isDirectCharacterAttack ? attackSource : null);
         SpawnInvestigationPulse(destructionPosition);
-        PlayBreakSound();
+        PlayBreakSound(destructionPosition);
         SpawnFragments();
         Destroy(gameObject);
     }
 
-    private void PlayBreakSound()
+    private AudioClip ResolveBreakSound()
     {
-        if (breakSound == null)
+        if (breakSound != null) return breakSound;
+        if (breakMaterial == BreakMaterial.Glass)
         {
-            return;
+            if (defaultGlassBreakSound == null)
+                defaultGlassBreakSound = Resources.Load<AudioClip>("Audio/GlassBreak");
+            return defaultGlassBreakSound;
         }
+        if (defaultWoodBreakSound == null)
+            defaultWoodBreakSound = Resources.Load<AudioClip>("Audio/DoorBreak");
+        return defaultWoodBreakSound;
+    }
 
-        AudioSource.PlayClipAtPoint(breakSound, transform.position, breakSoundVolume);
+    private void PlayBreakSound(Vector3 position)
+    {
+        if (breakSoundVolume <= 0f) return;
+        AudioClip clip = ResolveBreakSound();
+        if (clip == null) return;
+
+        // The sound outlives the destroyed object, but not its level. A distant
+        // camera streaming pass must not disable it halfway through the tail.
+        GameObject soundObject = new GameObject(name + " Break Sound");
+        UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(soundObject, gameObject.scene);
+        soundObject.transform.position = position;
+        soundObject.AddComponent<CameraVisionStreamingExempt>();
+        AudioSource source = soundObject.AddComponent<AudioSource>();
+        source.playOnAwake = false;
+        source.loop = false;
+        source.dopplerLevel = 0f;
+        source.rolloffMode = AudioRolloffMode.Linear;
+        source.minDistance = 3f;
+        source.maxDistance = Mathf.Max(3.01f, breakSoundMaxDistance);
+        source.spatialBlend = Mathf.Clamp01(breakSoundSpatialBlend);
+        source.volume = Mathf.Clamp01(breakSoundVolume);
+        source.pitch = 1f;
+        source.clip = clip;
+        source.Play();
+        Destroy(soundObject, clip.length + 0.1f);
     }
 
     private void SpawnFragments()
@@ -258,7 +297,9 @@ public class DoorData : MonoBehaviour
         shakeDuration = Mathf.Max(0f, shakeDuration);
         shakeAmount = Mathf.Max(0f, shakeAmount);
         shakeSpeed = Mathf.Max(0f, shakeSpeed);
-        breakSoundVolume = Mathf.Max(0f, breakSoundVolume);
+        breakSoundVolume = Mathf.Clamp01(breakSoundVolume);
+        breakSoundSpatialBlend = Mathf.Clamp01(breakSoundSpatialBlend);
+        breakSoundMaxDistance = Mathf.Max(3.01f, breakSoundMaxDistance);
         investigationRadius = Mathf.Max(0f, investigationRadius);
         investigationPulseDuration = Mathf.Max(0.05f, investigationPulseDuration);
     }

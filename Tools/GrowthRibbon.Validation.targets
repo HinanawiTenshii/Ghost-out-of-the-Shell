@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="MapSceneQuestMarker.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Items\GrowthPickupRibbonTrail.cs" />
+    <Compile Include="Assets\Scripts\Items\GrowthPickupRibbonTrail.cs" />
+  </ItemGroup>
+</Project>

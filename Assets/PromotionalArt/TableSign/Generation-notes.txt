@@ -1,0 +1,54 @@
+Tool: built-in image_gen.
+Final: A4 portrait 2480x3508 PNG, 300 DPI metadata; resized from generated native resolution, not native 300-DPI artwork.
+Print on A4 portrait (210x297mm). Fit image to printable page if printer cannot print borderless. No bleed added.
+Copy correction: 一块游戏 to 一款游戏.
+
+INITIAL PROMPT
+Create a finished A4 PORTRAIT game exhibition tabletop sign IMAGE, aspect ratio 210:297, target 2480x3508. Flat print artwork, not a photograph of a sign or stand. Use the attached approved game logo and key art faithfully. Reference 1 is a transparent logo whose RGB preview may show glow: render ONLY its actual solid blue letters and white wireframe tetrahedron/dotted halo without any glow. Reference 2 is approved geometric fantasy key art: three abstract faceless cloaked characters, cyan consciousness transfer arc. Maintain same blue-black/cyan modern geometric visual identity, with only tiny subdued CRT texture in art areas.
+Design an elegant highly legible information poster for an A4 acrylic tabletop holder. Consistent 12mm safe margins, clean grid, generous line spacing, all Chinese characters accurate. Upper 36%: compact logo at upper left, three-character key visual to its right and below, visually balanced across width. Show title only ONCE in logo: GHOST / out of the / SHELL. Logo blue lettering, white collectible emblem. Hero art cropped to busts without duplicate title.
+Middle area 36%-67%: big 2-line Chinese hook in pale cyan, then section heading 游戏介绍 and the complete explanatory paragraph in clear OFF-WHITE modern Chinese sans-serif. Lower 67%-95%: section heading 游戏操作, then 9 concise controls arranged in a neat TWO-COLUMN grid with blue outlined keycaps and white descriptions. Final item may span full width if needed. No extra copy, no invented slogans, no QR code, no dates, no platform logos. Avoid ornamental clutter. Text must be comfortably readable printed at A4 (body equivalent at least 10.5pt, controls at least 11pt). Main background deep navy-black, typography high contrast. Decorative lines thin and cyan, no boxes around entire page.
+
+ALL CHINESE COPY VERBATIM:
+Hook:
+“这是一个被圣剑选中的勇者的故事，
+但你并不是故事的主角。”
+
+Heading:
+游戏介绍
+
+Paragraph:
+《Ghost out of the Shell》是一款俯视角潜行冒险游戏，在故事中，你不再是拯救世界的勇者，而是一个被勇者抛弃的本应操控他的幽灵。尽管失去了躯壳，但你也因此获得了附身故事中其他角色的能力，通过这一能力，你踏上了追寻勇者并尝试重新控制它的冒险。
+
+Heading:
+游戏操作
+
+Controls, exact nine pairs with no omissions:
+WASD    控制移动
+E    交互
+F    附身其他角色
+Tab    打开地图与能力界面
+Esc    打开暂停菜单
+鼠标左键    攻击
+鼠标右键    显示周围属性
+F1    快速存储
+F2    快速读取
+
+Prioritize flawless Chinese typesetting and a structured reading order. Keep all requested information complete. Professional final printed sign visual, accurate A4 proportions.
+
+LOGO CORRECTION
+Make one tiny localized color correction to this finished Chinese A4 tabletop poster. Change ONLY the top-left logo's lowercase middle words "out of the" from white to the same blue as the existing GHOST and SHELL letters. Keep EVERYTHING ELSE unchanged: all Chinese text exactly, all body copy, layout, nine control rows, keycaps, character artwork, heading and line colors. Do not alter the white tetrahedron and its white dotted halo. Do not add glow or shading. Preserve A4 portrait ratio. This is a single color edit in top-left logo only.
+
+INTUITIVE CONTROLS EDIT
+Edit ONLY the bottom "游戏操作" section of this A4 portrait game tabletop poster to make controls visually intuitive. Preserve all upper artwork, blue logo with white tetrahedron, hook text, full game introduction text, margins, typography, background and overall A4 proportions unchanged. The controls area may begin slightly higher to use space efficiently, but do not remove or shrink body copy.
+Replace plain text key boxes with actual simple KEYBOARD KEYCAP DIAGRAMS and MOUSE DIAGRAMS, sharp minimal cyan outlines on dark navy, white labels. Keep clear balanced 2-column grid and enough spacing.
+LEFT COLUMN:
+Top: four separate square keyboard keys in true WASD arrangement, W centered ABOVE a row A S D. Place Chinese label 控制移动 to the right of this cluster. This block spans more height than a single row.
+Then individual recognizable physical keyboard keycaps with subtly inset top face and corner bevel, labeled E, F, Tab, Esc, each next to exact labels:
+E → 交互
+F → 附身其他角色
+Tab → 打开地图与能力界面
+Esc → 打开暂停菜单
+RIGHT COLUMN:
+Two separate TOP-VIEW MOUSE diagrams, each with rounded mouse body, vertical division between left and right click zones and a small central scroll wheel. For first diagram fill ONLY the LEFT button cyan, leave right dark; text to right 鼠标左键 / 攻击. For second diagram fill ONLY the RIGHT button cyan, leave left dark; text to right 鼠标右键 / 显示周围属性. No perspective angle, left button on viewer's left. The highlighted button must be unmistakable. Do not replace mouse diagram with rectangular written key label.
+Then two simple keyboard keycaps F1 and F2, same style as left column, exact labels 快速存储 and 快速读取.
+Use nine action entries in total, all included. Distinguish keyboard keys from mouse illustrations. Text needs to remain large and perfectly readable when printed A4. Do not put literal arrows between keycaps and words; just leave a clear gap. Do not add headings or English translations. No decorative clutter. Keep original flat modern geometric blue-black identity, preserve no glow on text, subtle CRT only on background. Finished A4 vertical poster PNG.

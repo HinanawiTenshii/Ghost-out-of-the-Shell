@@ -39,16 +39,16 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _CRT_Brightness: 1.5
+    - _CRT_Brightness: 1.51
     - _CRT_ChromaticAberration: 1.25
     - _CRT_Contrast: 1.12
-    - _CRT_Curvature: 0.019
-    - _CRT_Glow: 0.14
-    - _CRT_MaskIntensity: 0.14
-    - _CRT_NoiseIntensity: 0.018
-    - _CRT_ScanlineCount: 180
-    - _CRT_ScanlineIntensity: 0.27
-    - _CRT_TimeValue: 775.86725
+    - _CRT_Curvature: 0.04
+    - _CRT_Glow: 0.313
+    - _CRT_MaskIntensity: 0.1
+    - _CRT_NoiseIntensity: 0
+    - _CRT_ScanlineCount: 270
+    - _CRT_ScanlineIntensity: 0.301
+    - _CRT_TimeValue: 30.78337
     - _CRT_Vignette: 0
     m_Colors: []
   m_BuildTextureStacks: []

@@ -621,29 +621,39 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
 
     private void CollectKnownQuestTargets(Scene scene)
     {
-        AddNamedQuestTarget(scene, "level0.escape_prison", "FinalTarget");
-        AddNamedQuestTarget(
-            scene,
-            "level0.obtain_gate_key",
-            "GoldenKey",
-            new Vector2(0f, 0.72f));
-        AddNamedQuestTarget(scene, "level1.escape_castle", "FinalTarget");
-        AddNamedQuestTarget(scene, "level1.craft_super_bomb", "WorkTable");
-        AddNamedQuestTarget(scene, "level1.open_monster_cage", "Behemoth");
-        AddNamedQuestTarget(scene, "level1.find_castle_gate_key", "MainGate");
+        string[] ids = {
+            "level0.escape_prison", "level0.obtain_gate_key", "level1.escape_castle",
+            "level1.craft_super_bomb", "level1.open_monster_cage", "level1.find_castle_gate_key"
+        };
+        foreach (string id in ids)
+        {
+            if (TryGetSceneQuestTarget(scene, id, out Vector2 position))
+                questTargets.Add(new RuntimeMiniMapQuestTargetData { questId = id, position = position });
+        }
     }
 
-    private void AddNamedQuestTarget(Scene scene, string questId, string objectName)
+    // The map and region buttons share the same live target rules, including
+    // inactive streamed objects. No scene load or map mesh rebuild is needed.
+    public static bool TryGetSceneQuestTarget(Scene scene, string questId, out Vector2 position)
     {
-        AddNamedQuestTarget(scene, questId, objectName, Vector2.zero);
-    }
-
-    private void AddNamedQuestTarget(
-        Scene scene,
-        string questId,
-        string objectName,
-        Vector2 positionOffset)
-    {
+        position = Vector2.zero;
+        if (!scene.IsValid() || !scene.isLoaded)
+            return false;
+        string objectName;
+        Vector2 positionOffset = Vector2.zero;
+        switch (questId)
+        {
+            case "level0.escape_prison":
+            case "level1.escape_castle": objectName = "FinalTarget"; break;
+            case "level0.obtain_gate_key":
+                objectName = "GoldenKey";
+                positionOffset = new Vector2(0f, 0.72f);
+                break;
+            case "level1.craft_super_bomb": objectName = "WorkTable"; break;
+            case "level1.open_monster_cage": objectName = "Behemoth"; break;
+            case "level1.find_castle_gate_key": objectName = "MainGate"; break;
+            default: return false;
+        }
         Transform[] transforms = FindObjectsOfType<Transform>(true);
         for (int index = 0; index < transforms.Length; index++)
         {
@@ -660,14 +670,11 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
                         markerTransform = doorChild;
                     }
                 }
-                questTargets.Add(new RuntimeMiniMapQuestTargetData
-                {
-                    questId = questId,
-                    position = (Vector2)markerTransform.position + positionOffset
-                });
-                return;
+                position = (Vector2)markerTransform.position + positionOffset;
+                return true;
             }
         }
+        return false;
     }
 
     private void AddColliderPaths(Collider2D collider)
@@ -1057,7 +1064,7 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
         vertexHelper.AddTriangle(startIndex, startIndex + 2, startIndex + 3);
     }
 
-    private static void AddQuestTargetMarker(
+    internal static void AddQuestTargetMarker(
         VertexHelper vertexHelper,
         Vector2 center,
         float scale)

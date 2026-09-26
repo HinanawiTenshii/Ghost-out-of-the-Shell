@@ -1,0 +1,9 @@
+<Project>
+  <Import Project="WaterwayGateTargetFade.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Interaction\BatterySocketCable.cs;Assets\Scripts\Interaction\OrthogonalCableRouter.cs" />
+    <Compile Include="Assets\Scripts\Interaction\BatterySocketCable.cs;Assets\Scripts\Interaction\OrthogonalCableRouter.cs" />
+    <Compile Remove="Assets\Scripts\Items\BatteryPickupItem.cs;Assets\Scripts\Items\BatteryPickupItemVisual.cs;Assets\Scripts\Interaction\BatterySocket.cs;Assets\Scripts\Interaction\BatterySocketVisual.cs" />
+    <Compile Include="Assets\Scripts\Items\BatteryPickupItem.cs;Assets\Scripts\Items\BatteryPickupItemVisual.cs;Assets\Scripts\Interaction\BatterySocket.cs;Assets\Scripts\Interaction\BatterySocketVisual.cs" />
+  </ItemGroup>
+</Project>

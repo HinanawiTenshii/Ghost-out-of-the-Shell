@@ -57,6 +57,7 @@ public class PickupItemBase : MonoBehaviour
     public virtual float InventoryCharge => 0f;
     public virtual string InventoryState => string.Empty;
     public virtual bool UsePlacesInWorld => false;
+    public virtual bool CanUseFromInventory => true;
     protected virtual bool UsesTriggerCollider => true;
     protected virtual bool CanAttemptPickup => true;
 

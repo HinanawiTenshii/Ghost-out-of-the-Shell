@@ -326,7 +326,9 @@ public sealed class SaveSlotPanel : MonoBehaviour
         var text = Rect("Label", parent, pos, size).gameObject.AddComponent<Text>();
         text.text = value; text.font = font; text.fontSize = fontSize;
         text.color = ZeldaUiPalette.Ghost; text.alignment = alignment;
-        text.raycastTarget = false; return text;
+        text.raycastTarget = false;
+        if (useTitleLayout) TitleScreenGlow.Attach(text);
+        return text;
     }
     private static void MakeButton(RectTransform rect, bool enabled, Action action)
     {

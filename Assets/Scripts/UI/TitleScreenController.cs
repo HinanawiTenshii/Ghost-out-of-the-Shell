@@ -141,9 +141,9 @@ public sealed class TitleScreenController : MonoBehaviour
             new Color(0.025f, 0.075f, 0.12f, 0.82f);
         CreateBorder(titlePanelRect, GhostBlue, 3f);
 
-        CreateTitleText(titlePanelRect, "GHOST", new Vector2(0f, 105f), 58);
-        CreateTitleText(titlePanelRect, "out of the", new Vector2(0f, 0f), 32);
-        CreateTitleText(titlePanelRect, "SHELL", new Vector2(0f, -105f), 58);
+        CreateTitleText(titlePanelRect, "GHOST", new Vector2(0f, 64f), 84);
+        CreateTitleText(titlePanelRect, "out of the", new Vector2(0f, 0f), 24);
+        CreateTitleText(titlePanelRect, "SHELL", new Vector2(0f, -64f), 84);
 
         RectTransform optionsRoot = CreateUiObject(
             "Title Options",
@@ -220,7 +220,7 @@ public sealed class TitleScreenController : MonoBehaviour
         rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.pivot = new Vector2(0.5f, 0.5f);
         rect.anchoredPosition = position;
-        rect.sizeDelta = new Vector2(360f, 78f);
+        rect.sizeDelta = new Vector2(360f, fontSize + 8f);
         Text text = textObject.GetComponent<Text>();
         text.text = value;
         text.font = titleFont;
@@ -229,6 +229,7 @@ public sealed class TitleScreenController : MonoBehaviour
         text.alignment = TextAnchor.MiddleCenter;
         text.color = GhostBlue;
         text.raycastTarget = false;
+        TitleScreenGlow.Attach(text);
     }
 
     private void CreateOption(
@@ -284,6 +285,7 @@ public sealed class TitleScreenController : MonoBehaviour
         text.alignment = TextAnchor.MiddleLeft;
         text.color = interactable ? GhostBlue : DisabledBlue;
         text.raycastTarget = false;
+        TitleScreenGlow.Attach(text);
     }
 
     private void EnsureRenderPriority()
@@ -354,6 +356,7 @@ public sealed class TitleScreenController : MonoBehaviour
         Image image = edgeObject.GetComponent<Image>();
         image.color = color;
         image.raycastTarget = false;
+        TitleScreenGlow.Attach(image);
     }
 
     private static GameObject CreateUiObject(

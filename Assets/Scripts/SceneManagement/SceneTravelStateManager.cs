@@ -32,6 +32,8 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
         public bool doorOpen;
         public bool hasLever;
         public bool leverIsOn;
+        public bool hasBatterySocket;
+        public BatterySocket.RuntimeState batterySocketState;
         public bool hasItemSubmissionStation;
         public SpecificItemSubmissionStation.RuntimeState itemSubmissionState;
         public string pickupId, pickupIdentity;
@@ -449,6 +451,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
             ZeldaCharacterAiBase ai = target.GetComponent<ZeldaCharacterAiBase>();
             DoorHingeInteraction door = target.GetComponent<DoorHingeInteraction>();
             LeverData lever = target.GetComponent<LeverData>();
+            BatterySocket batterySocket = target.GetComponent<BatterySocket>();
             SpecificItemSubmissionStation itemSubmissionStation =
                 target.GetComponent<SpecificItemSubmissionStation>();
             ObjectState state = new ObjectState
@@ -474,6 +477,8 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
                 doorOpen = door != null && door.IsOpen,
                 hasLever = lever != null,
                 leverIsOn = lever != null && lever.IsOn,
+                hasBatterySocket = batterySocket != null,
+                batterySocketState = batterySocket != null ? batterySocket.CaptureRuntimeState() : default,
                 hasItemSubmissionStation = itemSubmissionStation != null,
                 itemSubmissionState = itemSubmissionStation != null
                     ? itemSubmissionStation.CaptureRuntimeState()
@@ -698,6 +703,10 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
             {
                 lever.ApplyPersistentState(state.leverIsOn);
             }
+
+            BatterySocket batterySocket = target.GetComponent<BatterySocket>();
+            if (state.hasBatterySocket && batterySocket != null)
+                batterySocket.ApplyRuntimeState(state.batterySocketState);
 
             SpecificItemSubmissionStation itemSubmissionStation =
                 target.GetComponent<SpecificItemSubmissionStation>();
