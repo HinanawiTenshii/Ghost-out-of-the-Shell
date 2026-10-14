@@ -1,5 +1,9 @@
+# Historical recorded V2 only. Current synthesis: GenerateDestructionAudio.py.
+param([switch]$RestoreRecordedV2)
+if (-not $RestoreRecordedV2) {
+    throw 'This restores obsolete recorded audio. Use python Tools/GenerateDestructionAudio.py for current synthesis, or explicitly pass -RestoreRecordedV2.'
+}
 # CC0 recordings and hashes: Docs/DestructionAudio.md.
-# Rebuilds only the two destruction clips; keeps their existing Unity GUIDs.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $audio = Join-Path $root '.codex-temp/Audio/DestructionV2'

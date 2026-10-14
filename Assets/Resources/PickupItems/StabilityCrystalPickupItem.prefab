@@ -142,6 +142,8 @@ MonoBehaviour:
   itemName: 稳定结晶
   itemDescription: 可以用于稳定自身本质的结晶，使用后会回复两点E.G.O,当E.G.O为满时使用会增加其上限。
   itemId: stability_crystal
+  requiredUseSkill: 0
+  useSkillRequirementInitialized: 1
   persistentIdentity: {fileID: 0}
   uniqueInstanceId: 
   pickupQuantity: 1

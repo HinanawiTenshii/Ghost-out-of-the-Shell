@@ -1,0 +1,49 @@
+Generation mode: built-in image_gen
+
+Use case: infographic-diagram. Create a game level design schematic for a subterranean ossuary STEALTH MAZE, clean top-down orthographic 2D floor plan with precise geometric thick walls and flat solid colors. Chinese labels. Not perspective art, no textures, shadows, glow, or ornamental parchment. Landscape canvas with main near-square map left 78%, legend and design guide right 22%. Respect footprint and anchors from user description: near-square rectangular footprint; entrance ① on RIGHT boundary about 78% down; exit ② on BOTTOM boundary near left corner at 12% width; optional reward chamber ③ near TOP CENTER. These positions MUST remain. No other boundary exits. Title: 埋骨地 · 潜行迷宫参考.
+
+Maze 6 by 6 conceptual macro cell arrangement with generous corridors, about 20 turns, interconnected rooms and 3 local loops, not hundreds of tiny passages. Dark charcoal thick impassable walls; pale beige traversable floor, muted blue hiding alcoves, large slate rectangular sarcophagi as sight-blocking cover, small ochre outlined circles for loot. No sealed inaccessible rooms. Door gaps actually connect rooms. Provide a readable connected intended progression below, enforce constraints:
+Entrance ① right lower edge opens to small safe 前室 lower right. Immediately west/up from entrance is broken corridor that splits into TWO nearby connected routes around tomb blocks; these routes lead to east-middle 柱厅. There is NO continuous walkable corridor along bottom boundary connecting entry directly to exit: a solid partition across lower middle blocks that shortcut.
+East-middle 柱厅 has six widely spaced square columns and 2 stone sarcophagi arranged to interrupt straight sightlines. It connects to central 交叉墓廊 via two staggered doorways. Central hall connects west to 西侧墓室, then down via winding 西侧曲廊 to exit antechamber by ② bottom left. Main route therefore travels from lower right to middle right to center to middle left then down left. Rooms have distinct sizes and bent approaches, no all-map sightline.
+Optional branch starts at central hall goes NORTH into 北侧守墓回廊, then into TOP CENTER optional ③ 随葬品密室. TWO approaches to this optional branch: main north passage from center and a narrower west side detour through 骨龛小径 that loops back into the north hall. Reward chamber has ONE normal doorway on south, a loot chest symbol at north wall, and a narrow east return passage initially closed by a gate labelled 单向捷径, opened FROM REWARD SIDE, reconnecting to east-middle pillar hall. Main entrance-to-exit route never requires entering reward branch.
+Two small genuine dead ends have optional minor loot; label one 旧棺室. 7 hiding alcoves distributed near intersections, each recess blue with small H mark. 10 dark tall sarcophagi indicated rectangles strategically near turns and chamber doorways; they are impassable high cover, not low flat slabs. Keep readable 2–3m conceptual passage clearance; junction rooms 5–8m, no strict scale.
+
+Three undead patrol routes, visually subordinate thin colored dotted loops and directional arrowheads FOLLOWING ONLY PASSABLE corridors around physical cover, never crossing walls:
+P1 orange dotted closed short loop in east pillar hall, showing 2 alternate ways around pillars; one small triangle facing west with a faint short view cone occluded by a column.
+P2 muted red dotted loop between central cross hall and west tomb chamber through two separate connecting corridors. This patrol must NOT extend to entrance.
+P3 violet dotted loop within north guard hall immediately outside reward room, making treasure optional higher risk.
+Draw routes sparingly within localized sectors, do not clutter all map corridors. Three small triangles total for enemy sample positions, no characters.
+At two door thresholds put thin yellow hatched strip labelled 碎骨带, provide quiet alternate way around at least one strip. Add small clear labels at safe alcoves rather than bushes. Four dim lamp points as tiny gold circles.
+
+Right guide exact Chinese text:
+空间流程
+① 入口前室
+柱厅 → 交叉墓廊
+西侧墓室 → ② 出口
+可选支线
+北侧守墓回廊 → ③ 奖励
+开启单向捷径返回柱厅
+
+图例
+深色：墙体
+浅色：可通行区域
+蓝色 H：藏身凹位
+灰色长块：高石棺
+彩色虚线：巡逻路线
+黄色斜纹：碎骨噪声区
+
+潜行设计
+转角切断视线
+观察后穿越巡逻间隙
+主线可避开北侧奖励区
+
+Footer: 概念结构示意 · 巡逻与视线需在灰盒中验证
+Prioritize topology, traversability, anchor positions, clear stealth affordances and coherent patrol loops over decorative detail.
+
+Edit this exact floor plan, preserve entrance ① lower right, exit ② lower left, reward ③ top center, labels and major rooms. Improve maze topology with FOUR visible traversable new connectors, drawn with the SAME pale beige floor and dark bordering walls as existing corridors, actual open doorway gaps:
+1 Add a narrow bent corridor from the existing lower-right 侧室's EAST wall, running north along far-right inner boundary, entering the EAST wall of 柱厅 near its lower-right corner. This makes a real quiet bypass around the 碎骨带 south of 柱厅. Keep map outer boundary closed.
+2 Add a U-shaped narrow corridor from the NORTH wall of 西侧墓室, heading north then east then down to enter the NORTHWEST side of 交叉墓廊, through existing dark unused space beneath 旧棺室. This bypasses the central 碎骨带 and creates a local loop. Add a mid-corridor blue hiding recess. Do NOT connect to the upper reward guard hall by accident.
+3 The reward room ③ must have a clearly open east doorway into a narrow corridor going east to the existing 单向捷径 gate. Add that connector where the solid wall currently separates reward room from shortcut. The gate then connects down to existing east corridor into 柱厅. Clearly write beside gate 奖励侧开启.
+4 Add a narrow passage from upper-right edge of 旧棺室 leading east into reward room's WEST wall, with a closed barred door labelled 内侧封闩, openable from reward room only. This creates a second return loop after reward but not a way to skip initial north guard hall.
+Update patrol P2 red dotted path to run from 西侧墓室 through new U bypass to 交叉墓廊 and back through original 碎骨带 connector, always following pale floor without crossing any walls or coffins. Keep P1 and P3.
+Remove large unnecessary text in bottom central solid wall area and replace with small understated label 未开凿岩体. Maintain solid charcoal walls, flat pale floor, clean schematic readable style.

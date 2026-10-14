@@ -17,6 +17,9 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
     [SerializeField, Min(0.01f)] private float coverDuration = 0.42f;
     private bool transitionPending;
     private bool waitingForSceneLoaded;
+    private AsyncOperation pendingLoad;
+    private bool loadClockPaused;
+    private float loadTimeScale;
     private EventSystem blockedEventSystem;
     private bool previousNavigationEvents;
 
@@ -54,6 +57,34 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
 
     public static bool IsBlockingInput { get; private set; }
 
+    /// <summary>Start only after the transition has fully covered gameplay.</summary>
+    public static void LoadSceneAsync(string sceneName)
+    {
+        CreateBeforeFirstSceneLoad();
+        if (instance.pendingLoad != null) throw new System.InvalidOperationException("已有场景正在加载。");
+        instance.loadTimeScale = Time.timeScale;
+        instance.loadClockPaused = true;
+        Time.timeScale = 0f; // Do not simulate combat or consume buffs during disk loading.
+        try
+        {
+            SceneLoadMetrics.BeginEngineLoad();
+            instance.pendingLoad = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
+            if (instance.pendingLoad == null) throw new System.InvalidOperationException("无法异步加载场景：" + sceneName);
+        }
+        catch
+        {
+            instance.ResumeLoadClock();
+            throw;
+        }
+    }
+
+    private void ResumeLoadClock()
+    {
+        if (!loadClockPaused) return;
+        Time.timeScale = loadTimeScale;
+        loadClockPaused = false;
+    }
+
     public static bool BeginTransition(string sceneName, System.Action loadScene)
     {
         CreateBeforeFirstSceneLoad();
@@ -64,6 +95,7 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
             return false;
         }
         instance.transitionPending = true;
+        SceneLoadMetrics.Begin(sceneName);
         SoulMarkRuntime.ClearForSceneTransition();
         DominoSkillRuntime.ClearForSceneTransition();
         IsBlockingInput = true;
@@ -90,7 +122,7 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
             blackBands[i].gameObject.SetActive(true);
             yield return new WaitForSecondsRealtime(stepDuration);
         }
-        // Present a fully black frame before synchronous loading or state reset.
+        // Present a fully black frame before capture/reset and asynchronous loading.
         yield return null;
         waitingForSceneLoaded = true;
         try { loadScene(); }
@@ -100,9 +132,15 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         }
         // Load failures must not leave the old scene permanently covered.
         yield return null;
+        while (waitingForSceneLoaded && pendingLoad != null && !pendingLoad.isDone)
+            yield return null;
         if (waitingForSceneLoaded)
         {
             waitingForSceneLoaded = false;
+            pendingLoad = null;
+            ResumeLoadClock();
+            SceneTravelStateManager.Instance?.CancelPendingSceneLoad();
+            GameSaveSystem.Instance?.CancelPendingSceneLoad();
             revealRoutine = StartCoroutine(RevealAfterSceneLoad());
         }
     }
@@ -147,6 +185,7 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
     {
         if (instance == this)
         {
+            ResumeLoadClock();
             RestoreMenuNavigation();
             IsBlockingInput = false;
             instance = null;
@@ -155,6 +194,9 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
+        ResumeLoadClock();
+        pendingLoad = null;
+        SceneLoadMetrics.SceneLoaded();
         waitingForSceneLoaded = false;
         ShowFullBlack();
         if (revealRoutine != null)
@@ -299,6 +341,7 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         transitionPending = false;
         RestoreMenuNavigation();
         revealRoutine = null;
+        SceneLoadMetrics.Complete();
     }
 
     private static int FindHighestSortingLayerId()

@@ -1,0 +1,66 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &871620610561378996
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 871620610561378999}
+  - component: {fileID: 871620610561378998}
+  m_Layer: 0
+  m_Name: Garden Fluorescence Test
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &871620610561378999
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 871620610561378996}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &871620610561378998
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 871620610561378996}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 75acf15fcd7a44c5a1a20c515b5b8bdb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  testEnabled: 0
+  adjustPalette: 0
+  enableBloom: 0
+  fountain: {fileID: 0}
+  walls: {fileID: 0}
+  decorations: {fileID: 0}
+  flowerbeds:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  wallColor: {r: 0.5, g: 0.53, b: 0.56, a: 1}
+  stoneColor: {r: 0.48, g: 0.52, b: 0.58, a: 1}
+  waterColor: {r: 0.035, g: 0.29, b: 0.52, a: 1}
+  waterHighlight: {r: 0.16, g: 0.78, b: 0.96, a: 1}
+  nearIntensity: 0.85
+  farIntensity: 0.22
+  threshold: 0.66
+  softKnee: 0.12
+  radius: 1.5

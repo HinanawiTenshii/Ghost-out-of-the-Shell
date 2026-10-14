@@ -14,7 +14,7 @@ $enum=[regex]::Match($source,'(?s)enum ZeldaAttackVisualShape\s*\{(.*?)\}').Grou
 if(($enum -replace '\s','') -ne 'Box,Sword,Hammer,Rock,Shockwave,Book'){throw 'Existing serialized attack enum values changed'}
 $character=Get-Content -Raw "$root/Assets/Scripts/Characters/PriestZeldaCharacterData.cs"
 if($character -notmatch 'AttackVisualShape => ZeldaAttackVisualShape.Book;'){throw 'Priest must select Book'}
-$prefab=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Priest-level2.prefab"
+$prefab=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Patrol/Priest-level2.prefab"
 foreach($expected in @('attackPower: 1','attackDuration: 0.24','attackSpawnOffset: {x: 0, y: 0.48}','attackSize: {x: 0.46, y: 0.4}','attackVisualTint: {r: 1, g: 1, b: 1, a: 1}')){
     if(!$prefab.Contains($expected)){throw "Unexpected attack configuration: $expected"}
 }

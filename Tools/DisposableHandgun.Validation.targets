@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="GardenFluorescence.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Items\DisposableHandgun*.cs" />
+    <Compile Include="Assets\Scripts\Items\DisposableHandgun*.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="EasternSwordsman.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Interaction\DualWaterwayGateTargetFade.cs" />
+    <Compile Include="Assets\Scripts\Interaction\DualWaterwayGateTargetFade.cs" />
+  </ItemGroup>
+</Project>

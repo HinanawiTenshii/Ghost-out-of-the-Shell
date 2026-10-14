@@ -60,6 +60,13 @@ public static class HoverRegression {
         ui.OnPointerEnter(mouse);Check(!icon.IsHovered,"Other map icons retain their original sizing");
         mouse.button=PointerEventData.InputButton.Left;ui.OnPointerClick(mouse);
         Check(MapPointOfInterestManager.Clicks==1,"Other map icons retain click-to-mark");
+        ui.graphic=null;ui.Configure("locked-door",(id,rect)=>entered++,id=>exited++,true);
+        int beforeEnter=entered,beforeExit=exited;
+        ui.OnPointerEnter(mouse);Check(entered==beforeEnter+1,"Door's invisible hit target requests name without an icon graphic");
+        ui.OnPointerClick(mouse);Check(MapPointOfInterestManager.Clicks==1,"Locked door hover target never selects/marks");
+        ui.OnPointerExit(mouse);Check(exited==beforeExit+1,"Leaving door hides name");
+        typeof(MapPointOfInterestUiInteraction).GetMethod("OnDisable",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(ui,null);
+        Check(exited==beforeExit+2,"Unlock/removal disables hover target and clears tooltip");
         return checks;
     }
 }

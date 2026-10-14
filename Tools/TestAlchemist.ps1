@@ -111,7 +111,7 @@ $g.Clear([Drawing.Color]::FromArgb(25,32,43))
 $font = [Drawing.Font]::new('Arial',11)
 $scriptGuid = [regex]::Match((Get-Content -Raw (Join-Path $root 'Assets/Scripts/Characters/AlchemistZeldaCharacterData.cs.meta')), 'guid: (\w+)').Groups[1].Value
 foreach ($tier in 0..0) {
-    $prefab = Get-Content -Raw (Join-Path $root "Assets/Prefabs/Level2NPCS/$($names[$tier]).prefab")
+    $prefab = Get-Content -Raw (Join-Path $root "Assets/Prefabs/Level2NPCS/Patrol/$($names[$tier]).prefab")
     if (-not $prefab.Contains("guid: $scriptGuid")) { throw 'Missing soldier data script reference' }
     if ($prefab -notmatch ('permissionLevel: '+($tier+1)+'\b')) { throw 'Rank mismatch' }
     if (-not $prefab.Contains('cameraOrthographicSize: 7') -or -not $prefab.Contains('playerVisionRadius: 13')) { throw 'Camera configuration mismatch' }

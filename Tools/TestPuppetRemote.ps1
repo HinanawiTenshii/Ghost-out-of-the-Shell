@@ -34,6 +34,7 @@ public class ZeldaHealthHeartsUI {
  public void ShowNotificationPopup(string s){last=s;}
 }
 public class PickupItemBase {
+ public int gestures;public void PlayUseGesture(ZeldaCharacterData d){gestures++;}
  public virtual bool CanBeStoredInCardboardBox(ZeldaCharacterData d)=>true;
  protected virtual bool ApplyUseEffect(ZeldaCharacterData d)=>true;
  public bool ExecuteUse(ZeldaCharacterData d)=>ApplyUseEffect(d);

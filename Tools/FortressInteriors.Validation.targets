@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="FortressDecorations.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Decorations\GeometricFortressInteriorDecoration.cs" />
+    <Compile Include="Assets\Scripts\Decorations\GeometricFortressInteriorDecoration.cs" />
+  </ItemGroup>
+</Project>

@@ -1,3 +1,4 @@
+param([switch]$SkipSceneBindings)
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 $source=Get-Content -Raw "$root/Assets/Scripts/Interaction/WaterwayGateTargetFade.cs"
@@ -27,6 +28,7 @@ public class FadeHarness {
  private static readonly HashSet<FadeHarness> ActiveFaders = new HashSet<FadeHarness>();
  public void Enable()=>ActiveFaders.Add(this);public void Disable()=>ActiveFaders.Remove(this);
  public WaterwayGate sourceGate;public float fadeDuration=.6f;
+ protected virtual bool IsControlledBy(WaterwayGate gate)=>sourceGate==gate;
  private SpriteRenderer[] sprites;private Color[] originalColors;private float visibility=1f;private bool visibleRequested=true,initialized;
  public GameObject gameObject=new GameObject();public SpriteRenderer[] children={new SpriteRenderer(1),new SpriteRenderer(.4f)};
  public float Alpha=>visibility;public bool Target=>visibleRequested;
@@ -35,7 +37,7 @@ public class FadeHarness {
  public void Initialize()=>EnsureInitialized();public void InitializeScene()=>Start();
 '@
 $code += [regex]::Match($source,'public bool IsFading =>[^;]+;').Value
-foreach($sig in @('public static bool IsGateTransitioning(', 'private void EnsureInitialized(', 'private void Start(', 'public void FadeIn(', 'public void FadeOut(', 'public void SetVisibleImmediately(', 'private void Update(', 'private void ApplyOpacity(', 'private void SetObjectActive(')){$code+=Extract $sig}
+foreach($sig in @('public static bool IsGateTransitioning(', 'private void EnsureInitialized(', 'protected virtual void Start(', 'public virtual void FadeIn(', 'public virtual void FadeOut(', 'public void SetVisibleImmediately(', 'private void Update(', 'private void ApplyOpacity(', 'private void SetObjectActive(')){$code+=Extract $sig}
 $code+='}'
 Add-Type -TypeDefinition $code
 $count=0
@@ -96,6 +98,11 @@ Check (!$a.IsFading -and !$a.gameObject.activeSelf) 'Tiny remaining fade reaches
 $b.FadeOut();$b.Disable()
 Check (![FadeHarness]::IsGateTransitioning($gate)) 'Disabled or unloaded target removes stale lock'
 $a.Disable()
+
+if ($SkipSceneBindings) {
+ Write-Output "PASS: $count single-gate fade production-method checks (Unity stubs, not Play Mode)."
+ return
+}
 
 $scene=Get-Content -Raw "$root/Assets/Scenes/Level2/Level2-Floor-1.unity"
 $blocks=[regex]::Split($scene,'(?m)(?=^--- !u!)')

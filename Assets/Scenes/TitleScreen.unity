@@ -166,8 +166,8 @@ MonoBehaviour:
   maskIntensity: 0.14
   noiseIntensity: 0.018
   brightness: 1.5
-  contrast: 1.12
-  phosphorGlow: 0.14
+  contrast: 1.3
+  phosphorGlow: 0.5
 --- !u!114 &295897090
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -180,10 +180,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 258c31de78bd4d75942b434405cc9cf8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  enableVisionStreaming: 1
   visibilityCheckInterval: 0.12
   unloadDelay: 0.3
   sceneRescanInterval: 1
   restoreObjectsWhenDisabled: 1
+  blockVisibilityHysteresis: 0.6
+  visibilityChecksPerFrame: 48
+  maximumActivationsPerFrame: 1
+  activationPreloadPadding: 1.25
+  viewportPreloadFraction: 0.1
+  activationTimeBudgetMilliseconds: 1.5
+  maximumSuspensionsPerFrame: 12
+  discoveryTransformsPerFrame: 96
 --- !u!114 &295897091
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -233,6 +242,7 @@ MonoBehaviour:
   followOffset: {x: 0, y: 0, z: -10}
   smoothFollow: 1
   followSmoothTime: 0.12
+  puppetOrthographicSize: 3
   cameraSizeSmoothTime: 0.25
   possessionFocusSizeMultiplier: 0.72
 --- !u!81 &295897093
@@ -407,3 +417,48 @@ PrefabInstance:
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 53650535d03e4fe59f55369166ef17b0, type: 3}
+--- !u!1 &8914301200001000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8914301200001001}
+  - component: {fileID: 8914301200001002}
+  m_Layer: 0
+  m_Name: Shared Player Hostility Timer
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8914301200001001
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8914301200001000}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 9999
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8914301200001002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8914301200001000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5219a8a77f704d9db5b972a9f734005c, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  hostileDuration: 9
+  searchDuration: 12

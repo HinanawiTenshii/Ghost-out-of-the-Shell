@@ -10,7 +10,8 @@ foreach($ref in [regex]::Matches($text,'\{fileID: (\d+)\}')){Check ($ref.Groups[
 Check (([regex]::Matches($text,'(?m)^SpriteRenderer:')).Count -eq 15) 'Only 15 simple rectangular sprites'
 Check (([regex]::Matches($text,'(?m)^BoxCollider2D:')).Count -eq 1) 'One solid collider'
 Check ($text.Contains('m_Size: {x: 2.6, y: 1.9}') -and $text.Contains('m_IsTrigger: 0')) 'Collider matches board footprint'
-Check (!$text.Contains('MonoBehaviour:')) 'No added interaction or runtime generator'
+Check (([regex]::Matches($text,'(?m)^MonoBehaviour:')).Count -eq 1 -and $text.Contains('guid: af9e8b3762e54152a8c79d6dfa063019')) 'Uses shared DocumentReader'
+Check ($text.Contains('preserveExistingAppearance: 1')) 'Reader preserves original board geometry and solid collider'
 Check ((Get-Content -Raw "$path.meta").Contains('guid: 9ba5c64a7f174bb98fb059b7e4ab600c')) 'Stable prefab GUID'
 $shelf=Get-Content -Raw "$root/Assets/Prefabs/Decorations/Shelf.prefab"
 foreach($color in @('0.38, g: 0.2, b: 0.11','0.67, g: 0.39, b: 0.2','0.29, g: 0.16, b: 0.1','0.73, g: 0.45, b: 0.24','0.62, g: 0.35, b: 0.18','0.97, g: 0.77, b: 0.28')){

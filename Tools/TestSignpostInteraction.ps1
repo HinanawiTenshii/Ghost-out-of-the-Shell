@@ -63,6 +63,7 @@ public static class ZeldaInteractionArbiter {
     public static void Submit(object o,object m,KeyCode key,Vector2 p,Action callback){pending=callback;}
 }
 public class SignpostInteraction {
+    private bool singleNotice;private string noticeText="";private Text noticeContent=new Text();
     private string upText="",downText="",leftText="",rightText="";
     private float interactionDistance=1.5f,previousTimeScale;
     private static SignpostInteraction activeSignpost;
@@ -116,6 +117,17 @@ $tests=@'
         s.OpenWindow();s.OnDisable();Check(!s.windowObject.activeSelf && Time.timeScale==.4f,"Streaming disable/unload restores gameplay and closes window");
         Next();ZeldaRuntimeRegistry.mover=null;Check(s.GetNearbyCharacter()==null,"Missing controlled actor is safe");
         ResetStatics();Check(!BlocksInput,"Domain-reload-disabled startup clears static state");
+        Next();ZeldaRuntimeRegistry.mover=new ZeldaFourWayMover();
+        var notice=new SignpostInteraction{singleNotice=true,noticeText="  城门公告\n夜间禁止通行  "};
+        notice.RefreshDirections();Check(notice.noticeContent.text=="城门公告\n夜间禁止通行","Notice trims margins and preserves editable multiline content");
+        notice.OpenWindow();Check(notice.windowObject.activeSelf&&Time.timeScale==0&&BlocksInput,"Notice shares modal pause/input arbitration with direction signs");
+        var directions=new SignpostInteraction();directions.OpenWindow();Check(!directions.windowObject.activeSelf,"Direction sign cannot open over a notice");
+        Next();Input.keys.Add(KeyCode.E);notice.Update();Check(!notice.windowObject.activeSelf&&Time.timeScale==.4f&&BlocksInput,"Notice closes with E, restores exact time scale and consumes close frame");
+        Next();notice.noticeText=" \n ";notice.RefreshDirections();Check(notice.noticeContent.text=="暂无告示内容","Blank notice has readable fallback");
+        notice.noticeText=null;notice.RefreshDirections();Check(notice.noticeContent.text=="暂无告示内容","Null notice is safe");
+        notice.OpenWindow();Next();Input.keys.Add(KeyCode.Escape);notice.Update();Check(!notice.windowObject.activeSelf&&BlocksInput,"Notice closes with Escape");
+        Next();notice.OpenWindow();notice.OnDisable();Check(Time.timeScale==.4f&&!notice.windowObject.activeSelf,"Unloading an open notice restores gameplay");
+        ResetStatics();
         return checks;
     }
 }
@@ -128,7 +140,7 @@ foreach($field in 'upText','downText','leftText','rightText'){if($prefab -notmat
 $gate=Get-Content -Raw "$root/Assets/Scripts/Interaction/DocumentReader.cs"
 $arbiter=Get-Content -Raw "$root/Assets/Scripts/Interaction/ZeldaInteractionArbiter.cs"
 if(!$gate.Contains('SignpostInteraction.BlocksInput') -or !$arbiter.Contains('ClockworkPuppetRuntime.BlocksCharacterInput || SignpostInteraction.BlocksInput')){throw 'Missing modal/input-consumption integration'}
-if(!$source.Contains('CRTScreenEffect.RegisterCanvas(windowCanvas)')){throw 'CRT and F12 registration missing'}
+if(!$source.Contains('CRTScreenEffect.RegisterCanvas(windowCanvas, enableGlow: true)')){throw 'CRT, popup glow and F12 registration missing'}
 if($source.Contains('row++') -or $source.Contains('title.text =')){throw 'Old list layout or shared window title returned'}
 $arrowLabels=[regex]::Match($source,'string\[\] labels = \{ ([^}]+) \}').Groups[1].Value
 $expected=@(0x2191,0x2193,0x2190,0x2192)
@@ -137,3 +149,8 @@ if($tokens.Count -ne 4){throw 'Four arrow labels required'}
 for($i=0;$i -lt 4;$i++){if($tokens[$i].Groups[1].Value -cne [string][char]$expected[$i]){throw 'Direction label must be just the matching arrow'}}
 if(!$source.Contains('directionPanels[i].gameObject.SetActive(visible)') -or !$source.Contains('CanvasScaler.ScreenMatchMode.Expand')){throw 'Panel visibility or responsive scaling missing'}
 Write-Output 'PASS: prefab binding, four editable directions, CJK font, shared input blocking, CRT/F12 registration. Not a Unity Play Mode test.'
+$noticePrefab=Get-Content -Raw "$root/Assets/Prefabs/Decorations/ReadableNoticeSign.prefab"
+foreach($field in @('singleNotice: 1','noticeBoard: 1','noticeText:','guid: 6c361f780f3543b098a21d4dc1054511','guid: 0ec1bf4b2c4c428b8360d5b0de2eb4a7','guid: 292af55397c443f6a5d7774297dac481')){if(!$noticePrefab.Contains($field)){throw "Notice prefab missing $field"}}
+if($prefab.Contains('singleNotice: 1') -or $prefab.Contains('noticeBoard: 1')){throw 'Existing direction sign must remain unchanged'}
+if(!$source.Contains('new Vector2(420f, 220f)') -or !$source.Contains('按[E]阅读告示牌')){throw 'Missing compact notice window or reading prompt'}
+Write-Output 'PASS: new short-stem notice prefab, editable content and centered single-window mode; existing directional prefab unchanged.'

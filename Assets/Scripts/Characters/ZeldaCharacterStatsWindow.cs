@@ -25,6 +25,8 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
     private static Sprite swordSprite;
     private static Sprite wrenchSprite;
     private static Sprite rectangleSprite;
+    private static Sprite discoveryFrameSprite;
+    private static Sprite discoveryPlusSprite;
     private static readonly Sprite[] PermissionDigitSprites = new Sprite[10];
     private static readonly Sprite[] NegativePermissionDigitSprites = new Sprite[2];
     private static ZeldaCharacterWorldDimmer worldDimmer;
@@ -49,6 +51,10 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
     private int lastSkillValue = int.MinValue;
     private int lastPossessionCost = int.MinValue;
     private int lastPermissionLevel = int.MinValue;
+    private GameObject skillDiscoveryBadge;
+    private Image skillDiscoveryIcon;
+    private string cachedNativeSkillId;
+    private PlayerGrowthAttributes.SkillDefinition nativeSkillDefinition;
 
     public void Configure(ZeldaCharacterData source, Vector2 localOffset, float displayScale)
     {
@@ -69,21 +75,47 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
             return;
         }
 
-        EnsureVisuals();
-        UpdateScreenPosition();
         bool isControlledCharacter = characterMover != null && characterMover.isActiveAndEnabled;
-        bool shouldBeVisible = !DocumentReader.IsInputBlocked &&
+        bool shouldBeVisible = Input.GetMouseButton(1) &&
+                               !DocumentReader.IsInputBlocked &&
                                !ClockworkPuppetRuntime.BlocksCharacterInput &&
                                !isControlledCharacter &&
-                               Input.GetMouseButton(1) &&
                                IsCharacterInsideCameraVision();
+        UpdateWindow(shouldBeVisible, Time.unscaledDeltaTime);
+    }
+
+    private void UpdateWindow(bool shouldBeVisible, float deltaTime)
+    {
+        // Keep the lightweight input/visibility check alive, but do not touch
+        // the hidden Canvas, icons or screen position once fade-out finishes.
+        if (!shouldBeVisible && !isVisible && visibilityAlpha <= 0f)
+            return;
+
+        EnsureVisuals();
+        bool opening = shouldBeVisible && !isVisible;
         if (shouldBeVisible != isVisible)
         {
             SetWindowVisible(shouldBeVisible);
         }
 
-        Refresh(false);
-        UpdateFade(Time.unscaledDeltaTime);
+        UpdateScreenPosition();
+        // Opening already forces a complete refresh, including changes made
+        // while hidden. Visible and fading windows still update every frame.
+        if (!opening)
+            Refresh(false);
+        UpdateFade(deltaTime);
+    }
+
+    private void OnDisable()
+    {
+        // The overlay is a separate root, so streaming/death would otherwise
+        // leave the last visible panel behind with no LateUpdate to fade it.
+        isVisible = false;
+        visibilityAlpha = 0f;
+        if (canvasGroup != null)
+            canvasGroup.alpha = 0f;
+        if (overlayObject != null)
+            overlayObject.SetActive(false);
     }
 
     private void OnDestroy()
@@ -102,8 +134,10 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
             {
                 overlayCanvas = overlayObject.GetComponent<Canvas>();
             }
-            overlayCanvas.overrideSorting = true;
-            overlayCanvas.sortingOrder = OverlaySortingOrder;
+            if (!overlayCanvas.overrideSorting)
+                overlayCanvas.overrideSorting = true;
+            if (overlayCanvas.sortingOrder != OverlaySortingOrder)
+                overlayCanvas.sortingOrder = OverlaySortingOrder;
             return;
         }
 
@@ -165,7 +199,7 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
         permissionImage = permissionObject.GetComponent<Image>();
         permissionImage.preserveAspect = true;
         permissionImage.raycastTarget = false;
-        CRTScreenEffect.RegisterCanvas(overlayCanvas);
+        CRTScreenEffect.RegisterCanvas(overlayCanvas, enableGlow: true);
     }
 
     private static void ConfigureResponsiveScaling(GameObject canvasObject)
@@ -233,7 +267,10 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
             return;
         }
 
-        Vector3 worldPosition = data.transform.TransformPoint(new Vector3(windowLocalOffset.x, windowLocalOffset.y, 0f));
+        // Follow the live head of articulated creatures, but retain the root's
+        // authored offset axes/scale so a turning head does not orbit the window.
+        Vector3 worldPosition = data.AttributeWindowAnchor.position +
+            data.transform.TransformVector(new Vector3(windowLocalOffset.x, windowLocalOffset.y, 0f));
         Vector3 screenPosition = camera.WorldToScreenPoint(worldPosition);
         PositionPanelAtScreenPoint(screenPosition);
         canvasGroup.alpha = screenPosition.z > 0f ? visibilityAlpha : 0f;
@@ -265,7 +302,7 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
             return false;
         }
 
-        Vector3 worldPosition = data.transform.position;
+        Vector3 worldPosition = data.AttributeWindowAnchor.position;
         Vector3 viewportPosition = camera.WorldToViewportPoint(worldPosition);
         if (viewportPosition.z <= 0f || viewportPosition.x < 0f || viewportPosition.x > 1f ||
             viewportPosition.y < 0f || viewportPosition.y > 1f)
@@ -279,6 +316,7 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
 
     private void Refresh(bool force)
     {
+        RefreshSkillDiscoveryBadge(force);
         int attackPower = Mathf.Clamp(data.FinalAttackPower, 0, MaxIconsPerRow);
         int skillValue = Mathf.Clamp(data.SkillValue, 0, MaxIconsPerRow);
         int possessionCost = Mathf.Clamp(data.FinalPossessionEnergy, 0, MaxIconsPerRow);
@@ -312,7 +350,7 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
             SetVisibleCount(skillIcons, skillValue);
             lastSkillValue = skillValue;
         }
-        SetVisibleCount(costIcons, Mathf.Clamp(data.BaseMaxPossessionEnergy + (data.CrystalEnergyThirds > 0 ? 1 : 0), 0, MaxIconsPerRow));
+        SetVisibleCount(costIcons, Mathf.Clamp(data.PossessionEnergyDisplaySlotCount, 0, MaxIconsPerRow));
         for (int i = 0; i < costIcons.Length; i++)
             ZeldaHealthHeartsUI.ConfigureEnergyIcon(costIcons[i], i, data);
         lastPossessionCost = possessionCost;
@@ -386,6 +424,92 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
         for (int level = 0; level < PermissionDigitSprites.Length; level++) PermissionDigitSprites[level] = CreatePermissionDigitSprite(level);
         for (int absoluteValue = 1; absoluteValue <= NegativePermissionDigitSprites.Length; absoluteValue++)
             NegativePermissionDigitSprites[absoluteValue - 1] = CreatePermissionDigitSprite(-absoluteValue);
+    }
+
+    private void RefreshSkillDiscoveryBadge(bool force)
+    {
+        string id = data.NativeCharacterSkillId;
+        bool skillChanged = id != cachedNativeSkillId;
+        if (skillChanged)
+        {
+            cachedNativeSkillId = id;
+            nativeSkillDefinition = null;
+            // Match the base character skill, not an upgrade unlocked later.
+            // No lambda/scene search or per-frame skill-icon allocation.
+            foreach (var skill in PlayerGrowthAttributes.Skills)
+                if (skill.id == id && skill.requiredPossessedSkillId == id)
+                {
+                    nativeSkillDefinition = skill;
+                    break;
+                }
+        }
+
+        var growth = PlayerGrowthAttributes.Instance;
+        bool show = !data.IsDead && !data.IsGhostLike && nativeSkillDefinition != null &&
+            (growth == null || !growth.IsSkillDiscovered(nativeSkillDefinition));
+        if (!show)
+        {
+            if (skillDiscoveryBadge != null && skillDiscoveryBadge.activeSelf)
+                skillDiscoveryBadge.SetActive(false);
+            return;
+        }
+
+        // Ordinary NPCs never allocate extra UI. Once built, the indicator is
+        // reused and follows the existing hidden-window/fade/streaming path.
+        bool created = skillDiscoveryBadge == null;
+        if (created) CreateSkillDiscoveryBadge();
+        if (!skillDiscoveryBadge.activeSelf) skillDiscoveryBadge.SetActive(true);
+        if (created || force || skillChanged)
+        {
+            skillDiscoveryIcon.sprite = data.CharacterSkillIcon;
+            skillDiscoveryIcon.enabled = skillDiscoveryIcon.sprite != null;
+        }
+    }
+
+    private void CreateSkillDiscoveryBadge()
+    {
+        skillDiscoveryBadge = CreateUiObject("Possession Skill Discovery", panelRect, typeof(Image));
+        RectTransform badgeRect = skillDiscoveryBadge.GetComponent<RectTransform>();
+        badgeRect.anchorMin = badgeRect.anchorMax = Vector2.one;
+        badgeRect.pivot = new Vector2(1f, 0f);
+        badgeRect.anchoredPosition = new Vector2(0f, 6f);
+        badgeRect.sizeDelta = new Vector2(52f, 52f);
+        Image background = skillDiscoveryBadge.GetComponent<Image>();
+        background.color = new Color32(8, 19, 46, 255);
+        background.raycastTarget = false;
+
+        if (discoveryFrameSprite == null)
+        {
+            const int width = 26, height = 26;
+            Texture2D texture = NewPixelTexture(width, height, "Skill Discovery Border");
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+                texture.SetPixel(x, y, x == 0 || y == 0 || x == width - 1 || y == height - 1
+                    ? Color.white : Color.clear);
+            discoveryFrameSprite = FinishSprite(texture, width, height, 1f, "Skill Discovery Border");
+        }
+        Image border = CreateUiObject("Cyan Border", badgeRect, typeof(Image)).GetComponent<Image>();
+        border.rectTransform.anchorMin = Vector2.zero; border.rectTransform.anchorMax = Vector2.one;
+        border.rectTransform.offsetMin = border.rectTransform.offsetMax = Vector2.zero;
+        border.sprite = discoveryFrameSprite; border.color = ZeldaUiPalette.Primary; border.raycastTarget = false;
+
+        skillDiscoveryIcon = CreateUiObject("Native Skill Icon", badgeRect, typeof(Image)).GetComponent<Image>();
+        skillDiscoveryIcon.rectTransform.anchorMin = skillDiscoveryIcon.rectTransform.anchorMax = new Vector2(.5f, .5f);
+        skillDiscoveryIcon.rectTransform.anchoredPosition = new Vector2(-2f, -2f);
+        skillDiscoveryIcon.rectTransform.sizeDelta = new Vector2(32f, 32f);
+        skillDiscoveryIcon.preserveAspect = true; skillDiscoveryIcon.color = ZeldaUiPalette.Primary;
+        skillDiscoveryIcon.raycastTarget = false;
+
+        Image plusBackground = CreateUiObject("New Skill Mark", badgeRect, typeof(Image)).GetComponent<Image>();
+        plusBackground.rectTransform.anchorMin = plusBackground.rectTransform.anchorMax = Vector2.one;
+        plusBackground.rectTransform.anchoredPosition = new Vector2(-9f, -9f);
+        plusBackground.rectTransform.sizeDelta = new Vector2(16f, 16f);
+        plusBackground.color = background.color; plusBackground.raycastTarget = false;
+        if (discoveryPlusSprite == null)
+            discoveryPlusSprite = CreatePatternSprite(new[] { "..##..", "..##..", "######", "######", "..##..", "..##.." }, "New Skill Plus");
+        Image plus = CreateUiObject("Plus Glyph", plusBackground.transform, typeof(Image)).GetComponent<Image>();
+        plus.rectTransform.sizeDelta = new Vector2(12f, 12f);
+        plus.sprite = discoveryPlusSprite; plus.color = ZeldaUiPalette.Primary; plus.raycastTarget = false;
     }
 
     private static void EnsureWorldDimmer()

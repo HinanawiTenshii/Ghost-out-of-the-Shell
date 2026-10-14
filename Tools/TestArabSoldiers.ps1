@@ -119,7 +119,7 @@ $font = [Drawing.Font]::new('Arial',11)
 $baselinePalette = @{}
 $scriptGuid = [regex]::Match((Get-Content -Raw (Join-Path $root 'Assets/Scripts/Characters/ArabSoldierZeldaCharacterData.cs.meta')), 'guid: (\w+)').Groups[1].Value
 foreach ($tier in 0..2) {
-    $prefab = Get-Content -Raw (Join-Path $root "Assets/Prefabs/Level2NPCS/$($names[$tier]).prefab")
+    $prefab = Get-Content -Raw (Join-Path $root "Assets/Prefabs/Level2NPCS/Idle/$($names[$tier]).prefab")
     if (-not $prefab.Contains("guid: $scriptGuid")) { throw 'Missing soldier data script reference' }
     if ($prefab -notmatch ('permissionLevel: '+($tier+1)+'\b')) { throw 'Rank mismatch' }
     if (-not $prefab.Contains('cameraOrthographicSize: 7') -or -not $prefab.Contains('playerVisionRadius: 13')) { throw 'Camera configuration mismatch' }

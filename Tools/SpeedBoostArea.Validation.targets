@@ -1,0 +1,11 @@
+<Project>
+  <Import Project="LockedDoorMap.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Interaction\SpeedBoostArea.cs" />
+    <Compile Include="Assets\Scripts\Interaction\SpeedBoostArea.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp-Editor'">
+    <Compile Remove="Assets\Editor\SpeedBoostAreaEditor.cs" />
+    <Compile Include="Assets\Editor\SpeedBoostAreaEditor.cs" />
+  </ItemGroup>
+</Project>

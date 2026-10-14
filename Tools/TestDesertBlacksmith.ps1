@@ -27,7 +27,7 @@ $start=$source.IndexOf('    private static readonly string[] DesertFront')
 if($start -lt 0){throw 'Missing desert smith maps'}
 $production=$source.Substring($start) # includes final class brace
 Add-Type -TypeDefinition ('using UnityEngine;'+$stubs+$utility+$checks+$baseHarness+'public class DesertBlacksmithVisualHarness : BlacksmithVisualHarness {'+$fields+$production) -CompilerOptions '/nowarn:0414,0649'
-$prefab=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Blacksmith-level2.prefab"
+$prefab=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Patrol/Blacksmith-level2.prefab"
 $actor=[DesertBlacksmithVisualHarness]::new()
 # Populate the inherited palette from the actual new prefab, not the old defaults.
 foreach($type in @([BlacksmithVisualHarness],[DesertBlacksmithVisualHarness])){
@@ -76,7 +76,7 @@ foreach($ref in [regex]::Matches($prefab,'\{fileID: (\d+)\}')){
     $id=$ref.Groups[1].Value;if($id -ne '0' -and $definitions -notcontains $id){throw "Broken prefab local reference: $id"}
 }
 if(!$prefab.Contains('guid: bece9032aed94df08666324b9ba648c2') -or !$source.Contains(': BlacksmithZeldaCharacterData')){throw 'Wrong inherited role/visual script'}
-foreach($path in 'Assets/Prefabs/Strongman.prefab','Assets/Prefabs/Level1NPCS/Strongman-Level1.prefab','Assets/Prefabs/Level2NPCS/Strongman-level2.prefab'){
+foreach($path in 'Assets/Prefabs/Strongman.prefab','Assets/Prefabs/Level1NPCS/Strongman-Level1.prefab','Assets/Prefabs/Level2NPCS/Idle/Strongman-level2.prefab'){
     $s=Get-Content -Raw "$root/$path";$blocks=[regex]::Split($s,'(?m)(?=^--- !u!)')
     $t=$blocks|Where-Object{$_ -match '^--- !u!4 ' -and $_ -match 'm_Father: \{fileID: 0\}'}
     if(!$t.Contains('m_LocalScale: {x: 1.1, y: 1.1, z: 1.1}')){throw "Strongman root not uniformly scaled: $path"}

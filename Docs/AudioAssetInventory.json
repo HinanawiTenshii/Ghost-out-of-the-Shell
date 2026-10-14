@@ -1,9 +1,337 @@
 {
   "schemaVersion": 1,
-  "recordedOn": "2026-09-25",
+  "recordedOn": "2026-10-04",
   "sourceRegister": "Docs/AudioSources.md",
   "note": "Inventory identity snapshot, not proof of permission. Source IDs refer to the source register; UNKNOWN requires further research.",
   "assets": [
+    {
+      "path": "Assets/Resources/Audio/ArenaRoundEndBell.wav",
+      "sourceId": "S19",
+      "status": "original-procedural",
+      "guid": "83fc3ff1e0b04731bcf6a82704111f13",
+      "sha256": "76C1879B4201D656C11D6CDDEC03871094B873532FD55E999BDF3A94DFD7F408",
+      "bytes": 63548,
+      "durationSeconds": 0.72,
+      "generator": "Tools/GenerateArenaBellAudio.py",
+      "note": "Generated 2026-10-13: two damped bronze bell strikes, 0.23 seconds apart, short tail. No recorded samples. Mono PCM16 44100 Hz; RMS 0.1495, peak 0.7; playback volume 0.55. Plays once for either arena round outcome, never replays on result restore."
+    },
+    {
+      "path": "Assets/Resources/Audio/MeteorDescent.wav",
+      "sourceId": "S18",
+      "status": "original-procedural",
+      "guid": "a3b1c3f985174d709454c657ad9570b6",
+      "sha256": "B9927C86E10BFB6104C15A9E212A4B369A41B77A3B8B931D12E9B39F3B400C21",
+      "bytes": 70604,
+      "durationSeconds": 0.8,
+      "generator": "Tools/GenerateMeteorShowerAudio.py",
+      "note": "Generated 2026-10-12: accelerating air rush and granular rock vibration, no recorded samples. Mono PCM16 44100 Hz; RMS 0.13, peak 0.6303. Playback gain budget 0.32, synchronized to the 0.8-second meteor descent."
+    },
+    {
+      "path": "Assets/Resources/Audio/MeteorImpact.wav",
+      "sourceId": "S18",
+      "status": "original-procedural",
+      "guid": "abcda0aec05543dd87f9e9e983ed1184",
+      "sha256": "F5800B208E2861A3BFEE0744E774C62C9DDA29AA4F2602BC9FAD665A890798CD",
+      "bytes": 72368,
+      "durationSeconds": 0.82,
+      "generator": "Tools/GenerateMeteorShowerAudio.py",
+      "note": "Generated 2026-10-12: heavy low impact, explosive crack, stone debris and faint magical resonances. No recorded samples. Mono PCM16 44100 Hz; RMS 0.1651, peak 0.78. Shared impact gain budget 0.6."
+    },
+    {
+      "path": "Assets/Resources/Audio/MeteorFireLoop.wav",
+      "sourceId": "S18",
+      "status": "original-procedural",
+      "guid": "948b565b51b64f8fbca74f752a18c97a",
+      "sha256": "1D54B8E26BE3F9AE9EFE89159119E0814A3411011EFE4881DDE3AABB3ADCC64D",
+      "bytes": 141164,
+      "durationSeconds": 1.6,
+      "generator": "Tools/GenerateMeteorShowerAudio.py",
+      "note": "Generated 2026-10-12: seamless magical fire roar with sparse crackles; overlap-add and seam smoothing, no recorded samples. Mono PCM16 44100 Hz; RMS 0.13, peak 0.488, seam delta 0.00003. One spatially mixed voice per shower at gain budget 0.27; each field contributes only during its five-second burn."
+    },
+    {
+      "path": "Assets/Resources/Audio/PurpleWaveRelease.wav",
+      "sourceId": "S17",
+      "status": "original-procedural",
+      "guid": "61740816e8bb42deb6f5847bc2f13f6f",
+      "sha256": "7BA34462EA58F9AB15F31EA194A3A3CDA7033CFB132EB811BC1F0F9205667CF3",
+      "bytes": 45026,
+      "durationSeconds": 0.51,
+      "generator": "Tools/GeneratePurpleWaveAudio.py",
+      "note": "Generated 2026-10-12: continuous hollow, granular magic surge from the hand. No sampled recordings. Mono PCM16 44100 Hz; RMS 0.15, peak 0.4573; playback volume 0.5. Duration follows wave travel."
+    },
+    {
+      "path": "Assets/Resources/Audio/PurpleWaveBurst.wav",
+      "sourceId": "S17",
+      "status": "original-procedural",
+      "guid": "133536a58b544f489c916a9637e5203f",
+      "sha256": "01DC60D4096D2F27DDA6281B1B1A2780F4A41392967362A22B9748DB3DC33BB8",
+      "bytes": 42380,
+      "durationSeconds": 0.48,
+      "generator": "Tools/GeneratePurpleWaveAudio.py",
+      "note": "Generated 2026-10-12: short magical fracture, low impact and granular residue at the actual terminal burst. No sampled recordings. Mono PCM16 44100 Hz; RMS 0.1371, peak 0.76; playback volume 0.6."
+    },
+    {
+      "path": "Assets/Resources/Audio/HolyLightCentral.wav",
+      "sourceId": "S16",
+      "status": "original-procedural",
+      "guid": "68f9d2e31bf74a30acdb2ea29e8264e1",
+      "sha256": "0E3E1E772D2C59D89697ED2DA065AA508B6360FAE7AB838A0A9EBF393DC2BA4A",
+      "bytes": 190556,
+      "durationSeconds": 2.16,
+      "generator": "Tools/GenerateHolyLightAudio.py",
+      "note": "Generated 2026-10-10: 0.16s descending air, warm magical impact and two-second resonant glow. No sampled recordings. Mono PCM16 44100 Hz; RMS 0.0909, peak 0.76; playback volume 0.55."
+    },
+    {
+      "path": "Assets/Resources/Audio/HolyLightWave.wav",
+      "sourceId": "S16",
+      "status": "original-procedural",
+      "guid": "2b614173557a44ed9564eefed9b2be22",
+      "sha256": "66EE0B22613D2F5A36E8F8B6922F357AAB1789632994D9B15CDFC2B8F71D7FAA",
+      "bytes": 71486,
+      "durationSeconds": 0.81,
+      "generator": "Tools/GenerateHolyLightAudio.py",
+      "note": "Generated 2026-10-10: lighter descending magic pulse; 0.16s descent plus 0.65s impact/tail. One voice per four-column wave, not four stacked cues. No sampled recordings. Mono PCM16 44100 Hz; RMS 0.1131, peak 0.68; playback volume 0.45."
+    },
+    {
+      "path": "Assets/Resources/Audio/TurretFire.wav",
+      "sourceId": "S15",
+      "status": "original-procedural",
+      "guid": "85f216cc71464c58ac04f260df413ac2",
+      "sha256": "2309B422DCF1B0B28478FA714BB8E0CD75B8FFF175173CAF6EE7B09BB2E0352F",
+      "bytes": 31796,
+      "durationSeconds": 0.36,
+      "generator": "Tools/GenerateTurretAudio.py",
+      "note": "Generated 2026-10-10: deterministic low-frequency impact, explosive crack and short mechanical resonances; no sampled recordings. Mono PCM16 44100 Hz; onset 0.045 ms, RMS 0.16."
+    },
+    {
+      "path": "Assets/Resources/Audio/PotionShatter.wav",
+      "sourceId": "S14",
+      "status": "original-procedural",
+      "guid": "6822874f10e44f0b9f1ac83c9fe6b1ad",
+      "sha256": "4A65362ADC59BDFB237A9234106E26D2CE01292A7903FD092CCA77FB4A3CEDF8",
+      "bytes": 51200,
+      "durationSeconds": 0.58,
+      "generator": "Tools/GeneratePotionShatterAudio.py",
+      "note": "Generated 2026-10-10: deterministic brittle glass, wet noise and short droplet resonances; no sampled recordings. Mono PCM16 44100 Hz; onset 0.068 ms, RMS 0.1312."
+    },
+    {
+      "path": "Assets/Resources/Audio/FearRoar.wav",
+      "sourceId": "S13",
+      "status": "original-procedural",
+      "guid": "2c3df4ee5c724a48939ea3f00e21b913",
+      "sha256": "62D82E7F131827CF2A9C9BF8E724F2179EF272D7A5FF68A023F2D410EA1C262F",
+      "bytes": 88244,
+      "durationSeconds": 1.0,
+      "generator": "Tools/GenerateFearRoarAudio.py",
+      "note": "Generated 2026-10-09 with deterministic oscillators, formants and noise; no sampled recordings. Mono PCM16, 44100 Hz. Matches the one-second roar field, not the longer target stun."
+    },
+    {
+      "path": "Assets/Resources/Audio/EnergyCrystalShatter.wav",
+      "sourceId": "S12",
+      "status": "original-procedural",
+      "guid": "490cbe97bd4d44868a016065faf98b21",
+      "sha256": "44ADDE4E7E119826A33860FAAF0EE70C215BCF873524CA725AAC4EF869621267",
+      "bytes": 54728,
+      "durationSeconds": 0.62,
+      "generator": "Tools/GenerateEnergyCrystalAudio.py",
+      "note": "Generated 2026-10-09 using deterministic noise and oscillators; no sampled recordings. Mono PCM16, 44100 Hz."
+    },
+    {
+      "path": "Assets/Resources/Audio/Sandworm/DeathSegment.wav",
+      "sourceId": "S10",
+      "guid": "2d19bb4d8abd471e959fc32d9c5e4f7a",
+      "sha256": "EB6AF7721756E857A1AAA25782965464266C6476F7B92CDC59B37D05B4870285",
+      "bytes": 20330,
+      "durationSeconds": 0.23,
+      "generator": "Tools/GenerateSandwormAudio.py",
+      "metrics": {
+        "durationSeconds": 0.23,
+        "peak": 0.78,
+        "rms": 0.1471,
+        "onsetMs": 0.023,
+        "seamDelta": 0.00589
+      }
+    },
+    {
+      "path": "Assets/Resources/Audio/Sandworm/DeathHead.wav",
+      "sourceId": "S10",
+      "guid": "a4d50692f156431c91c4bdbb792c542f",
+      "sha256": "CF0B8E75E8D2852B212D76716602E8E6A7EA85E8117FAB103E08E97F7ADA95C4",
+      "bytes": 63548,
+      "durationSeconds": 0.72,
+      "generator": "Tools/GenerateSandwormAudio.py",
+      "metrics": {
+        "durationSeconds": 0.72,
+        "peak": 0.9,
+        "rms": 0.1931,
+        "onsetMs": 0.045,
+        "seamDelta": 0.00015
+      }
+    },
+    {
+      "path": "Assets/Resources/Audio/Sandworm/MovementLoop.wav",
+      "sourceId": "S10",
+      "guid": "cbf0e818fc04536418ce1fe899e4875a",
+      "sha256": "CCEA05C337824AAD6AA04C63393B0C31A672DC5A5D9AF18C4C00F71BAABAD24F",
+      "bytes": 211724,
+      "durationSeconds": 2.4,
+      "generator": "Tools/GenerateSandwormAudio.py",
+      "metrics": {
+        "durationSeconds": 2.4,
+        "peak": 0.3705,
+        "rms": 0.155,
+        "onsetMs": 0,
+        "seamDelta": 0.00528
+      }
+    },
+    {
+      "path": "Assets/Resources/Audio/Sandworm/EmergenceLoop.wav",
+      "sourceId": "S10",
+      "guid": "490392a359f551648a7aa85b44b14889",
+      "sha256": "45409FD492A1F16B37F45CFA5D52B9B1B147234318E599ABDFD4BA92AE0A593A",
+      "bytes": 158804,
+      "durationSeconds": 1.8,
+      "generator": "Tools/GenerateSandwormAudio.py",
+      "metrics": {
+        "durationSeconds": 1.8,
+        "peak": 0.422,
+        "rms": 0.185,
+        "onsetMs": 0,
+        "seamDelta": 0.0162
+      }
+    },
+    {
+      "path": "Assets/Resources/Audio/Sandworm/BurrowLoop.wav",
+      "sourceId": "S10",
+      "guid": "ee2ddf32499ef4244bfd1c28c1a2b7ec",
+      "sha256": "183B9CC5917DAEB5E74CA34D441C8DA203CFD6790A6E8518D65F8E89D2D37A8C",
+      "bytes": 185264,
+      "durationSeconds": 2.1,
+      "generator": "Tools/GenerateSandwormAudio.py",
+      "metrics": {
+        "durationSeconds": 2.1,
+        "peak": 0.39,
+        "rms": 0.17,
+        "onsetMs": 0,
+        "seamDelta": 0.00101
+      }
+    },
+    {
+      "path": "Assets/Resources/Audio/Sandworm/Breach.wav",
+      "sourceId": "S10",
+      "guid": "cce1567662e935a4cb36ab81c3313fa7",
+      "sha256": "4FBAFBCE4512DAC287C4732D2016EB277977C373826CE3C4CF0B0ED8403D1E26",
+      "bytes": 54728,
+      "durationSeconds": 0.62,
+      "generator": "Tools/GenerateSandwormAudio.py",
+      "metrics": {
+        "durationSeconds": 0.62,
+        "peak": 0.88,
+        "rms": 0.1548,
+        "onsetMs": 0.045,
+        "seamDelta": 0.00079
+      }
+    },
+    {
+      "path": "Assets/Resources/Audio/Sandworm/BurrowImpact.wav",
+      "sourceId": "S10",
+      "guid": "51dd6aa6de5cfdd4c887a6cea827586a",
+      "sha256": "EFD5CDDC48ACF3FD00B9EE65CB229F7CF689C6D8564BD24C4DB7251A2539E62D",
+      "bytes": 42380,
+      "durationSeconds": 0.48,
+      "generator": "Tools/GenerateSandwormAudio.py",
+      "metrics": {
+        "durationSeconds": 0.48,
+        "peak": 0.84,
+        "rms": 0.1737,
+        "onsetMs": 0.204,
+        "seamDelta": 0.00418
+      }
+    },
+    {
+      "path": "Assets/Resources/Audio/Sandworm/BlastFall.wav",
+      "sourceId": "S10",
+      "guid": "d9097bec27539ff4bb941145a1010a0a",
+      "sha256": "ACC827E132237FE0A92E4011E4AB57AED49E4140B6390BF5EFA5EDBA5910FE74",
+      "bytes": 79424,
+      "durationSeconds": 0.9,
+      "generator": "Tools/GenerateSandwormAudio.py",
+      "metrics": {
+        "durationSeconds": 0.9,
+        "peak": 0.9,
+        "rms": 0.1517,
+        "onsetMs": 0,
+        "seamDelta": 0.01508
+      }
+    },
+    {
+      "path": "Assets/Resources/Audio/Sandworm/GroundImpact.wav",
+      "sourceId": "S10",
+      "guid": "97eeb7e3f95185044aa607cfb72d2612",
+      "sha256": "0001827DC09958DAA6CF985F3F7655894E4C79EF7DBA3CD627A5D8BD5FF88559",
+      "bytes": 51200,
+      "durationSeconds": 0.58,
+      "generator": "Tools/GenerateSandwormAudio.py",
+      "metrics": {
+        "durationSeconds": 0.58,
+        "peak": 0.86,
+        "rms": 0.1634,
+        "onsetMs": 0.136,
+        "seamDelta": 0.00439
+      }
+    },
+    {
+      "path": "Assets/Resources/Audio/HandgunFire.wav",
+      "sourceId": "S9",
+      "guid": "3b3c5c5928894c91832702b83ea03227",
+      "sha256": "80ACFEAD4791E71CAB92BEC3CBF28EA75CB5483D09F85A98A627C37266890331",
+      "bytes": 28302,
+      "durationSeconds": 0.32,
+      "sourceUrl": "https://opengameart.org/node/70780",
+      "originalBackup": {
+        "path": "Docs/AudioOriginals/Handgun/Black Powder.wav",
+        "sha256": "495EADF1C1E41A1264FF75F08A58DE9004B3F9792391A174D70FC5C796C41744"
+      }
+    },
+    {
+      "path": "Assets/Resources/Audio/ElectricGate/CurrentLoop.wav",
+      "sourceId": "S8",
+      "guid": "a931665471bd47c1b90d9b2d8b8e83f0",
+      "sha256": "06CA559DAF3DAF97907494FEC212574412E4B5CB8A91644A31F228F1B3B1AD93",
+      "bytes": 86730,
+      "durationSeconds": 0.982449,
+      "sourceUrl": "https://opengameart.org/sites/default/files/shieldloop.wav",
+      "originalBackup": {
+        "path": "Docs/AudioOriginals/ElectricGate/shieldloop.wav",
+        "sha256": "BB5FDBA1FDBBD44A00143AF7DA8B86BF9581C3F2A8E22445C8601F51539DC801"
+      }
+    },
+    {
+      "path": "Assets/Resources/Audio/ElectricGate/WarningLoop.wav",
+      "sourceId": "S8",
+      "guid": "20a4192d27cf44f59e6a5b4cc7021f0e",
+      "sha256": "CF7F96EE947CDA546BDF774834CAB9CBC4B77DF9AC36483BDFF9CCBED5750D33",
+      "bytes": 432030,
+      "durationSeconds": 4.897415,
+      "sourceUrl": "https://opengameart.org/sites/default/files/snaploop.wav",
+      "originalBackup": {
+        "path": "Docs/AudioOriginals/ElectricGate/snaploop.wav",
+        "sha256": "350F26E58C47D2F061B0AA6681C245357258CB3084BCB0C48D34DDC8FCA28CDE"
+      }
+    },
+    {
+      "path": "Assets/Resources/Audio/ElectricGate/Discharge.wav",
+      "sourceId": "S8",
+      "guid": "e9333db9fffd4f78bf2e5f7b11af22c5",
+      "sha256": "CEC2C87D4EED88BC1A72108A4940E553D91F8E870F45A422A20237754E651523",
+      "bytes": 38886,
+      "durationSeconds": 0.44,
+      "sourceUrl": "https://opengameart.org/sites/default/files/shieldhit.wav",
+      "originalBackup": {
+        "path": "Docs/AudioOriginals/ElectricGate/shieldhit.wav",
+        "sha256": "6213E372A3AAAFA0A4B33CC04E2F62CA97D20F3D91CF3506464D8CC9DC899625"
+      }
+    },
     {
       "path": "Assets/BGMS/m-art_Jimejime.mp3",
       "sourceId": "M-ART",
@@ -122,14 +450,12 @@
     },
     {
       "path": "Assets/Resources/Audio/DoorBreak.wav",
-      "sourceId": "S6",
+      "sourceId": "S11",
       "guid": "3f22ed120148407796e6087c9db90849",
-      "sha256": "5C478035E606D375CA3669ECF52CCAAC037053E6C87178BA8ED03D056D4F613B",
-      "bytes": 117736,
-      "durationSeconds": 1.333991,
-      "tags": {
-        "encoder": "Lavf63.1.101"
-      },
+      "sha256": "075D508AD7EA9A716A8F33DD6104B1AAF763A3E29490A393A7EEEC2E6EC94BBF",
+      "bytes": 45908,
+      "durationSeconds": 0.52,
+      "tags": {},
       "originalBackup": null,
       "previousVersions": [
         {
@@ -138,19 +464,33 @@
           "bytes": 30326,
           "durationSeconds": 0.342948,
           "note": "Replaced 2026-09-25: stronger destruction recording. See Docs/DestructionAudio.md for original source."
+        },
+        {
+          "sourceId": "S6",
+          "sha256": "5C478035E606D375CA3669ECF52CCAAC037053E6C87178BA8ED03D056D4F613B",
+          "bytes": 117736,
+          "durationSeconds": 1.333991,
+          "originalBackup": "Docs/AudioOriginals/Destruction/RecordedV2/DoorBreak.wav",
+          "note": "Replaced 2026-10-04 by original procedural synthesis S11. Recorded source attribution retained in Docs/DestructionAudio.md."
         }
-      ]
+      ],
+      "generator": "Tools/GenerateDestructionAudio.py",
+      "metrics": {
+        "durationSeconds": 0.52,
+        "peak": 0.8,
+        "rms": 0.1378,
+        "onsetMs": 0.136,
+        "seamDelta": 0
+      }
     },
     {
       "path": "Assets/Resources/Audio/GlassBreak.wav",
-      "sourceId": "S7",
+      "sourceId": "S11",
       "guid": "e29d6d35122645fdaca034b6e11b8966",
-      "sha256": "7358C76A6598C95476789740394E071F79A0F7703865753B12F00A765926DC0F",
-      "bytes": 110594,
-      "durationSeconds": 1.253016,
-      "tags": {
-        "encoder": "Lavf63.1.101"
-      },
+      "sha256": "1F56BC652870599104CF3672CB390B2738FAF040AB38912CD7124DE3306399E0",
+      "bytes": 56492,
+      "durationSeconds": 0.64,
+      "tags": {},
       "originalBackup": null,
       "previousVersions": [
         {
@@ -159,8 +499,24 @@
           "bytes": 75048,
           "durationSeconds": 0.85,
           "note": "Replaced 2026-09-25: stronger destruction recording. See Docs/DestructionAudio.md for original source."
+        },
+        {
+          "sourceId": "S7",
+          "sha256": "7358C76A6598C95476789740394E071F79A0F7703865753B12F00A765926DC0F",
+          "bytes": 110594,
+          "durationSeconds": 1.253016,
+          "originalBackup": "Docs/AudioOriginals/Destruction/RecordedV2/GlassBreak.wav",
+          "note": "Replaced 2026-10-04 by original procedural synthesis S11. Recorded source attribution retained in Docs/DestructionAudio.md."
         }
-      ]
+      ],
+      "generator": "Tools/GenerateDestructionAudio.py",
+      "metrics": {
+        "durationSeconds": 0.64,
+        "peak": 0.8,
+        "rms": 0.1096,
+        "onsetMs": 0.068,
+        "seamDelta": 0
+      }
     },
     {
       "path": "Assets/Resources/Audio/NpcAwarenessAlert.wav",

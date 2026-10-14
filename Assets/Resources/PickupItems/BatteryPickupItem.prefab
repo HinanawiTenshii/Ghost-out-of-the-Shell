@@ -140,8 +140,12 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   itemName: "魔力电池"
-  itemDescription: "封存着魔力的便携式能源，装入电池槽后可以驱动与其相连的机关。靠近电池槽按E安装或取回，无法直接使用。"
+  itemDescription: "封存着魔力的便携式能源，装入电池槽后可以驱动与其相连的机关。靠近电池槽按E安装或取回，无法直接使用。注意，电池内部装载的魔力极度不稳定，受到任何冲击都会发生爆炸。"
   itemId: battery
+  requiredUseSkill: 0
+  useSkillRequirementInitialized: 1
+  maximumCharge: 5
+  remainingCharge: 5
   persistentIdentity: {fileID: 0}
   uniqueInstanceId: ""
   pickupQuantity: 1

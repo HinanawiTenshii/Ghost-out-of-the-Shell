@@ -31,7 +31,8 @@ public sealed class QuestJournalEventTrigger : MonoBehaviour
         bool changed = QuestJournalManager.GetOrCreate().ApplyEventChanges(
             journalChanges,
             gameObject.scene.name);
-        if (changed || journalChanges == null || journalChanges.Length == 0)
+        if ((changed || journalChanges == null || journalChanges.Length == 0) &&
+            QuestJournalManager.GetOrCreate().CanApplyEventChanges(journalChanges))
         {
             hasTriggered = true;
         }

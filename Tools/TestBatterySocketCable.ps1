@@ -3,7 +3,7 @@ $root=Split-Path $PSScriptRoot -Parent
 $router=Get-Content -Raw "$root/Assets/Scripts/Interaction/OrthogonalCableRouter.cs"
 $stubs=@'
 namespace UnityEngine {
- public struct Vector2 {public float x,y;public Vector2(float x,float y){this.x=x;this.y=y;}public static Vector2 zero=>new Vector2();public static Vector2 operator -(Vector2 v)=>new Vector2(-v.x,-v.y);public static Vector2 Min(Vector2 a,Vector2 b)=>new Vector2(System.Math.Min(a.x,b.x),System.Math.Min(a.y,b.y));public static Vector2 Max(Vector2 a,Vector2 b)=>new Vector2(System.Math.Max(a.x,b.x),System.Math.Max(a.y,b.y));}
+ public struct Vector2 {public static Vector2 operator *(Vector2 a,float n)=>new Vector2(a.x*n,a.y*n);public float x,y;public Vector2(float x,float y){this.x=x;this.y=y;}public static Vector2 zero=>new Vector2();public static Vector2 operator -(Vector2 v)=>new Vector2(-v.x,-v.y);public static Vector2 Min(Vector2 a,Vector2 b)=>new Vector2(System.Math.Min(a.x,b.x),System.Math.Min(a.y,b.y));public static Vector2 Max(Vector2 a,Vector2 b)=>new Vector2(System.Math.Max(a.x,b.x),System.Math.Max(a.y,b.y));}
  public struct Vector3 {public float x,y,z;public Vector3(float x,float y,float z){this.x=x;this.y=y;this.z=z;}}
  public class GameObject {public Transform transform=new Transform();public bool activeInHierarchy=true;public int layer;}
  public class Component {public GameObject gameObject=new GameObject();public Transform transform=>gameObject.transform;}
@@ -24,7 +24,13 @@ namespace UnityEngine {
   public static float Abs(float a)=>System.Math.Abs(a);
  }
 }
+public class ElectricGatePillar:UnityEngine.MonoBehaviour {
+ public bool HasPanel=true;public UnityEngine.Vector2 PanelDirection=new UnityEngine.Vector2(0,-1);
+ public UnityEngine.Vector2 CablePort=>transform.TransformPoint(PanelDirection*.61f);
+ public UnityEngine.Vector2 CableDirection {get{var d=transform.TransformVector(new UnityEngine.Vector3(PanelDirection.x,PanelDirection.y,0));return System.Math.Abs(d.x)>System.Math.Abs(d.y)?new UnityEngine.Vector2(System.Math.Sign(d.x),0):new UnityEngine.Vector2(0,System.Math.Sign(d.y));}}
+}
 public class WaterwayGateController:UnityEngine.MonoBehaviour{} public class LeverData:UnityEngine.MonoBehaviour{} public class BatterySocket:UnityEngine.MonoBehaviour{}
+public class AlarmDevice:UnityEngine.MonoBehaviour{}
 public class CameraVisionObjectStreaming {public System.Collections.Generic.HashSet<UnityEngine.GameObject> suspended=new System.Collections.Generic.HashSet<UnityEngine.GameObject>();public bool IsSuspendedByStreamingOrAncestor(UnityEngine.GameObject target)=>suspended.Contains(target);}
 public static class CableTests {
  public static int count;
@@ -103,6 +109,17 @@ public static class CableTests {
   }
   var mirrored=new UnityEngine.Transform{sy=-1};UnityEngine.Rect mirroredBody;var mirroredPort=PortGeometry.GetBottomPort(mirrored,controllerBounds,out mirroredBody);
   Check(mirroredPort.y==.62f&&PortGeometry.GetPortDirection(mirrored).y==1,"Negative-scale flip also moves physical bottom port to the top");
+  foreach(var side in new[]{V(0,-1),V(0,1),V(-1,0),V(1,0)})foreach(float degrees in new[]{0f,90f,180f,270f,35f}){
+   var gate=new ElectricGatePillar{PanelDirection=side};gate.transform.x=7;gate.transform.y=3;gate.transform.angle=degrees*(float)System.Math.PI/180;
+   gate.transform.sx=1.2f;gate.transform.sy=1.5f;
+   UnityEngine.Rect body;var port=PortGeometry.GetMechanismPort(gate,out body);var expected=gate.transform.TransformPoint(side*.61f);
+   Check(System.Math.Abs(port.x-expected.x)<.00001f&&System.Math.Abs(port.y-expected.y)<.00001f,"Electric gate cable terminates at configured panel face after rotation/scale");
+   var path=new System.Collections.Generic.List<UnityEngine.Vector2>();
+   Check(OrthogonalCableRouter.TryRoutePorts(a,port,V(0,-1),gate.CableDirection,bodyA,body,.28f,walls,.16f,16,40000,.2f,path,null,.45f,21),"All four transformed panel faces reachable by orthogonal route");
+   int last=path.Count-1;var lead=path[last-1];var dir=gate.CableDirection;
+   Check(System.Math.Abs((lead.x-port.x)*dir.y-(lead.y-port.y)*dir.x)<.0001f&&((lead.x-port.x)*dir.x+(lead.y-port.y)*dir.y)>0,"Cable arrives outside panel face, not through pillar");
+   for(int i=1;i<path.Count;i++)Check(path[i-1].x==path[i].x||path[i-1].y==path[i].y,"Electric panel routing has no diagonal cable segments");
+  }
   PreviewWalls=new System.Collections.Generic.List<UnityEngine.Rect>{R(0,-1.5f,1,1.5f)};
   PreviewRoutes=new System.Collections.Generic.List<System.Collections.Generic.List<UnityEngine.Vector2>>();
   var occupied=new System.Collections.Generic.List<UnityEngine.Rect>();
@@ -111,40 +128,6 @@ public static class CableTests {
    Check(OrthogonalCableRouter.TryRoutePorts(V(-5,-.458333f),V(7,3.62f),V(0,-1),V(0,1),R(-5.375f,-.458333f,-4.625f,.458333f),R(6.57f,2.38f,7.43f,3.62f),.28f,PreviewWalls,.16f,12,40000,.2f,p,occupied,.45f,i),"Shared transformed bottom ports retain cable separation");
    PreviewRoutes.Add(p);Reserve(occupied,p);
   }
-  return count;
- }
- public static int RunDeviceAvoidance(){
-  var h=new DeviceAvoidanceHarness();var owner=new BatterySocket();owner.gameObject=h.gameObject;
-  var target=new WaterwayGateController();target.transform.x=6;
-  var otherSocket=new BatterySocket();otherSocket.transform.x=3;otherSocket.transform.y=-.9f;otherSocket.gameObject.layer=9;
-  var otherController=new WaterwayGateController();otherController.transform.x=2;otherController.transform.y=1.1f;otherController.enabled=false;
-  var otherLever=new LeverData();otherLever.transform.x=4;otherLever.transform.y=-2;otherLever.transform.angle=1.5707963f;otherLever.transform.sy=-1;
-  h.devices.Add(owner);h.devices.Add(target);h.devices.Add(otherSocket);h.devices.Add(otherController);h.devices.Add(otherLever);
-  h.AddDeviceObstacles(target);
-  Check(h.obstacles.Count==3,"Exclude own socket and bound target; include every other socket/controller/lever irrespective of layer or behaviour.enabled");
-  UnityEngine.Rect socketBody;PortGeometry.GetBottomPort(otherSocket.transform,PortGeometry.GetLocalBodyBounds(otherSocket),out socketBody);
-  Check(System.Math.Abs(h.obstacles[0].xMin-(socketBody.xMin-.12f))<.00001f,"Additional device edge spacing applied outside actual visual silhouette");
-  var start=V(0,-11f/24f);var end=V(6,-.62f);var startBody=R(-.375f,-11f/24f,.375f,11f/24f);var endBody=R(5.57f,-.62f,6.43f,.62f);
-  var bands=new System.Collections.Generic.List<UnityEngine.Rect>{R(-8,-3,8,2)};
-  var routed=new System.Collections.Generic.List<UnityEngine.Vector2>();
-  foreach(float stagger in new[]{0f,.45f}){
-   Check(OrthogonalCableRouter.TryRoutePorts(start,end,V(0,-1),V(0,-1),startBody,endBody,.28f,h.obstacles,.16f,12,40000,.2f,routed,bands,stagger,31),"Congested cables still route around unrelated devices with or without natural turns");
-   for(int i=1;i<routed.Count;i++)foreach(var raw in h.obstacles){
-    var r=R(raw.xMin-.16f,raw.yMin-.16f,raw.xMax+.16f,raw.yMax+.16f);var p=routed[i-1];var q=routed[i];
-    bool crosses=p.y==q.y?p.y>r.yMin&&p.y<r.yMax&&System.Math.Max(p.x,q.x)>r.xMin&&System.Math.Min(p.x,q.x)<r.xMax:
-     p.x>r.xMin&&p.x<r.xMax&&System.Math.Max(p.y,q.y)>r.yMin&&System.Math.Min(p.y,q.y)<r.yMax;
-    Check(!crosses,"Every segment including fixed port leads preserves full clearance from other device");
-   }
-  }
-  otherSocket.gameObject.activeInHierarchy=false;h.obstacles.Clear();h.AddDeviceObstacles(target);
-  Check(h.obstacles.Count==2,"Intentionally inactive unrelated device does not block route");
-  h.streaming[0].suspended.Add(otherSocket.gameObject);h.obstacles.Clear();h.AddDeviceObstacles(target);
-  Check(h.obstacles.Count==3,"Streaming suspension never turns unrelated equipment into a pass-through");
-  otherSocket.transform.x=8;h.obstacles.Clear();h.AddDeviceObstacles(target);
-  Check(h.obstacles[0].xMin>7,"Moving cached device immediately updates collected geometry without scene rescan");
-  otherSocket.transform.x=0;otherSocket.transform.y=-.85f;h.obstacles.Clear();h.AddDeviceObstacles(target);
-  Check(!OrthogonalCableRouter.TryRoutePorts(start,end,V(0,-1),V(0,-1),startBody,endBody,.28f,h.obstacles,.16f,12,40000,.2f,routed,bands,.45f,31),"Unrelated device over endpoint lead blocks route rather than allowing a misleading attachment");
-  Check(routed.Count==0,"Failure hides stale route through endpoint obstruction");
   return count;
  }
  public static int RunStyled(){
@@ -221,41 +204,30 @@ public static class CableTests {
 '@
 $component=Get-Content -Raw "$root/Assets/Scripts/Interaction/BatterySocketCable.cs"
 $geometry='public static class PortGeometry {'
-foreach($signature in @('private static Rect GetLocalBodyBounds(', 'private static Vector2 GetBottomPort(', 'private static Vector2 GetPortDirection(')){
+foreach($signature in @('private static Rect GetLocalBodyBounds(', 'private static Vector2 GetBottomPort(', 'private static Vector2 GetPortDirection(', 'private static Vector2 GetMechanismPort(')){
  $start=$component.IndexOf($signature);if($start -lt 0){throw "Missing $signature"}
  $begin=$component.IndexOf('{',$start);$end=$begin+1;$depth=1
  while($depth){if($component[$end] -eq '{'){$depth++};if($component[$end] -eq '}'){$depth--};$end++}
  $geometry+=$component.Substring($start,$end-$start).Replace('private static','public static')
 }
 $geometry+='}'
-$geometry+='public class DeviceAvoidanceHarness {public UnityEngine.GameObject gameObject=new UnityEngine.GameObject();public System.Collections.Generic.List<UnityEngine.Component> devices=new System.Collections.Generic.List<UnityEngine.Component>();public System.Collections.Generic.List<UnityEngine.Rect> obstacles=new System.Collections.Generic.List<UnityEngine.Rect>();public float deviceClearance=.12f;public CameraVisionObjectStreaming[] streaming={new CameraVisionObjectStreaming()};private static UnityEngine.Rect GetLocalBodyBounds(UnityEngine.Component d)=>PortGeometry.GetLocalBodyBounds(d);private static UnityEngine.Vector2 GetBottomPort(UnityEngine.Transform t,UnityEngine.Rect r,out UnityEngine.Rect body)=>PortGeometry.GetBottomPort(t,r,out body);'
-foreach($signature in @('private bool IsPresentForRouting(', 'private void AddDeviceObstacles(')){
- $start=$component.IndexOf($signature);if($start -lt 0){throw "Missing $signature"}
- $begin=$component.IndexOf('{',$start);$end=$begin+1;$depth=1
- while($depth){if($component[$end] -eq '{'){$depth++};if($component[$end] -eq '}'){$depth--};$end++}
- $geometry+=$component.Substring($start,$end-$start).Replace('private bool','public bool').Replace('private void','public void')
-}
-$geometry+='}'
 Add-Type -TypeDefinition ($router+"`n"+$stubs+"`n"+$geometry)
 $checks=[CableTests]::Run()
 $checks=[CableTests]::RunStyled()
 $checks=[CableTests]::RunBottomPorts()
-$checks=[CableTests]::RunDeviceAvoidance()
 $component=Get-Content -Raw "$root/Assets/Scripts/Interaction/BatterySocketCable.cs"
-foreach($required in @('LayerMask.NameToLayer("Blocks")','IsSuspendedByStreamingOrAncestor','GetBottomPort(transform, GetLocalBodyBounds(socket)','GetBottomPort(binding.transform, GetLocalBodyBounds(binding)','transform.InverseTransformPoint','previousObstacles','generated.SetActive(false)')){
+foreach($required in @('NoObstacles','GetBottomPort(transform, GetLocalBodyBounds(socket)','GetBottomPort(binding.transform, GetLocalBodyBounds(binding)','transform.InverseTransformPoint','TryRestoreRoute(binding, start, end)','generated.SetActive(false)')){
  if(!$component.Contains($required)){throw "Missing integration guard: $required"};$checks++
 }
-foreach($required in @('string.CompareOrdinal(other.GetOrderKey(), orderKey) >= 0','previousReservations','StableVariation(orderKey)','ActiveCables.Remove(this)','other.gameObject.scene != gameObject.scene')){
+foreach($required in @('string.CompareOrdinal(other.GetOrderKey(), orderKey) >= 0','savedRoute','StableVariation(orderKey)','ActiveCables.Remove(this)','other.gameObject.scene != gameObject.scene')){
  if(!$component.Contains($required)){throw "Missing cable coordination guard: $required"};$checks++
 }
-foreach($required in @('GetComponentsInChildren<BatterySocket>(true)','GetComponentsInChildren<WaterwayGateController>(true)','GetComponentsInChildren<LeverData>(true)','AddDeviceObstacles(binding)')){
- if(!$component.Contains($required)){throw "Missing independent device discovery: $required"};$checks++
-}
+if($component.Contains('GetComponentsInChildren<Collider2D>') -or $component.Contains('AddDeviceObstacles')){throw 'Scene obstacles must no longer affect cable generation'}
 if($component.Contains('typeof(BoxCollider2D)') -or $component.Contains('LineRenderer')){throw 'Cable must not add collision or smoothed line geometry'}
 $prefab=Get-Content -Raw "$root/Assets/Prefabs/Decorations/BatterySocket.prefab"
 $guid=[regex]::Match((Get-Content -Raw "$root/Assets/Scripts/Interaction/BatterySocketCable.cs.meta"),'guid: ([a-f0-9]{32})').Groups[1].Value
 if(!$prefab.Contains($guid)){throw 'Cable component missing from socket prefab'}
-foreach($required in @('generated.layer = 0;', 'cableRenderer.sortingLayerID = 0;', 'cableRenderer.sortingOrder = Mathf.Min(0, sortingOrder);')){
+foreach($required in @('generated.layer = 0;', 'cableRenderer.sortingLayerID = 0;', 'cableRenderer.sortingOrder = Mathf.Min(-1, sortingOrder);')){
  if(!$component.Contains($required)){throw "Missing masked ground render policy: $required"};$checks++
 }
 $mover=Get-Content -Raw "$root/Assets/Scripts/Characters/ZeldaFourWayMover.cs"

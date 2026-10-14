@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="AlchemySystem.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\UI\BuffDurationIconGraphic.cs;Assets\Scripts\UI\RuntimeBuffDurationBar.cs" />
+    <Compile Include="Assets\Scripts\UI\BuffDurationIconGraphic.cs;Assets\Scripts\UI\RuntimeBuffDurationBar.cs" />
+  </ItemGroup>
+</Project>

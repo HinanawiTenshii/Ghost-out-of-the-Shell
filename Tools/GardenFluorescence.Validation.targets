@@ -1,0 +1,9 @@
+<Project>
+  <Import Project="RuntimeUiGlow.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Rendering\GardenFluorescenceTest.cs" />
+    <Compile Remove="Assets\Scripts\Rendering\SelectiveWorldBloom.cs" />
+    <Compile Include="Assets\Scripts\Rendering\GardenFluorescenceTest.cs" />
+    <Compile Include="Assets\Scripts\Rendering\SelectiveWorldBloom.cs" />
+  </ItemGroup>
+</Project>

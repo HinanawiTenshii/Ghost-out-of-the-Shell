@@ -20,9 +20,12 @@ namespace UnityEngine {
  public class Min:Attribute{public Min(float a){}} public class DisallowMultipleComponent:Attribute{}
  public class RequireComponent:Attribute{public RequireComponent(Type a,Type b){}}
  public struct Vector2 {public float x,y;public Vector2(float a,float b){x=a;y=b;}
+  public static Vector2 one=>new Vector2(1,1);public static Vector2 zero=>new Vector2();public static Vector2 operator *(Vector2 v,float n)=>new Vector2(v.x*n,v.y*n);
   public static float Distance(Vector2 a,Vector2 b){return (float)Math.Sqrt((a.x-b.x)*(a.x-b.x)+(a.y-b.y)*(a.y-b.y));}
   public static implicit operator Vector2(Vector3 v){return new Vector2(v.x,v.y);}}
- public struct Vector3 {public float x,y,z;public Vector3(float a,float b,float c=0){x=a;y=b;z=c;}}
+ public struct Vector3 {public float x,y,z;public Vector3(float a,float b,float c=0){x=a;y=b;z=c;}public static Vector3 operator -(Vector3 a,Vector3 b)=>new Vector3(a.x-b.x,a.y-b.y,a.z-b.z);}
+ public struct Bounds {public Vector3 size,center;}
+ public class Collider2D:MonoBehaviour {public Bounds bounds;}
  public struct Color {public static Color white=>new Color();}
  public struct Quaternion {public static Quaternion identity=>new Quaternion();}
  public static class Mathf {public static int Max(int a,int b)=>Math.Max(a,b);public static float Max(float a,float b)=>Math.Max(a,b);public static int Clamp(int a,int b,int c)=>Math.Max(b,Math.Min(a,c));}
@@ -49,10 +52,10 @@ public class ZeldaCharacterData:MonoBehaviour {
  public RuntimeState CaptureRuntimeState()=>new RuntimeState{health=health,currentHealth=currentHealth};
  public void ApplyRuntimeState(RuntimeState s){health=s.health;currentHealth=s.currentHealth;}}
 public class AutomatonZeldaCharacterData:ZeldaCharacterData{public void InvalidateVisuals(){}}
-public class ZeldaFourWayMover:MonoBehaviour {public FakeBox ActiveCardboardBox;}
+public class ZeldaFourWayMover:MonoBehaviour {public bool IsAttacking;public int gestures;public FakeBox ActiveCardboardBox;}
 public class FakeBox {public bool exited;public void RequestExit(){exited=true;}}
 public enum ZeldaAiState{Idle,Hostile}
-public class ZeldaCharacterAiBase:MonoBehaviour {public class SaveState{public ZeldaAiState state;public Vector2 facing;public bool automatonHostilityActivated;}}
+public class ZeldaCharacterAiBase:MonoBehaviour {public static void NotifyPlayerBombPlacement(ZeldaCharacterData user){} public class SaveState{public ZeldaAiState state;public Vector2 facing;public bool automatonHostilityActivated;}}
 public class AutomatonCharacterAi:ZeldaCharacterAiBase {
  public bool HostilityActivated,IsPossessionLocked;public Vector2 FacingDirection=new Vector2(0,-1);
  public void DeactivateHostility(){HostilityActivated=false;}
@@ -72,6 +75,9 @@ public static class SavedScalarFields {
  public static void Apply(object c,List<Value> v){if(c is ZeldaCharacterData d&&v!=null)d.FinalAttackPower=v[0].attack;}}
 public class PickupItemVisualBase {public Color DisplayColor=>Color.white;public void SetDisplayColor(Color c){}}
 public class PickupItemBase:MonoBehaviour {
+ public virtual bool CanUseFromInventory=>true;public virtual bool UsesSimpleUseGesture=>true;
+ public void PlayUseGesture(ZeldaCharacterData user){user.GetComponent<ZeldaFourWayMover>().gestures++;}
+ public static Vector3 ResolvePlacementPosition(ZeldaCharacterData user,Vector3 fallback,Vector2 size,Vector2 offset,GameObject ignored)=>new Vector3(user.transform.position.x,user.transform.position.y-.65f,user.transform.position.z);
  public string ItemId="armed_golem",UniqueInstanceId=Guid.NewGuid().ToString(),ItemName="武装魔像",ItemDescription=ArmedGolemPickupItem.DefaultDescription;
  private string itemId=>ItemId;private int pickupQuantity=1,maxStackSize=1;private bool restorePreviousTaskOnPickup=false;
  public bool Locked;protected bool IsPickupLocked=>Locked;protected float PickupDistance=>1.25f;
@@ -90,7 +96,9 @@ public class PickupItemBase:MonoBehaviour {
 $code+=(Extract $pickup '    public virtual bool TryPickUp()')+"`n}`n"
 $code+=($golem -replace '(?m)^using [^;]+;\r?\n','')
 $code+=@'
+public class BombPickupItem:PickupItemBase {}
 public class CardboardBoxPickupItem {
+ public void ArmStoredBomb(ZeldaCharacterData user){}
  public static CardboardBoxPickupItem FindNearestAvailableContainer(Vector3 p)=>null;
  public bool TryStoreItem(PersistentInventory.Slot s,PickupItemBase p,ZeldaCharacterData u)=>false;public void CancelLastStoredItem(){} }
 public class PersistentInventory:MonoBehaviour {
@@ -106,7 +114,7 @@ public class PersistentInventory:MonoBehaviour {
 '@
 foreach($sig in @('    public struct RuntimeSlotState','    public struct RuntimeState','    public sealed class Slot',
     '    public RuntimeState CaptureRuntimeState()','    public void ApplyRuntimeState(', '    public bool TryAddUniqueItem(',
-    '    public bool TryUseSelectedItem()', '    public bool TryDropSelectedItem()')){$code+=Extract $inventory $sig}
+    '    public bool TryUseSelectedItem()', '    public bool TryDropSelectedItem()', '    private static void NotifyBombPlacement(')){$code+=Extract $inventory $sig}
 $code+="`n}`n"
 $code+=@'
 public static class GolemTests {
@@ -147,7 +155,8 @@ public static class GolemTests {
   Check(inv.TryUseSelectedItem()&&inv.GetSlot(0).IsEmpty,"R places even after switching to weaker character");
   Check(!ZeldaRuntimeRegistry.controlled.ActiveCardboardBox.exited,"R places instead of exiting box");
   var placed=lastClone;
-  Check(placed.transform.position.x==5&&placed.transform.position.y==8&&!placed.gameObject.destroyed,"R places live character at feet");
+  Check(placed.transform.position.x==5&&Math.Abs(placed.transform.position.y-7.35f)<.001&&!placed.gameObject.destroyed,"R places live character ahead using placement resolver");
+  Check(ZeldaRuntimeRegistry.controlled.gestures==1,"R placement plays one gesture");
   Check(placed.GetComponent<AutomatonZeldaCharacterData>().currentHealth==4&&placed.GetComponent<AutomatonZeldaCharacterData>().FinalAttackPower==7,"Health and authored stats survive placement");
   Check(placed.UniqueInstanceId==id&&placed.transform.localScale.x==.9f&&!placed.GetComponent<AutomatonCharacterAi>().HostilityActivated&&placed.Locked,"Identity, scale, dormant state and cooldown restored");
   placed.Locked=false;user.FinalAttackPower=4;Check(placed.TryPickUp(),"Placed golem can be reclaimed with strength above 3");
@@ -170,7 +179,9 @@ Add-Type -TypeDefinition $code
 Write-Output ("PASS: "+[GolemTests]::Run()+" production pickup/inventory/R-Q/snapshot checks (Unity services stubbed).")
 $prefab=Get-Content -Raw -Encoding UTF8 "$root/Assets/Prefabs/Level2NPCS/Automaton-level2.prefab"
 $variant=Get-Content -Raw -Encoding UTF8 "$root/Assets/Resources/PickupItems/ArmedGolemPickupItem.prefab"
-foreach($s in @('itemId: armed_golem','itemName: 武装魔像','1d5cdeca0bac42c5a8d4beec4ce8240e','0190b5b73e5e4e428ca92d02bd69c2a2','m_IsTrigger: 0')){if(!$prefab.Contains($s)){throw "Prefab missing $s"}}
+foreach($s in @('itemId: armed_golem','1d5cdeca0bac42c5a8d4beec4ce8240e','0190b5b73e5e4e428ca92d02bd69c2a2','m_IsTrigger: 0')){if(!$prefab.Contains($s)){throw "Prefab missing $s"}}
+$nameValue=[regex]::Match($prefab,'(?m)^  itemName: (.+)$').Groups[1].Value.Trim().Trim('"')
+if([regex]::Unescape($nameValue) -ne '武装魔像'){throw 'Wrong prefab item name'}
 if(!$variant.Contains('m_SourcePrefab: {fileID: 100100000, guid: a9d8efb48a934a17bba021da0462da1f, type: 3}')){throw 'Resource does not inherit current automaton'}
 if(!(Extract $inventory '    public void Load()').Contains('data.slots[i].ItemState')){throw 'PlayerPrefs load drops payload'}
 $travel=Get-Content -Raw -Encoding UTF8 "$root/Assets/Scripts/SceneManagement/SceneTravelStateManager.cs"

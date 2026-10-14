@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>Geometric 2D street lamp with two translucent, breathing light discs.</summary>
+/// <summary>Geometric 2D street lamp with two additive, softly fading warm light discs.</summary>
 [ExecuteAlways, DisallowMultipleComponent]
 [RequireComponent(typeof(BoxCollider2D))]
 [AddComponentMenu("Rendering/Kerosene Street Lamp")]
@@ -26,10 +26,13 @@ public sealed class KeroseneStreetLamp : MonoBehaviour
     [SerializeField, Range(0f, 0.3f)] private float radiusBreathing = 0.08f;
     [SerializeField, Range(0f, 0.8f)] private float alphaBreathing = 0.18f;
     [SerializeField] private bool randomizePhase = true;
+    [SerializeField, Range(0f, 6f), InspectorName("泛光强度")] private float glowIntensity = 3.8f;
+    [SerializeField, Range(1f, 3f), InspectorName("泛光范围倍率")] private float glowRadiusMultiplier = 1.45f;
 
     private GameObject generatedRoot;
     private Mesh bodyMesh, discMesh;
     private Material material;
+    private Material glowMaterial;
     private MeshRenderer innerLight, outerLight;
     private MaterialPropertyBlock lightProperties;
     private float elapsed, phase;
@@ -50,6 +53,8 @@ public sealed class KeroseneStreetLamp : MonoBehaviour
         outerRadius = Mathf.Max(innerRadius, outerRadius);
         breathingPeriod = Mathf.Max(0.1f, breathingPeriod);
         sortingOrder = Mathf.Max(2, sortingOrder);
+        glowIntensity = Mathf.Clamp(glowIntensity, 0f, 6f);
+        glowRadiusMultiplier = Mathf.Clamp(glowRadiusMultiplier, 1f, 3f);
         dirty = true; // No object creation from the validation/import thread.
     }
 
@@ -70,9 +75,10 @@ public sealed class KeroseneStreetLamp : MonoBehaviour
         if (renderer == null) return;
         renderer.enabled = lightOn;
         renderer.transform.localPosition = new Vector3(lightCenter.x, lightCenter.y, 0f);
-        renderer.transform.localScale = Vector3.one * (radius * (1f + radiusBreathing * pulse));
+        renderer.transform.localScale = Vector3.one * (radius * glowRadiusMultiplier * (1f + radiusBreathing * pulse));
         tint.a *= 1f + alphaBreathing * pulse;
         lightProperties.SetColor("_Color", tint);
+        lightProperties.SetFloat("_Intensity", glowIntensity);
         renderer.SetPropertyBlock(lightProperties);
     }
 
@@ -87,6 +93,11 @@ public sealed class KeroseneStreetLamp : MonoBehaviour
         material.name = "Kerosene Lamp Geometry";
         material.hideFlags = HideFlags.HideAndDontSave;
         material.color = Color.white;
+        Shader glowShader = Resources.Load<Shader>("WarmLightGlow");
+        glowMaterial = glowShader != null && glowShader.isSupported ? new Material(glowShader) : new Material(material);
+        glowMaterial.name = "Kerosene Lamp Warm Glow";
+        glowMaterial.hideFlags = HideFlags.HideAndDontSave;
+        if (glowMaterial.HasProperty("_RadialFalloff")) glowMaterial.SetFloat("_RadialFalloff", 1f);
         lightProperties = new MaterialPropertyBlock();
         generatedRoot = new GameObject("Lamp Geometry (Generated)") { hideFlags = HideFlags.HideAndDontSave };
         generatedRoot.transform.SetParent(transform, false);
@@ -112,8 +123,8 @@ public sealed class KeroseneStreetLamp : MonoBehaviour
         // obstructing their movement; character body sprites use sorting order 1.
         CreateRenderer("Body", bodyMesh, Mathf.Max(2, sortingOrder));
         discMesh = CreateDisc();
-        outerLight = CreateRenderer("Outer Warm Light", discMesh, sortingOrder - 2);
-        innerLight = CreateRenderer("Inner Warm Light", discMesh, sortingOrder - 1);
+        outerLight = CreateRenderer("Outer Warm Light", discMesh, sortingOrder - 2, glowMaterial);
+        innerLight = CreateRenderer("Inner Warm Light", discMesh, sortingOrder - 1, glowMaterial);
         ApplyLight(outerLight, outerRadius, outerLightColor, 0f);
         ApplyLight(innerLight, innerRadius, innerLightColor, 0f);
     }
@@ -149,6 +160,8 @@ public sealed class KeroseneStreetLamp : MonoBehaviour
         const int segments = 64;
         var vertices = new Vector3[segments * 2 + 1];
         var colors = new Color[vertices.Length];
+        var uv = new Vector2[vertices.Length];
+        uv[0] = new Vector2(.5f, .5f);
         var indices = new int[segments * 9];
         colors[0] = Color.white;
         for (int i = 0; i < segments; i++)
@@ -157,6 +170,8 @@ public sealed class KeroseneStreetLamp : MonoBehaviour
             Vector3 direction = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f);
             vertices[1 + i] = direction * 0.92f;
             vertices[1 + segments + i] = direction;
+            uv[1 + i] = new Vector2(.5f + direction.x * .46f, .5f + direction.y * .46f);
+            uv[1 + segments + i] = new Vector2(.5f + direction.x * .5f, .5f + direction.y * .5f);
             colors[1 + i] = Color.white;
             colors[1 + segments + i] = new Color(1f, 1f, 1f, 0f);
             int a = 1 + i, b = 1 + (i + 1) % segments, offset = i * 9;
@@ -167,18 +182,19 @@ public sealed class KeroseneStreetLamp : MonoBehaviour
         var mesh = new Mesh { name = "Soft Edge Light Disc", hideFlags = HideFlags.HideAndDontSave };
         mesh.vertices = vertices;
         mesh.colors = colors;
+        mesh.uv = uv;
         mesh.triangles = indices;
         mesh.RecalculateBounds();
         return mesh;
     }
 
-    private MeshRenderer CreateRenderer(string label, Mesh mesh, int order)
+    private MeshRenderer CreateRenderer(string label, Mesh mesh, int order, Material rendererMaterial = null)
     {
         var child = new GameObject(label) { hideFlags = HideFlags.HideAndDontSave, layer = gameObject.layer };
         child.transform.SetParent(generatedRoot.transform, false);
         child.AddComponent<MeshFilter>().sharedMesh = mesh;
         var renderer = child.AddComponent<MeshRenderer>();
-        renderer.sharedMaterial = material;
+        renderer.sharedMaterial = rendererMaterial != null ? rendererMaterial : material;
         renderer.sortingLayerName = sortingLayerName;
         renderer.sortingOrder = order;
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -197,8 +213,9 @@ public sealed class KeroseneStreetLamp : MonoBehaviour
     private void Release()
     {
         if (generatedRoot != null) generatedRoot.SetActive(false);
-        Dispose(generatedRoot); Dispose(bodyMesh); Dispose(discMesh); Dispose(material);
+        Dispose(generatedRoot); Dispose(bodyMesh); Dispose(discMesh); Dispose(material); Dispose(glowMaterial);
         generatedRoot = null; bodyMesh = null; discMesh = null; material = null;
+        glowMaterial = null;
         innerLight = null; outerLight = null;
     }
 

@@ -48,12 +48,15 @@ public static class Resources {
 }
 public class AwarenessHarness {
     public GameObject gameObject=new GameObject();public Transform transform {get{return gameObject.transform;}}
-    public bool isActiveAndEnabled=true,enableAwarenessSound=true,IsIgnoringPlayer;
+    public bool isActiveAndEnabled=true,enableAwarenessSound=true,IsIgnoringPlayer,IsEchoRecoveryFrame;
     public bool IsStunned {get{return currentState==ZeldaAiState.Stunned;}}
     public AudioClip awarenessSound;public float awarenessSoundVolume=.55f,awarenessSoundMaxDistance=18;
     private AudioSource awarenessAudioSource;private static AudioClip defaultAwarenessSound;
     public ZeldaAiState currentState;
     bool retainLoadedUntilIdle,hasConsumedUnawareFirstHit;float hostileIndicatorTimer,hostileIndicatorDuration=.7f;
+    ZeldaFourWayMover lastSharedHostilityTarget;
+    bool anonymousHandgunInvestigation,pendingHandgunInvestigation;
+    void SyncSharedPlayerIncident(){} void ShareNearbyPlayerHostility(){}
     void OnStateExited(ZeldaAiState a,ZeldaAiState b){} void OnStateEntered(ZeldaAiState a,ZeldaAiState b){}
     void InvalidateNavigationPlan(){}
     void ResetHostileAttackCycle(){} // Combat state is covered by TestHostileAttackCycle.
@@ -62,7 +65,9 @@ public class AwarenessHarness {
     public static bool Gate(ZeldaAiState a,ZeldaAiState b){return ShouldPlayAwarenessCue(a,b);}
     public void Enter(ZeldaAiState s,bool cue=true){ChangeState(s,cue);}
 '@
-$production=(Method '    protected virtual void ChangeState')+(Method '    private static bool ShouldPlayAwarenessCue')+(Method '    private void PlayAwarenessCue')
+$mixConstant=[regex]::Match($source,'private const float AwarenessMixGain = [0-9.]+f;').Value
+if(!$mixConstant){throw 'Missing shared awareness mix gain'}
+$production=$mixConstant+(Method '    protected virtual void ChangeState')+(Method '    private static bool ShouldPlayAwarenessCue')+(Method '    private void PlayAwarenessCue')
 $tests=@'
 }
 public static class AwarenessTests {
@@ -79,6 +84,7 @@ public static class AwarenessTests {
         var npc=new AwarenessHarness();npc.Enter(ZeldaAiState.Alert);
         for(int i=0;i<100;i++)npc.Enter(ZeldaAiState.Alert);
         Check(npc.Calls==1,"Repeated warning ticks only play once");
+        Check(Math.Abs(npc.Source.lastVolume-.275f)<.00001,"Default serialized .55 is attenuated to .275 for existing NPCs");
         npc.Enter(ZeldaAiState.Hostile);Check(npc.Calls==1,"Escalation is silent");
         for(int i=0;i<100;i++)npc.Enter(ZeldaAiState.Hostile);
         Check(npc.Calls==1,"Repeated hostile ticks are silent");
@@ -101,10 +107,12 @@ public static class AwarenessTests {
         Check(ignored.Calls==0&&ignored.currentState==ZeldaAiState.Idle,"Blocked transition is silent");
         var stopped=new AwarenessHarness {isActiveAndEnabled=false};stopped.Enter(ZeldaAiState.Hostile);Check(stopped.Calls==0,"Disabled AI is silent");
         var custom=new AwarenessHarness {awarenessSound=new AudioClip(),awarenessSoundVolume=.4f};custom.Enter(ZeldaAiState.Alert);
-        Check(custom.Source.lastClip==custom.awarenessSound&&Math.Abs(custom.Source.lastVolume-.4f)<.001,"Custom sound and volume override");
+        Check(custom.Source.lastClip==custom.awarenessSound&&Math.Abs(custom.Source.lastVolume-.2f)<.001,"Custom sound and volume override retains proportion after mix trim");
+        var loud=new AwarenessHarness {awarenessSoundVolume=1};loud.Enter(ZeldaAiState.Alert);
+        Check(Math.Abs(loud.Source.lastVolume-.5f)<.00001,"Full-volume scene override is also reduced");
         var far=new AwarenessHarness();far.transform.position=new Vector2(18,0);far.Enter(ZeldaAiState.Alert);Check(far.Calls==0,"Out of range silent");
         var edge=new AwarenessHarness();edge.transform.position=new Vector2(16,0);edge.Enter(ZeldaAiState.Alert);
-        Check(edge.Calls==1&&edge.Source.lastVolume>0&&edge.Source.lastVolume<.55,"Outer band fades volume");
+        Check(edge.Calls==1&&Math.Abs(edge.Source.lastVolume-(.275f*2f/6.3f))<.00001,"Distance fade unchanged and scaled by mix trim");
         var foreign=new AwarenessHarness();foreign.gameObject.scene="Level2";foreign.Enter(ZeldaAiState.Hostile);Check(foreign.Calls==0,"Other additive scene silent");
         ZeldaRuntimeRegistry.player.gameObject.scene="DontDestroyOnLoad";
         var traveler=new AwarenessHarness();traveler.Enter(ZeldaAiState.Alert);Check(traveler.Calls==1,"Traveling persistent player still hears alerts");

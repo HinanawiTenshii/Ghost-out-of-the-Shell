@@ -1,41 +1,46 @@
 using UnityEngine;
 
-/// <summary>Desert fortress Strongman. Inherits Strongman combat and common data.</summary>
+/// <summary>Fortress laborer: sweatband, sleeveless linen, braces and a tool pouch on the Strongman rig.</summary>
 public sealed class DesertStrongmanZeldaCharacterData : StrongmanZeldaCharacterData
 {
-    [Header("Desert Guard Appearance / 沙漠要塞壮汉外观")]
-    [SerializeField] private Color headclothColor = new Color(0.72f, 0.68f, 0.56f, 1f);
-    [SerializeField] private Color headclothHighlight = new Color(0.86f, 0.81f, 0.68f, 1f);
-    [SerializeField] private Color headclothShadow = new Color(0.49f, 0.46f, 0.37f, 1f);
-    [SerializeField] private Color tunicColor = new Color(0.23f, 0.36f, 0.34f, 1f);
-    [SerializeField] private Color tunicShadow = new Color(0.15f, 0.25f, 0.24f, 1f);
-    [SerializeField] private Color tunicHighlight = new Color(0.32f, 0.44f, 0.40f, 1f);
-    [SerializeField] private Color leatherColor = new Color(0.31f, 0.20f, 0.12f, 1f);
-    [SerializeField] private Color brassColor = new Color(0.64f, 0.49f, 0.27f, 1f);
+    [Header("Fortress Laborer Workwear / 要塞体力工人工装")]
+    // Retain serialized names so existing prefab/scene palette overrides remain valid.
+    [SerializeField] private Color headclothColor = new Color(0.82f, 0.22f, 0.13f, 1f);
+    [SerializeField] private Color headclothHighlight = new Color(1f, 0.43f, 0.22f, 1f);
+    [SerializeField] private Color headclothShadow = new Color(0.50f, 0.12f, 0.10f, 1f);
+    [SerializeField] private Color tunicColor = new Color(0.82f, 0.85f, 0.79f, 1f);
+    [SerializeField] private Color tunicShadow = new Color(0.48f, 0.58f, 0.54f, 1f);
+    [SerializeField] private Color tunicHighlight = new Color(0.95f, 0.96f, 0.87f, 1f);
+    [SerializeField] private Color leatherColor = new Color(0.45f, 0.25f, 0.12f, 1f);
+    [SerializeField] private Color brassColor = new Color(0.69f, 0.54f, 0.29f, 1f);
     [SerializeField] private Color skinColor = new Color(0.72f, 0.47f, 0.29f, 1f);
     [SerializeField] private Color skinShadow = new Color(0.55f, 0.33f, 0.20f, 1f);
-    [SerializeField] private Color gloveColor = new Color(0.43f, 0.30f, 0.17f, 1f);
-    [SerializeField] private Color beardColor = new Color(0.20f, 0.15f, 0.11f, 1f);
-    [SerializeField] private Color bootsColor = new Color(0.20f, 0.13f, 0.08f, 1f);
+    [SerializeField] private Color gloveColor = new Color(0.64f, 0.39f, 0.20f, 1f);
+    [SerializeField] private Color beardColor = new Color(0.24f, 0.16f, 0.10f, 1f);
+    [SerializeField] private Color bootsColor = new Color(0.25f, 0.17f, 0.11f, 1f);
     [SerializeField] private Color eyeColor = new Color(0.08f, 0.075f, 0.06f, 1f);
+    [SerializeField] private Color hairHighlight = new Color(0.40f, 0.26f, 0.14f, 1f);
+    [SerializeField] private Color trousersColor = new Color(0.13f, 0.40f, 0.43f, 1f);
+    [SerializeField] private Color trousersShadow = new Color(0.08f, 0.26f, 0.30f, 1f);
 
     // The 20x20 canvas, feet and pivot match the existing Strongman walk rig.
-    // W/H/Q=headwrap; F/S=skin; R=beard; C/D/L=tunic; B/A/G=leather/brass/gloves.
+    // W/H/Q=sweatband; R/N=hair; F/S=skin; C/D/L=linen; T/V=trousers.
+    // B/A/G=leather, buckle, gloves/pouch. No armor, chest cross-straps or cloak.
     private static readonly string[] Front = {
-        ".......WWWWWW.......",
-        "......WHHHHWWW......",
-        ".....WWWWWWWWWW.....",
+        ".......RNNRRR.......",
+        "......RNRRRRRR......",
+        ".....HWWWWWWWWQ.....",
         "......FEFFFFEF......",
         "......SFFFFFFS......",
         "......SRRFFRRS......",
-        "...FFFACCCCCCAFFF...",
-        "...FFFCBCCCCBCFFF...",
-        "...SSSCCBCCBCCSSS...",
-        "...AAACCCBBCCCAAA...",
-        "...GGGCCCAACCCGGG...",
-        "....DDDCLLLLCDDD....",
-        ".....DBBBAABBBD.....",
-        "......DCLLLLCD......",
+        "...FFFBCLFFLCBFFF...",
+        "...FFFBCLLLLCBFFF...",
+        "...SSSBCLLLLCBSSS...",
+        "...GGGBCLLLCCBGGG...",
+        "...GGGCCLLLLCCGGG...",
+        "....TTBBAABBBTTT....",
+        ".....BGBTTTTTVV.....",
+        "......TVTTTTVV......",
         "......KKK..KKK......",
         "......KKK..KKK......",
         "....................",
@@ -44,20 +49,20 @@ public sealed class DesertStrongmanZeldaCharacterData : StrongmanZeldaCharacterD
         "...................."
     };
     private static readonly string[] Back = {
-        ".......WWWWWW.......",
-        "......WWWHHHHW......",
-        ".....WWWWWWWWWW.....",
-        "......QWWWWWWQ......",
-        "......QQWWWWQQ......",
-        "......SQQQQQQS......",
-        "...FFFACCQQCCAFFF...",
-        "...FFFCBCQQCBCFFF...",
-        "...SSSCCBQQBCCSSS...",
-        "...AAACCCBBCCCAAA...",
-        "...GGGCCCBBCCCGGG...",
-        "....DDDCCBBCCDDD....",
-        ".....DBBBBBBBBD.....",
-        "......DCCCCCCD......",
+        ".......RRRNNR.......",
+        "......RRRRRRNR......",
+        ".....QWWWWWWWHW.....",
+        "......RRRRRRRW......",
+        "......RRRRRRQW......",
+        "......SSRRSSQQ......",
+        "...FFFBCCCCCCBFFF...",
+        "...FFFBCLLLLCBFFF...",
+        "...SSSBCLLLLCBSSS...",
+        "...GGGBCLLLLCBGGG...",
+        "...GGGBCLLLLCBGGG...",
+        "....TTBBBBBBBBTT....",
+        ".....VVTTTTTBGB.....",
+        "......TVTTTTVV......",
         "......KKK..KKK......",
         "......KKK..KKK......",
         "....................",
@@ -66,20 +71,20 @@ public sealed class DesertStrongmanZeldaCharacterData : StrongmanZeldaCharacterD
         "...................."
     };
     private static readonly string[] Left = {
-        ".....WWWWWW.........",
-        "....WHHHHWWW........",
-        "...WWWWWWWWWW.......",
-        "....FEFFFWWQ........",
-        "....SFFFFWQQ........",
-        "....SRRFRQQS........",
-        "......CCACCCCD......",
-        "......CCFFFCCD......",
-        "......CCSSSCCD......",
-        "......CCAAACCD......",
-        "......CCGGGCCD......",
-        "......DCLLLCCD......",
-        "......DBBBBBBD......",
-        "......DCLLLCCD......",
+        ".....RNNRRR.........",
+        "....RNRRRRRR........",
+        "...HWWWWWWWQW.......",
+        "....FEFFRRRQ........",
+        "....SFFFRRRQ........",
+        "....SRRFRSSQ........",
+        "......BCLLLCCD......",
+        "......BCFFFCCD......",
+        "......BCSSSCCD......",
+        "......BCGGGCCD......",
+        "......BCGGGCCD......",
+        "......BBBABBBB......",
+        "......BGBTTTVV......",
+        "......TVTTTTVV......",
         "......KKK..KKK......",
         "......KKK..KKK......",
         "....................",
@@ -148,7 +153,7 @@ public sealed class DesertStrongmanZeldaCharacterData : StrongmanZeldaCharacterD
         }
         var texture = new Texture2D(20, 20, TextureFormat.RGBA32, false)
         {
-            name = "Desert Strongman " + direction + (attacking ? " Attack" : " Idle"),
+            name = "Fortress Laborer " + direction + (attacking ? " Attack" : " Idle"),
             filterMode = FilterMode.Point,
             wrapMode = TextureWrapMode.Clamp,
             hideFlags = HideFlags.HideAndDontSave
@@ -182,6 +187,9 @@ public sealed class DesertStrongmanZeldaCharacterData : StrongmanZeldaCharacterD
             case 'S': return skinShadow;
             case 'G': return gloveColor;
             case 'R': return beardColor;
+            case 'N': return hairHighlight;
+            case 'T': return trousersColor;
+            case 'V': return trousersShadow;
             case 'K': return bootsColor;
             case 'E': return eyeColor;
             default: return Color.clear;

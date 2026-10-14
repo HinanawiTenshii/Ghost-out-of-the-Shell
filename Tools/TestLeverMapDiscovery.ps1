@@ -17,9 +17,20 @@ namespace UnityEngine {
         public float x,y;
         public static Vector2 zero {get{return new Vector2();}}
         public static implicit operator Vector2(Vector3 v){return new Vector2{x=v.x,y=v.y};}
+        public static Vector2 operator +(Vector2 a,Vector2 b){return new Vector2{x=a.x+b.x,y=a.y+b.y};}
+        public static Vector2 operator *(Vector2 a,float b){return new Vector2{x=a.x*b,y=a.y*b};}
+        public static bool operator ==(Vector2 a,Vector2 b){return a.x==b.x && a.y==b.y;}
+        public static bool operator !=(Vector2 a,Vector2 b){return !(a==b);}
+        public override bool Equals(object o){return o is Vector2 && this==(Vector2)o;}
+        public override int GetHashCode(){return x.GetHashCode()^y.GetHashCode();}
     }
     public struct Vector3 {public float x,y,z; public Vector3(float a,float b,float c){x=a;y=b;z=c;}}
-    public struct Color {}
+    public struct Color {
+        public static bool operator ==(Color a,Color b){return true;}
+        public static bool operator !=(Color a,Color b){return false;}
+        public override bool Equals(object o){return o is Color;}
+        public override int GetHashCode(){return 0;}
+    }
     public struct Color32 {
         public Color32(byte a,byte b,byte c,byte d){}
         public static implicit operator Color(Color32 c){return new Color();}

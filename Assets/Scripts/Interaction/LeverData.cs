@@ -31,9 +31,25 @@ public class LeverData : MonoBehaviour
     private TextMesh interactionPromptText;
     private Font interactionPromptFont;
     private Material interactionPromptMaterial;
-    private bool insufficientSkillAcknowledged;
 
-    public int Complexity => complexity;
+    private GameObject skillLink1, skillLink2, skillLink3;
+    private bool linkedToWaterwayGate;
+    public int Complexity
+    {
+        get
+        {
+            if (skillLink1 != linkedObject || skillLink2 != linkedObject2 || skillLink3 != linkedObject3)
+            {
+                skillLink1 = linkedObject;
+                skillLink2 = linkedObject2;
+                skillLink3 = linkedObject3;
+                linkedToWaterwayGate = IsWaterwayLink(skillLink1) || IsWaterwayLink(skillLink2) || IsWaterwayLink(skillLink3);
+            }
+            return linkedToWaterwayGate ? Mathf.Max(complexity, CharacterSkillRequirements.WaterwayGate) : complexity;
+        }
+    }
+    private static bool IsWaterwayLink(GameObject target) => target != null &&
+        (target.GetComponent<WaterwayGate>() != null || target.GetComponent<WaterwayGateController>() != null);
     public bool IsOn => isOn;
     public bool HasBatteryPower => BatterySocket.IsPowered(this);
     public static IReadOnlyCollection<LeverData> WorldLevers => ActiveLevers;
@@ -159,11 +175,7 @@ public class LeverData : MonoBehaviour
             return;
         }
 
-        bool interactionSucceeded = TryInteract(nearbyCharacter);
-        if (!interactionSucceeded && nearbyCharacter.FinalSkillValue < complexity)
-        {
-            insufficientSkillAcknowledged = true;
-        }
+        TryInteract(nearbyCharacter);
     }
 
     private void LateUpdate()
@@ -173,11 +185,14 @@ public class LeverData : MonoBehaviour
 
     private bool TryInteract(ZeldaCharacterData characterData)
     {
-        if (characterData == null || !HasBatteryPower || characterData.FinalSkillValue < complexity)
+        if (characterData == null || !HasBatteryPower)
         {
             return false;
         }
 
+        if (!CharacterSkillRequirements.Require(characterData, Complexity)) return false;
+        var mover = characterData.GetComponent<ZeldaFourWayMover>();
+        if (mover == null || !mover.TryBeginItemAttack(.24f)) return false;
         isOn = !isOn;
         ApplyVisual();
         SignalEmitted?.Invoke(this, isOn);
@@ -207,13 +222,9 @@ public class LeverData : MonoBehaviour
             return;
         }
 
-        bool hasEnoughSkill = characterData.FinalSkillValue >= complexity;
-        if (hasEnoughSkill)
-        {
-            insufficientSkillAcknowledged = false;
-        }
-        string promptMessage = insufficientSkillAcknowledged && !hasEnoughSkill
-            ? "能力不足"
+        bool hasEnoughSkill = characterData.FinalSkillValue >= Complexity;
+        string promptMessage = !hasEnoughSkill
+            ? "能力值不足"
             : "按[E]进行互动";
 
         // Register even in a minimal test scene with no HUD or prompt font.
@@ -251,7 +262,7 @@ public class LeverData : MonoBehaviour
             return;
 
         interactionPromptFont.RequestCharactersInTexture(
-            "按[E]进行互动能力不足",
+            "按[E]进行互动能力值不足",
             72,
             FontStyle.Normal);
 

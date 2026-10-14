@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="ClockworkRemote.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Decorations\GeometricHangingChandelier.cs" />
+    <Compile Include="Assets\Scripts\Decorations\GeometricHangingChandelier.cs" />
+  </ItemGroup>
+</Project>

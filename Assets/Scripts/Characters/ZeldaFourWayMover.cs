@@ -89,11 +89,44 @@ public class ZeldaFourWayMover : MonoBehaviour
         ? characterData : (characterData = GetComponent<ZeldaCharacterData>());
     public bool IsMoving => moveDirection.sqrMagnitude > 0f;
     public bool IsAttacking => attackTimer > 0f;
+    private bool itemAttackPose;
+    public bool IsUsingItemAttack => itemAttackPose && IsAttacking;
+
+    // Reuse the authored raised-hand pose/attack movement lock without spawning
+    // this character's melee weapon, hitbox or melee audio (also works for civilians).
+    public bool TryBeginItemAttack(float duration)
+    {
+        if (!isActiveAndEnabled || characterData == null || characterData.IsDead ||
+            characterData.IsGhostLike || IsAttacking) return false;
+        itemAttackPose = true;
+        attackTimer = Mathf.Max(.05f, duration);
+        facingDirection = ToNearestCardinalDirection(facingDirection);
+        moveDirection = Vector2.zero;
+        ApplyFacingVisual();
+        return true;
+    }
+
+    public void EndItemAttack()
+    {
+        if (!itemAttackPose) return;
+        itemAttackPose = false;
+        attackTimer = 0f;
+        if (characterData != null && !characterData.IsDead) ApplyFacingVisual();
+    }
     public void CancelAttackForStun()
     {
+        itemAttackPose = false;
         attackTimer = 0f;
         moveDirection = Vector2.zero;
         ApplyFacingVisual();
+    }
+    // Existing direct attack hitboxes compare this generation before resolving
+    // contacts. Rewind must not leave a pre-rewind swing dealing delayed damage.
+    public int EchoAttackInterruptionVersion { get; private set; }
+    public void CancelAttackForEcho()
+    {
+        unchecked { EchoAttackInterruptionVersion++; }
+        CancelAttackForStun();
     }
     public bool IsSprinting => isSprinting;
     public CardboardBoxWearState ActiveCardboardBox => activeCardboardBox;
@@ -175,6 +208,7 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     private void OnDisable()
     {
+        EndItemAttack();
         if (characterSkillProgressBar != null) characterSkillProgressBar.Hide();
         ZeldaRuntimeRegistry.NotifyMoverDisabled(this);
         possessionInteractionSelected = false;
@@ -218,6 +252,12 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     private void UpdatePossessionPrompt()
     {
+        if (characterData is TurretZeldaCharacterData)
+        {
+            SetPossessionPromptVisible(false);
+            possessionInteractionSelected = false;
+            return;
+        }
         if (ClockworkPuppetRuntime.BlocksCharacterInput)
         {
             possessionInteractionSelected = false;
@@ -393,6 +433,7 @@ public class ZeldaFourWayMover : MonoBehaviour
         if (characterData != null) characterData.ApplyPlayerHealthUpgrade();
         if (DocumentReader.IsInputBlocked)
         {
+            (characterData as TurretZeldaCharacterData)?.CancelPlayerInput();
             moveDirection = Vector2.zero;
             StopSprintingAndRefreshStaminaBar();
             ResetControlSwitchProgress();
@@ -415,6 +456,17 @@ public class ZeldaFourWayMover : MonoBehaviour
             moveDirection = Vector2.zero;
             StopSprintingAndHideBar();
             ResetControlSwitchProgress();
+            return;
+        }
+
+        if (characterData is TurretZeldaCharacterData turret)
+        {
+            moveDirection = Vector2.zero;
+            StopSprintingAndHideBar();
+            ResetControlSwitchProgress();
+            turret.UpdatePlayerControl(Time.deltaTime);
+            facingDirection = turret.AimDirection;
+            ApplyFacingVisual();
             return;
         }
 
@@ -457,6 +509,12 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (characterData is TurretZeldaCharacterData)
+        {
+            rb.velocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+            return;
+        }
         if (IsAttacking || characterData.IsDead)
         {
             return;
@@ -470,6 +528,8 @@ public class ZeldaFourWayMover : MonoBehaviour
         Vector2 displacement =
             moveDirection * movementSpeed * Time.fixedDeltaTime;
         Vector2 allowedDisplacement = GetBlockedDisplacement(displacement);
+        allowedDisplacement = ElectricGateNetwork.ConstrainGhost(characterData, rb.position, allowedDisplacement,
+            Mathf.Max(bodyCollider.bounds.extents.x, bodyCollider.bounds.extents.y));
         if (allowedDisplacement.sqrMagnitude <= 0f)
         {
             return;
@@ -638,6 +698,14 @@ public class ZeldaFourWayMover : MonoBehaviour
         if (characterData.IsGhostForm) characterData.GhostForm.ApplyVisual(spriteRenderer, IsMoving);
     }
 
+    public void FaceForDialogue(Vector2 direction)
+    {
+        if (characterData == null || characterData.IsDead) return;
+        facingDirection = ToNearestCardinalDirection(direction);
+        moveDirection = Vector2.zero;
+        ApplyFacingVisual();
+    }
+
     public void RefreshFormVisuals()
     {
         if (characterData == null) return;
@@ -670,6 +738,7 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     public bool TryPerformAttack(Vector2 requestedFacingDirection, UnityEngine.Object observedTarget)
     {
+        if (characterData is TurretZeldaCharacterData turret) return turret.TryFire();
         if (characterData == null || characterData.IsDead || characterData.IsGhostForm || !characterData.CanAttack || IsAttacking)
         {
             return false;
@@ -680,7 +749,8 @@ public class ZeldaFourWayMover : MonoBehaviour
             facingDirection = requestedFacingDirection.normalized;
         }
 
-        attackTimer = characterData.AttackDuration;
+        itemAttackPose = false;
+        attackTimer = characterData.AttackDuration * CharacterPotionBuffs.AttackIntervalMultiplier(characterData);
         moveDirection = Vector2.zero;
 
         if (characterData.AttackPrefab == null)
@@ -707,13 +777,14 @@ public class ZeldaFourWayMover : MonoBehaviour
         }
 
         GameObject attackObject = Instantiate(characterData.AttackPrefab, attackPosition, attackRotation);
+        CharacterPotionBuffs.NotifyAction(characterData);
         LastAttackOutcome = null;
 
         ZeldaAttackHitbox hitbox = attackObject.GetComponent<ZeldaAttackHitbox>();
         if (hitbox != null)
         {
             hitbox.Configure(
-                characterData.AttackDuration,
+                attackTimer,
                 characterData.AttackSize,
                 characterData.AttackVisualTint,
                 characterData.FinalAttackPower,
@@ -745,6 +816,8 @@ public class ZeldaFourWayMover : MonoBehaviour
 
         attackTimer = Mathf.Max(0f, attackTimer - Mathf.Max(0f, deltaTime));
     }
+
+    public event System.Action<ZeldaFourWayMover> PossessionAttempted;
 
     private bool UpdateControlSwitchProgress(float deltaTime)
     {
@@ -778,6 +851,7 @@ public class ZeldaFourWayMover : MonoBehaviour
             return false;
         }
 
+        if (target != pendingControlTarget) target.PossessionAttempted?.Invoke(this);
         if (!IsValidControlSwitchTarget(target))
         {
             RejectPossessionAttempt();
@@ -846,7 +920,6 @@ public class ZeldaFourWayMover : MonoBehaviour
 
         ZeldaCharacterData targetData = target.GetComponent<ZeldaCharacterData>();
 
-        if (DominoSkillRuntime.TryPossess(this, target)) return true;
         target.ReceiveControl(facingDirection);
         PlayerGrowthAttributes.Instance?.RecordPossessedCharacter(target.GetComponent<ZeldaCharacterData>());
         SoulMarkRuntime.ClearAfterDirectPossession(target);
@@ -1389,6 +1462,14 @@ public class ZeldaFourWayMover : MonoBehaviour
             return false;
         }
 
+        // Keep nearby targets available to the interaction prompt, but enforce
+        // AI eligibility both while channeling and immediately before transfer.
+        ZeldaCharacterAiBase candidateAi = candidate.GetComponent<ZeldaCharacterAiBase>();
+        if (candidateAi != null && !candidateAi.IsInPossessableState)
+        {
+            return false;
+        }
+
         ZeldaCharacterData candidateData = candidate.GetComponent<ZeldaCharacterData>();
         if (characterData.MaxPossessionEnergy < candidateData.PossessionCost)
         {
@@ -1459,6 +1540,7 @@ public class ZeldaFourWayMover : MonoBehaviour
         if (ghostMover != null)
         {
             ghostMover.ReceiveControl(facingDirection);
+            ElectricGateNetwork.ReboundDeathGhost(deadCharacterData, ghostMover);
         }
     }
 
@@ -1498,6 +1580,16 @@ public sealed class SoulMarkRuntime : MonoBehaviour
     private static SoulMarkRuntime instance;
     public static bool IsTransferring => instance != null && instance.transferring;
     public static bool IsVisionCovered => instance != null && instance.visionCovered;
+    // A pending destination is player-owned: another controlled body can also
+    // invoke Transfer. Read without validating/mutating the live mark from UI.
+    public static bool HasPendingMarkInScene(UnityEngine.SceneManagement.Scene scene)
+    {
+        if (instance == null || instance.transferring || instance.marked == null || instance.gameObject.scene != scene)
+            return false;
+        var target = instance.marked.GetComponent<ZeldaCharacterData>();
+        return target != null && !target.IsDead &&
+            ZeldaRuntimeRegistry.GetGameplayScene(instance.marked.gameObject) == scene;
+    }
     public static void ClearAfterDirectPossession(ZeldaFourWayMover target)
     {
         if (instance != null && !instance.transferring && instance.marked == target)
@@ -1582,7 +1674,7 @@ public sealed class SoulMarkRuntime : MonoBehaviour
     private System.Collections.IEnumerator Transfer(ZeldaFourWayMover user)
     {
         // Reuse the ordinary bomb prefab's authored blast and investigation ranges.
-        var bombPrefab = Resources.Load<BombPickupItem>("PickupItems/BombPickupItem");
+        var bombPrefab = Resources.Load<BombPickupItem>("PickupItems/Bombs/BombPickupItem");
         if (bombPrefab == null) { Debug.LogError("Soul mark requires the ordinary bomb pickup prefab."); yield break; }
         transferring = true;
         var destination = marked;

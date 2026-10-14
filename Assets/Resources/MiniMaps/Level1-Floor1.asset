@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9a2f0b8e4c7d41c6a912fc0e693d45a1, type: 3}
   m_Name: Level1-Floor1
   m_EditorClassIdentifier: Assembly-CSharp::RuntimeMiniMapSceneData
-  schemaVersion: 4
+  schemaVersion: 6
+  sourceRevision: 7d5b04b2a689082cf4ab02361e0891dd
   sceneName: Level1-Floor1
   displayName: "\u57CE\u5821\u4E00\u697C"
   blockPaths:
@@ -732,3 +733,4 @@ MonoBehaviour:
   - questId: level1.open_monster_cage
     position: {x: -0.07348442, y: 7.5959234}
   bridges: []
+  surfaces: []

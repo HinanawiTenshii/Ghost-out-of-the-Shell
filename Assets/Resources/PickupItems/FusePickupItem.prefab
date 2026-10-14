@@ -145,6 +145,8 @@ MonoBehaviour:
   itemName: "\u5F15\u4FE1"
   itemDescription: "\u7528\u4E8E\u5236\u4F5C\u4E00\u79CD\u7279\u6B8A\u5F3A\u529B\u70B8\u5F39\u7684\u5F15\u4FE1\uFF0C\u53EF\u4EE5\u5728\u57CE\u5821\u5730\u4E0B\u5BA4\u7684\u5DE5\u4F5C\u53F0\u4E0A\u8FDB\u884C\u5236\u4F5C\u3002"
   itemId: submission_fuse
+  requiredUseSkill: 0
+  useSkillRequirementInitialized: 1
   persistentIdentity: {fileID: 11400000, guid: 11cff5de78f9457398c09a0d2ee74776, type: 2}
   uniqueInstanceId: 581550649fbe46a282f69e47704a5c10
   pickupQuantity: 1

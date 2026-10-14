@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="FortressInteriors.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Interaction\AlarmDevice.cs;Assets\Scripts\Interaction\AlarmDeviceVisual.cs" />
+    <Compile Include="Assets\Scripts\Interaction\AlarmDevice.cs;Assets\Scripts\Interaction\AlarmDeviceVisual.cs" />
+  </ItemGroup>
+</Project>

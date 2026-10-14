@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="Scribe.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Characters\EngineerZeldaCharacterData.cs" />
+    <Compile Include="Assets\Scripts\Characters\EngineerZeldaCharacterData.cs" />
+  </ItemGroup>
+</Project>

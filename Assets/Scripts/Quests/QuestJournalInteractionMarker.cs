@@ -12,6 +12,7 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
     {
         public QuestJournalEventOperation operation;
         public string entryId;
+        public string parentEntryId;
         public string title;
         public string details;
     }
@@ -31,12 +32,27 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
     private QuestJournalManager journal;
     private Transform positionAnchor;
     private bool useDoorChildPosition;
+    private CharacterDialogue dialogueOwner;
+
+    /// <summary>Reuse the world quest glyph above an NPC's existing dialogue hint.</summary>
+    public static QuestJournalInteractionMarker ConfigureDialogue(CharacterDialogue owner)
+    {
+        if (owner == null) return null;
+        var marker = owner.GetComponent<QuestJournalInteractionMarker>();
+        if (marker == null) marker = owner.gameObject.AddComponent<QuestJournalInteractionMarker>();
+        marker.dialogueOwner = owner;
+        marker.ResolvePositionAnchor();
+        marker.EnsureMarkerVisual();
+        marker.RefreshVisibility();
+        return marker;
+    }
 
     public static QuestJournalInteractionMarker Configure(
         GameObject owner,
         bool addDirectEntry,
         string directEntryId,
-        QuestJournalEventChange[] changes)
+        QuestJournalEventChange[] changes,
+        string directParentEntryId = null)
     {
         if (owner == null || !HasRelevantChange(addDirectEntry, directEntryId, changes))
             return null;
@@ -48,7 +64,7 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
             marker = owner.AddComponent<QuestJournalInteractionMarker>();
         }
 
-        marker.SetEntrySources(addDirectEntry, directEntryId, changes);
+        marker.SetEntrySources(addDirectEntry, directEntryId, changes, directParentEntryId);
         return marker;
     }
 
@@ -81,7 +97,8 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
     private void SetEntrySources(
         bool addDirectEntry,
         string directEntryId,
-        QuestJournalEventChange[] changes)
+        QuestJournalEventChange[] changes,
+        string directParentEntryId)
     {
         ResolvePositionAnchor();
         markerChanges.Clear();
@@ -91,7 +108,8 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
                 QuestJournalEventOperation.AddOrUpdate,
                 directEntryId,
                 string.Empty,
-                string.Empty);
+                string.Empty,
+                directParentEntryId);
         }
 
         if (changes != null)
@@ -107,7 +125,8 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
                         operation,
                         changes[index].entryId,
                         changes[index].title,
-                        changes[index].details);
+                        changes[index].details,
+                        changes[index].parentEntryId);
                 }
             }
         }
@@ -121,7 +140,8 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
         QuestJournalEventOperation operation,
         string entryId,
         string title,
-        string details)
+        string details,
+        string parentEntryId)
     {
         if (string.IsNullOrWhiteSpace(entryId))
             return;
@@ -130,6 +150,7 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
         {
             operation = operation,
             entryId = entryId.Trim(),
+            parentEntryId = parentEntryId,
             title = title ?? string.Empty,
             details = details ?? string.Empty
         });
@@ -161,6 +182,13 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
 
     private void LateUpdate()
     {
+        if (dialogueOwner != null)
+        {
+            // CharacterDialogue (-300) has already positioned/hidden its icon.
+            // Only local references and journal lookups; no scene/option scans.
+            RefreshDialoguePresentation();
+            return;
+        }
         if (markerRoot != null)
         {
             markerRoot.transform.position = GetAnchorPosition();
@@ -253,12 +281,19 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
         if (markerRoot == null)
             return;
 
+        if (dialogueOwner != null)
+        {
+            RefreshDialoguePresentation();
+            return;
+        }
+
         bool shouldShow = false;
         if (journal != null)
         {
             for (int index = 0; index < markerChanges.Count; index++)
             {
                 MarkerChange change = markerChanges[index];
+                if (!journal.CanTriggerEntry(change.entryId, change.parentEntryId)) continue;
                 bool entryExists = journal.TryGetEntry(change.entryId, out QuestJournalManager.Entry entry);
                 if (!entryExists)
                 {
@@ -292,6 +327,19 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
         markerRoot.SetActive(shouldShow);
     }
 
+    private void RefreshDialoguePresentation()
+    {
+        // A possessed NPC can outlive its original scene. Keep the unparented
+        // visual in the owner's scene, and recover it if that scene was unloaded.
+        if (markerRoot == null) EnsureMarkerVisual();
+        if (markerRoot.scene != gameObject.scene)
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(markerRoot, gameObject.scene);
+        bool hasIcon = dialogueOwner.TryGetQuestMarkerPosition(out Vector3 position);
+        bool show = isActiveAndEnabled && hasIcon && dialogueOwner.HasAvailableQuest;
+        if (show) markerRoot.transform.position = position;
+        if (markerRoot.activeSelf != show) markerRoot.SetActive(show);
+    }
+
     private static bool IsChangeAlreadyApplied(
         MarkerChange change,
         QuestJournalManager.Entry entry)
@@ -318,7 +366,8 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
             return;
 
         EnsureSharedSprite();
-        markerRoot = new GameObject("Quest Journal Interaction Marker");
+        markerRoot = new GameObject("Quest Journal Interaction Marker") { hideFlags = HideFlags.DontSave };
+        UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(markerRoot, gameObject.scene);
         markerRoot.transform.position = GetAnchorPosition();
         markerRoot.transform.rotation = Quaternion.Euler(0f, 0f, 45f);
 

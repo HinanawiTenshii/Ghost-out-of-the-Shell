@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9a2f0b8e4c7d41c6a912fc0e693d45a1, type: 3}
   m_Name: Level0
   m_EditorClassIdentifier: Assembly-CSharp::RuntimeMiniMapSceneData
-  schemaVersion: 4
+  schemaVersion: 6
+  sourceRevision: f14b546997f45e3a5f5a0c249117d569
   sceneName: Level0
   displayName: "\u5730\u4E0B\u76D1\u7262"
   blockPaths:
@@ -884,3 +885,4 @@ MonoBehaviour:
   - questId: level1.find_castle_gate_key
     position: {x: 17.43206, y: -33.56}
   bridges: []
+  surfaces: []

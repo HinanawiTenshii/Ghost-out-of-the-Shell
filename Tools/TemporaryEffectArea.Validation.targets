@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="AlchemyPickups.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Interaction\TemporaryCharacterEffectArea.cs;Assets\Scripts\Interaction\TriggerAreaBubbleEffect.cs" />
+    <Compile Include="Assets\Scripts\Interaction\TemporaryCharacterEffectArea.cs;Assets\Scripts\Interaction\TriggerAreaBubbleEffect.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="ElectricGate.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\UI\RuntimeUiGlowScope.cs" />
+    <Compile Include="Assets\Scripts\UI\RuntimeUiGlowScope.cs" />
+  </ItemGroup>
+</Project>

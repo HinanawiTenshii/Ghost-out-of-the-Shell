@@ -7,6 +7,8 @@ using UnityEngine;
 public sealed class GeometricSignpostDecoration : MonoBehaviour
 {
     [Header("Geometry / 几何外形")]
+    [SerializeField, Tooltip("单块矩形告示牌；关闭时保留原来的三块箭头指路牌。")]
+    private bool noticeBoard;
     [SerializeField, Min(0.02f)] private float poleWidth = 0.18f;
     [SerializeField, Min(0.1f)] private float poleHeight = 3.2f;
     [SerializeField, Min(0.1f)] private float boardWidth = 1.16f;
@@ -41,8 +43,9 @@ public sealed class GeometricSignpostDecoration : MonoBehaviour
         boardWidth = Mathf.Max(0.1f, boardWidth);
         boardHeight = Mathf.Max(0.02f, boardHeight);
         boardGap = Mathf.Max(0f, boardGap);
-        // Keep at least half the overall height as exposed pole.
-        poleHeight = Mathf.Max(poleHeight, (3f * boardHeight + 2f * boardGap) * 2f);
+        // Notice signs expose only a short stem; legacy directional signs keep their tall pole.
+        poleHeight = noticeBoard ? Mathf.Max(boardHeight + .05f, poleHeight)
+            : Mathf.Max(poleHeight, (3f * boardHeight + 2f * boardGap) * 2f);
         arrowTipRatio = Mathf.Clamp(arrowTipRatio, 0.05f, 0.45f);
         baseCollisionHeight = Mathf.Clamp(baseCollisionHeight, 0.02f, poleHeight);
         sortingOrder = Mathf.Max(2, sortingOrder);
@@ -79,7 +82,8 @@ public sealed class GeometricSignpostDecoration : MonoBehaviour
             new Vector2(-poleWidth * 0.5f, 0f), new Vector2(poleWidth * 0.5f, 0f),
             new Vector2(poleWidth * 0.5f, poleHeight), new Vector2(-poleWidth * 0.5f, poleHeight)
         }, poleColor);
-        for (int i = 0; i < 3; i++)
+        if (noticeBoard) AddNoticeBoard(vertices, colors, triangles);
+        for (int i = 0; !noticeBoard && i < 3; i++)
         {
             float top = poleHeight - i * (boardHeight + boardGap);
             float bottom = top - boardHeight;
@@ -121,6 +125,33 @@ public sealed class GeometricSignpostDecoration : MonoBehaviour
         foreach (Vector2 position in outline) { vertices.Add(position); colors.Add(color); }
         for (int i = 1; i < outline.Length - 1; i++)
         { triangles.Add(start); triangles.Add(start + i); triangles.Add(start + i + 1); }
+    }
+
+    private void AddNoticeBoard(List<Vector3> vertices, List<Color> colors, List<int> triangles)
+    {
+        float bottom = poleHeight - boardHeight;
+        float half = boardWidth * .5f;
+        float rim = Mathf.Min(.07f, Mathf.Min(boardWidth, boardHeight) * .12f);
+        AddRectangle(vertices, colors, triangles, -half, bottom, half, poleHeight, poleColor);
+        AddRectangle(vertices, colors, triangles, -half + rim, bottom + rim,
+            half - rim, poleHeight - rim, boardColor);
+        // Broad engraved strokes make the sign readable at game scale without tiny lettering.
+        Color ink = Color.Lerp(poleColor, Color.black, .25f);
+        float line = Mathf.Min(.045f, boardHeight * .06f);
+        float middle = bottom + boardHeight * .5f;
+        AddRectangle(vertices, colors, triangles, -half * .62f, middle + boardHeight * .13f,
+            half * .62f, middle + boardHeight * .13f + line, ink);
+        AddRectangle(vertices, colors, triangles, -half * .62f, middle - boardHeight * .17f,
+            half * .28f, middle - boardHeight * .17f + line, ink);
+    }
+
+    private static void AddRectangle(List<Vector3> vertices, List<Color> colors, List<int> triangles,
+        float left, float bottom, float right, float top, Color color)
+    {
+        AddPolygon(vertices, colors, triangles, new[] {
+            new Vector2(left, bottom), new Vector2(right, bottom),
+            new Vector2(right, top), new Vector2(left, top)
+        }, color);
     }
 
     private void OnDisable()

@@ -26,8 +26,6 @@ public sealed class TabJournalMenuController : MonoBehaviour
     private static bool miniMapSnapshotsLoaded;
 
     private static readonly Color GhostBlue = ZeldaUiPalette.Ghost;
-    private static readonly Color MapTransitionSkyBlue =
-        new Color32(65, 175, 235, 255);
     private static readonly Color PanelBlue =
         new Color(0.025f, 0.07f, 0.12f, 0.985f);
     private static readonly Color TabBlue =
@@ -68,14 +66,14 @@ public sealed class TabJournalMenuController : MonoBehaviour
     private RectTransform mapSceneListContent;
     private readonly Dictionary<string, GameObject> mapSceneQuestMarkers =
         new Dictionary<string, GameObject>(StringComparer.OrdinalIgnoreCase);
-    private RectTransform mapTransitionLabelLayer;
+    private RectTransform mapTransitionHoverLayer;
     private RectTransform mapPointLayer;
     private GameObject mapPointTooltipRoot;
     private RectTransform mapPointTooltipRect;
     private Text mapPointTooltipText;
     private string selectedMapSceneName;
-    private readonly List<MiniMapTransitionLabel> mapTransitionLabels =
-        new List<MiniMapTransitionLabel>();
+    private readonly List<MiniMapTransitionHover> mapTransitionHovers =
+        new List<MiniMapTransitionHover>();
     private readonly List<MiniMapPointIcon> mapPointIcons =
         new List<MiniMapPointIcon>();
     private MapPointOfInterestManager mapPointManager;
@@ -90,6 +88,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
     private readonly List<Image> questEntryBackgrounds = new List<Image>();
     private readonly List<Image> levelObjectiveCorners = new List<Image>();
     private string selectedQuestId;
+    private readonly List<QuestJournalManager.HierarchyRow> questHierarchyRows = new List<QuestJournalManager.HierarchyRow>();
     private float previousTimeScale = 1f;
     private bool previousCursorVisible;
     private CursorLockMode previousCursorLockMode;
@@ -101,11 +100,12 @@ public sealed class TabJournalMenuController : MonoBehaviour
 
     private static int inputBlockedThroughFrame = -1;
 
-    private sealed class MiniMapTransitionLabel
+    private sealed class MiniMapTransitionHover
     {
         public int transitionIndex;
+        public string pointId;
+        public string tooltip;
         public RectTransform rect;
-        public Text text;
     }
 
     private sealed class MiniMapPointIcon
@@ -173,7 +173,6 @@ public sealed class TabJournalMenuController : MonoBehaviour
     {
         if (IsOpen)
         {
-            EnsureRenderPriority();
             Scene activeScene = SceneManager.GetActiveScene();
             if (selectedTab == 0 &&
                 miniMapGraphic != null &&
@@ -186,7 +185,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
 
             if (selectedTab == 0)
             {
-                UpdateMiniMapTransitionLabels();
+                UpdateMiniMapTransitionPositions();
                 UpdateMiniMapPointPositions();
             }
             else if (selectedTab == 1)
@@ -435,6 +434,14 @@ public sealed class TabJournalMenuController : MonoBehaviour
             art.combatExpertise = PlayerGrowthAttributes.IsCombatExpertiseSkill(skill.id);
             art.fearRoar = PlayerGrowthAttributes.IsFearRoarSkill(skill.id);
             art.royalCommand = PlayerGrowthAttributes.IsRoyalCommandSkill(skill.id);
+            art.builder = PlayerGrowthAttributes.IsBuilderSkill(skill.id);
+            art.builderLevel = skill.id == "builder_2" ? 2 : 1;
+            art.holyLight = PlayerGrowthAttributes.IsHolyLightSkill(skill.id);
+            art.holyShield = PlayerGrowthAttributes.IsHolyShieldSkill(skill.id);
+            art.meteorShower = PlayerGrowthAttributes.IsMeteorShowerSkill(skill.id);
+            art.meteorShowerRank = skill.id == "meteor_shower_3" ? 2 : skill.id == "meteor_shower_2" ? 1 : 0;
+            art.holyShieldRank = skill.id == "holy_shield_3" ? 2 : skill.id == "holy_shield_2" ? 1 : 0;
+            art.holyLightRank = skill.id == "holy_light_3" ? 2 : skill.id == "holy_light_2" ? 1 : 0;
             art.royalCommandLevel = skill.id == "royal_command_2" ? 2 : 1;
             art.fearRoarLevel = skill.id == "fear_roar_3" ? 3 : skill.id == "fear_roar_2" ? 2 : 1;
             art.combatExpertiseLevel = skill.id == "combat_expertise_2" ? 2 : 1;
@@ -604,12 +611,12 @@ public sealed class TabJournalMenuController : MonoBehaviour
         miniMapGraphic = graphicObject.GetComponent<RuntimeMiniMapGraphic>();
         miniMapGraphic.raycastTarget = false;
 
-        GameObject transitionLabelLayerObject = CreateUiObject(
-            "Map Transition Labels",
+        GameObject transitionHoverLayerObject = CreateUiObject(
+            "Map Transition Hover Targets",
             viewportRect);
-        mapTransitionLabelLayer =
-            transitionLabelLayerObject.GetComponent<RectTransform>();
-        Stretch(mapTransitionLabelLayer);
+        mapTransitionHoverLayer =
+            transitionHoverLayerObject.GetComponent<RectTransform>();
+        Stretch(mapTransitionHoverLayer);
 
         GameObject mapPointLayerObject = CreateUiObject(
             "Map Points Of Interest",
@@ -937,11 +944,13 @@ public sealed class TabJournalMenuController : MonoBehaviour
                     controlledMover.transform.position);
             }
         }
-        RebuildMiniMapTransitionLabels(activeScene);
-        UpdateMiniMapTransitionLabels();
+        RebuildMiniMapTransitionHovers(activeScene);
+        UpdateMiniMapTransitionPositions();
         RebuildMiniMapPoints();
         UpdateMiniMapPointPositions();
     }
+
+    private readonly List<Vector2> trackedQuestMapPositions = new List<Vector2>();
 
     private void ApplyTrackedQuestTargetToMap(
         string mapSceneName,
@@ -956,11 +965,8 @@ public sealed class TabJournalMenuController : MonoBehaviour
             return;
         }
 
-        Vector2 target;
-        bool found = mapGraphic.TryGetQuestTarget(
-            questJournal.TrackedEntryId,
-            out target);
-        mapGraphic.SetTrackedQuestTarget(found, target, clampToBorder);
+        mapGraphic.GetQuestTargets(questJournal.TrackedEntryId, trackedQuestMapPositions);
+        mapGraphic.SetTrackedQuestTargets(trackedQuestMapPositions, clampToBorder);
     }
 
     private void RefreshMapSceneQuestMarkers()
@@ -979,6 +985,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
 
     private static bool SceneHasQuestTarget(string sceneName, Scene activeScene, string questId)
     {
+        questId = QuestJournalManager.ResolveQuestMapTargetId(questId);
         if (string.IsNullOrWhiteSpace(questId))
             return false;
         if (string.Equals(sceneName, activeScene.name, StringComparison.OrdinalIgnoreCase))
@@ -997,103 +1004,101 @@ public sealed class TabJournalMenuController : MonoBehaviour
         return false;
     }
 
-    private void RebuildMiniMapTransitionLabels(Scene activeScene)
+    private void RebuildMiniMapTransitionHovers(Scene activeScene)
     {
-        mapTransitionLabels.Clear();
-        if (mapTransitionLabelLayer == null || miniMapGraphic == null)
+        HideMapPointTooltip(hoveredMapPointId);
+        mapTransitionHovers.Clear();
+        if (mapTransitionHoverLayer == null || miniMapGraphic == null) return;
+
+        for (int index = mapTransitionHoverLayer.childCount - 1; index >= 0; index--)
         {
-            return;
+            GameObject child = mapTransitionHoverLayer.GetChild(index).gameObject;
+            child.SetActive(false);
+            Destroy(child);
         }
 
-        for (int childIndex = mapTransitionLabelLayer.childCount - 1;
-             childIndex >= 0;
-             childIndex--)
-        {
-            Destroy(mapTransitionLabelLayer.GetChild(childIndex).gameObject);
-        }
-
-        IReadOnlyList<RuntimeMiniMapTransitionData> transitions =
-            miniMapGraphic.Transitions;
+        IReadOnlyList<RuntimeMiniMapTransitionData> transitions = miniMapGraphic.Transitions;
         for (int index = 0; index < transitions.Count; index++)
         {
-            RuntimeMiniMapTransitionData transition = transitions[index];
-            if (!transition.preservesSceneState ||
-                string.IsNullOrWhiteSpace(transition.targetSceneName))
-            {
-                continue;
-            }
-
-            string targetSceneName = transition.targetSceneName.Trim();
-            GameObject labelObject = CreateUiObject(
-                "Destination " + targetSceneName,
-                mapTransitionLabelLayer,
-                typeof(Text));
-            RectTransform labelRect = labelObject.GetComponent<RectTransform>();
-            labelRect.anchorMin = labelRect.anchorMax =
-                new Vector2(0.5f, 0.5f);
-            labelRect.pivot = new Vector2(0.5f, 0.5f);
-            labelRect.sizeDelta = new Vector2(190f, 24f);
-            Text label = labelObject.GetComponent<Text>();
-            label.text = "前往" +
-                GetMapSceneDisplayName(targetSceneName, activeScene);
-            label.font = menuFont;
-            label.fontSize = 13;
-            label.alignment = TextAnchor.MiddleCenter;
-            label.color = MapTransitionSkyBlue;
-            label.raycastTarget = false;
-            mapTransitionLabels.Add(new MiniMapTransitionLabel
+            string targetSceneName = transitions[index].targetSceneName?.Trim();
+            string id = "map-transition:" + selectedMapSceneName + ":" + index;
+            GameObject hoverObject = CreateUiObject(
+                "Transition Hover " + index, mapTransitionHoverLayer,
+                typeof(Image), typeof(MapPointOfInterestUiInteraction));
+            RectTransform hoverRect = hoverObject.GetComponent<RectTransform>();
+            hoverRect.anchorMin = hoverRect.anchorMax = hoverRect.pivot = new Vector2(0.5f, 0.5f);
+            // Keep a usable hit area at minimum zoom without enlarging the drawing.
+            hoverRect.sizeDelta = new Vector2(18f, 18f);
+            Image hitTarget = hoverObject.GetComponent<Image>();
+            hitTarget.color = Color.clear;
+            hitTarget.raycastTarget = true;
+            hoverObject.GetComponent<MapPointOfInterestUiInteraction>().Configure(
+                id, ShowMapTransitionTooltip, HideMapPointTooltip, true);
+            mapTransitionHovers.Add(new MiniMapTransitionHover
             {
                 transitionIndex = index,
-                rect = labelRect,
-                text = label
+                pointId = id,
+                tooltip = string.IsNullOrWhiteSpace(targetSceneName) ? "场景出口" :
+                    "前往" + GetMapSceneDisplayName(targetSceneName, activeScene),
+                rect = hoverRect
             });
         }
     }
 
-    private void UpdateMiniMapTransitionLabels()
+    private void UpdateMiniMapTransitionPositions()
     {
-        if (miniMapGraphic == null)
+        if (miniMapGraphic == null || mapTransitionHoverLayer == null) return;
+        IReadOnlyList<RuntimeMiniMapTransitionData> transitions = miniMapGraphic.Transitions;
+        for (int index = 0; index < mapTransitionHovers.Count; index++)
         {
-            return;
-        }
-
-        bool showLabels = miniMapGraphic.ZoomPercentage >= 99.9f;
-        IReadOnlyList<RuntimeMiniMapTransitionData> transitions =
-            miniMapGraphic.Transitions;
-        for (int index = 0; index < mapTransitionLabels.Count; index++)
-        {
-            MiniMapTransitionLabel label = mapTransitionLabels[index];
-            bool valid = label != null &&
-                         label.text != null &&
-                         label.rect != null &&
-                         label.transitionIndex >= 0 &&
-                         label.transitionIndex < transitions.Count;
-            if (!valid)
-            {
-                continue;
-            }
-
+            MiniMapTransitionHover hover = mapTransitionHovers[index];
+            if (hover == null || hover.rect == null) continue;
+            bool valid = hover.transitionIndex >= 0 && hover.transitionIndex < transitions.Count;
             Vector2 localPosition = Vector2.zero;
-            bool visible = showLabels && miniMapGraphic.TryWorldToLocal(
-                transitions[label.transitionIndex].position,
-                out localPosition);
-            label.text.gameObject.SetActive(visible);
+            bool visible = valid && miniMapGraphic.TryWorldToLocal(
+                transitions[hover.transitionIndex].position, out localPosition) &&
+                mapTransitionHoverLayer.rect.Contains(localPosition);
+            if (hover.rect.gameObject.activeSelf != visible)
+                hover.rect.gameObject.SetActive(visible);
             if (visible)
             {
-                label.rect.anchoredPosition =
-                    localPosition + new Vector2(0f, -25f);
+                hover.rect.anchoredPosition = localPosition;
+                if (hoveredMapPointId == hover.pointId)
+                    ShowMapTransitionTooltip(hover.pointId, hover.rect);
             }
+        }
+    }
+
+    private void ShowMapTransitionTooltip(string pointId, RectTransform iconRect)
+    {
+        if (mapPointTooltipRoot == null || mapPointTooltipText == null ||
+            mapPointTooltipRect == null || iconRect == null || !iconRect.gameObject.activeInHierarchy)
+            return;
+
+        foreach (MiniMapTransitionHover hover in mapTransitionHovers)
+        {
+            if (hover.pointId != pointId) continue;
+            // Set up the content only on entry; panning just updates its position.
+            if (hoveredMapPointId != pointId || !mapPointTooltipRoot.activeSelf)
+            {
+                mapPointTooltipText.text = hover.tooltip;
+                float width = Mathf.Clamp(mapPointTooltipText.preferredWidth + 24f, 110f, 250f);
+                mapPointTooltipRect.sizeDelta = new Vector2(width, 32f);
+                mapPointTooltipText.alignment = TextAnchor.MiddleCenter;
+            }
+            hoveredMapPointId = pointId;
+            PositionMapPointTooltip(iconRect.anchoredPosition +
+                new Vector2(mapPointTooltipRect.sizeDelta.x * 0.5f + 14f, 25f));
+            return;
         }
     }
 
     private void RebuildMiniMapPoints()
     {
         mapPointIcons.Clear();
-        hoveredMapPointId = null;
-        if (mapPointTooltipRoot != null)
-        {
-            mapPointTooltipRoot.SetActive(false);
-        }
+        // A POI discovery refresh must not dismiss an unrelated exit tooltip.
+        if (hoveredMapPointId == null || !hoveredMapPointId.StartsWith("map-transition:", StringComparison.Ordinal))
+            HideMapPointTooltip(hoveredMapPointId);
         if (mapPointLayer == null || miniMapGraphic == null)
         {
             return;
@@ -1103,6 +1108,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
              childIndex >= 0;
              childIndex--)
         {
+            mapPointLayer.GetChild(childIndex).gameObject.SetActive(false);
             Destroy(mapPointLayer.GetChild(childIndex).gameObject);
         }
 
@@ -1116,6 +1122,20 @@ public sealed class TabJournalMenuController : MonoBehaviour
         for (int index = 0; index < points.Count; index++)
         {
             MapPointOfInterestRecord point = points[index];
+            // Keep the line in the shared map mesh; add only an invisible, rotated hover target.
+            if (point.IconShape == MapPointIconShape.LockedDoor)
+            {
+                GameObject hoverObject = CreateUiObject("Locked Door Hover " + point.Id, mapPointLayer,
+                    typeof(CanvasRenderer), typeof(Image), typeof(MapPointOfInterestUiInteraction));
+                RectTransform hoverRect = hoverObject.GetComponent<RectTransform>();
+                hoverRect.anchorMin = hoverRect.anchorMax = hoverRect.pivot = new Vector2(.5f,.5f);
+                Image hitTarget = hoverObject.GetComponent<Image>();
+                hitTarget.color = Color.clear; hitTarget.raycastTarget = true;
+                hoverObject.GetComponent<MapPointOfInterestUiInteraction>().Configure(
+                    point.Id, ShowMapPointTooltip, HideMapPointTooltip, true);
+                mapPointIcons.Add(new MiniMapPointIcon { pointId = point.Id, rect = hoverRect });
+                continue;
+            }
             GameObject iconObject = CreateUiObject(
                 "Point Of Interest " + point.Id,
                 mapPointLayer,
@@ -1172,12 +1192,20 @@ public sealed class TabJournalMenuController : MonoBehaviour
             bool visible = valid && miniMapGraphic.TryWorldToLocal(
                 point.WorldPosition,
                 out localPosition);
+            if (visible && point.IconShape == MapPointIconShape.LockedDoor)
+            {
+                visible = miniMapGraphic.TryGetLockedDoorHoverRect(point,
+                    out localPosition, out Vector2 hitSize, out float angle);
+                icon.rect.sizeDelta = hitSize;
+                icon.rect.localRotation = Quaternion.Euler(0, 0, angle);
+            }
             if (icon != null && icon.rect != null)
             {
                 icon.rect.gameObject.SetActive(visible);
                 if (visible)
                 {
                     icon.rect.anchoredPosition = localPosition;
+                    if (hoveredMapPointId == icon.pointId) ShowMapPointTooltip(icon.pointId, icon.rect);
                 }
             }
         }
@@ -1192,18 +1220,24 @@ public sealed class TabJournalMenuController : MonoBehaviour
             iconRect == null ||
             !mapPointManager.TryGetPoint(
                 pointId,
-                out MapPointOfInterestRecord point))
+                out MapPointOfInterestRecord point) || !point.VisibleOnMap || point.SceneName != selectedMapSceneName)
         {
             return;
         }
 
         hoveredMapPointId = pointId;
         bool isLever = point.IconShape == MapPointIconShape.Lever;
+        bool nameOnly = isLever || point.IconShape == MapPointIconShape.LockedDoor;
         mapPointTooltipText.text = point.TooltipText;
-        mapPointTooltipRect.sizeDelta = isLever ? new Vector2(76f, 32f) : new Vector2(230f, 84f);
-        mapPointTooltipText.alignment = isLever ? TextAnchor.MiddleCenter : TextAnchor.UpperLeft;
+        mapPointTooltipRect.sizeDelta = nameOnly ? new Vector2(isLever ? 76f : 136f, 32f) : new Vector2(230f, 84f);
+        mapPointTooltipText.alignment = nameOnly ? TextAnchor.MiddleCenter : TextAnchor.UpperLeft;
         Vector2 position = iconRect.anchoredPosition +
-            (isLever ? new Vector2(55f, 25f) : new Vector2(126f, 36f));
+            (nameOnly ? new Vector2(isLever ? 55f : 85f, 25f) : new Vector2(126f, 36f));
+        PositionMapPointTooltip(position);
+    }
+
+    private void PositionMapPointTooltip(Vector2 position)
+    {
         Rect viewport = mapPointLayer.rect;
         Vector2 half = mapPointTooltipRect.sizeDelta * 0.5f;
         position.x = Mathf.Clamp(
@@ -1586,38 +1620,40 @@ public sealed class TabJournalMenuController : MonoBehaviour
 
         for (int index = questListContent.childCount - 1; index >= 0; index--)
         {
-            Destroy(questListContent.GetChild(index).gameObject);
+            GameObject oldRow = questListContent.GetChild(index).gameObject;
+            oldRow.SetActive(false); // Deferred destruction must not leave invisible raycast blockers.
+            Destroy(oldRow);
         }
         questEntryBackgrounds.Clear();
         levelObjectiveCorners.Clear();
 
-        IReadOnlyList<QuestJournalManager.Entry> entries = questJournal.Entries;
+        questJournal.GetVisibleHierarchy(questHierarchyRows);
         QuestJournalManager.Entry selectedEntry = null;
-        for (int index = 0; index < entries.Count; index++)
+        // If the selected child was folded, show its closest visible ancestor.
+        string candidateId = selectedQuestId;
+        while (!string.IsNullOrEmpty(candidateId) && selectedEntry == null)
         {
-            if (entries[index].Id == selectedQuestId)
-            {
-                selectedEntry = entries[index];
-                break;
-            }
+            foreach (var row in questHierarchyRows)
+                if (row.entry.Id == candidateId) { selectedEntry = row.entry; break; }
+            candidateId = questJournal.GetParentEntryId(candidateId);
         }
 
-        if (selectedEntry == null && entries.Count > 0)
+        if (selectedEntry == null && questHierarchyRows.Count > 0)
         {
-            selectedEntry = entries[0];
-            selectedQuestId = selectedEntry.Id;
+            selectedEntry = questHierarchyRows[0].entry;
         }
+        if (selectedEntry != null) selectedQuestId = selectedEntry.Id;
 
-        const float rowHeight = 64f;
-        const float rowSpacing = 12f;
-        questListContent.sizeDelta = new Vector2(
-            0f,
-            Mathf.Max(0f, entries.Count * (rowHeight + rowSpacing) - rowSpacing));
-
+        float rowTop = 0f;
         Color selectedColor = Color.Lerp(TabBlue, GhostBlue, 0.48f);
-        for (int index = 0; index < entries.Count; index++)
+        for (int index = 0; index < questHierarchyRows.Count; index++)
         {
-            QuestJournalManager.Entry entry = entries[index];
+            var hierarchy = questHierarchyRows[index];
+            QuestJournalManager.Entry entry = hierarchy.entry;
+            bool child = hierarchy.depth > 0;
+            float rowHeight = child ? 54f : 64f;
+            float indent = Mathf.Min(hierarchy.depth, 5) * 18f;
+            if (index > 0) rowTop += child ? 4f : 12f;
             bool selected = entry.Id == selectedQuestId;
             bool levelObjective = entry.IsLevelObjective;
             GameObject rowObject = CreateUiObject(
@@ -1629,8 +1665,9 @@ public sealed class TabJournalMenuController : MonoBehaviour
             rowRect.anchorMin = new Vector2(0f, 1f);
             rowRect.anchorMax = new Vector2(1f, 1f);
             rowRect.pivot = new Vector2(0.5f, 1f);
-            rowRect.anchoredPosition = new Vector2(0f, -index * (rowHeight + rowSpacing));
-            rowRect.sizeDelta = new Vector2(-4f, rowHeight);
+            rowRect.anchoredPosition = new Vector2(indent * .5f, -rowTop);
+            rowRect.sizeDelta = new Vector2(-4f - indent, rowHeight);
+            rowTop += rowHeight;
 
             Image background = rowObject.GetComponent<Image>();
             background.color = selected ? selectedColor : TabBlue;
@@ -1656,7 +1693,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
             GameObject labelObject = CreateUiObject("Title", rowRect, typeof(Text));
             RectTransform labelRect = labelObject.GetComponent<RectTransform>();
             Stretch(labelRect);
-            labelRect.offsetMin = new Vector2(12f, 5f);
+            labelRect.offsetMin = new Vector2(hierarchy.hasChildren ? 46f : 12f, 5f);
             labelRect.offsetMax = new Vector2(-12f, -5f);
             Text label = labelObject.GetComponent<Text>();
             label.text = entry.Title;
@@ -1668,7 +1705,9 @@ public sealed class TabJournalMenuController : MonoBehaviour
             label.verticalOverflow = VerticalWrapMode.Truncate;
             label.color = GhostBlue;
             label.raycastTarget = false;
+            if (hierarchy.hasChildren) CreateQuestFoldout(rowRect, entryId);
         }
+        questListContent.sizeDelta = new Vector2(0f, rowTop);
 
         if (selectedEntry == null)
         {
@@ -1684,6 +1723,30 @@ public sealed class TabJournalMenuController : MonoBehaviour
             ? "暂无详细信息。"
             : selectedEntry.Details;
         UpdateQuestTrackButton(selectedEntry);
+    }
+
+    private void CreateQuestFoldout(RectTransform row, string entryId)
+    {
+        var root = CreateUiObject("Foldout " + entryId, row, typeof(QuestFoldoutGraphic), typeof(Button));
+        var rect = root.GetComponent<RectTransform>();
+        rect.anchorMin = rect.anchorMax = new Vector2(0f, .5f);
+        rect.pivot = new Vector2(0f, .5f);
+        rect.anchoredPosition = new Vector2(6f, 0f);
+        rect.sizeDelta = new Vector2(36f, 40f);
+        var graphic = root.GetComponent<QuestFoldoutGraphic>();
+        graphic.expanded = !questJournal.IsEntryCollapsed(entryId);
+        graphic.color = Color.white;
+        var button = root.GetComponent<Button>();
+        button.targetGraphic = graphic;
+        button.transition = Selectable.Transition.ColorTint;
+        var colors = button.colors;
+        colors.normalColor = GhostBlue;
+        colors.highlightedColor = Color.white;
+        colors.selectedColor = Color.Lerp(GhostBlue, Color.white, .35f);
+        colors.pressedColor = new Color(.15f, .55f, .72f, 1f);
+        colors.fadeDuration = .06f;
+        button.colors = colors;
+        button.onClick.AddListener(() => questJournal.SetEntryCollapsed(entryId, !questJournal.IsEntryCollapsed(entryId)));
     }
 
     private void CreateLevelObjectiveCorners(RectTransform row)
@@ -1905,7 +1968,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
             menuCanvas.worldCamera = uiCamera;
             menuCanvas.planeDistance = uiCamera.nearClipPlane + 0.01f;
         }
-        CRTScreenEffect.RegisterCanvas(menuCanvas);
+        CRTScreenEffect.RegisterCanvas(menuCanvas, enableGlow: true);
     }
 
     private static void CreateBorder(
@@ -2163,7 +2226,7 @@ public sealed class CharacterSkillPage : MonoBehaviour
             nodes[id] = node.GetComponent<Image>();
             var art = Rect("Icon", node.transform, Vector2.zero, new Vector2(44, 44));
             art.localRotation = Quaternion.Euler(0, 0, -45);
-            if (skill.healthBonus > 0 || skill.attackBonus > 0 || skill.energyBonus > 0)
+            if (skill.healthBonus > 0 || skill.attackBonus > 0 || skill.energyBonus > 0 || skill.skillBonus > 0)
             {
                 // The node is rotated 45 degrees: local +Y moves the complete
                 // icon group toward the screen's upper-left corner.
@@ -2178,6 +2241,15 @@ public sealed class CharacterSkillPage : MonoBehaviour
             skillArt.combatExpertise = PlayerGrowthAttributes.IsCombatExpertiseSkill(skill.id);
             skillArt.fearRoar = PlayerGrowthAttributes.IsFearRoarSkill(skill.id);
             skillArt.royalCommand = PlayerGrowthAttributes.IsRoyalCommandSkill(skill.id);
+            skillArt.builder = PlayerGrowthAttributes.IsBuilderSkill(skill.id);
+            skillArt.builderLevel = skill.id == "builder_2" ? 2 : 1;
+            skillArt.holyLight = PlayerGrowthAttributes.IsHolyLightSkill(skill.id);
+            skillArt.holyShield = PlayerGrowthAttributes.IsHolyShieldSkill(skill.id);
+            skillArt.meteorShower = PlayerGrowthAttributes.IsMeteorShowerSkill(skill.id);
+            skillArt.meteorShowerRank = skill.id == "meteor_shower_3" ? 2 : skill.id == "meteor_shower_2" ? 1 : 0;
+            skillArt.holyShieldRank = skill.id == "holy_shield_3" ? 2 : skill.id == "holy_shield_2" ? 1 : 0;
+            skillArt.holyLightRank = skill.id == "holy_light_3" ? 2 : skill.id == "holy_light_2" ? 1 : 0;
+            skillArt.skillBonus = skill.skillBonus > 0;
             skillArt.royalCommandLevel = skill.id == "royal_command_2" ? 2 : 1;
             skillArt.fearRoarLevel = skill.id == "fear_roar_3" ? 3 : skill.id == "fear_roar_2" ? 2 : 1;
             skillArt.strengthBonus = skill.attackBonus > 0;
@@ -2186,9 +2258,9 @@ public sealed class CharacterSkillPage : MonoBehaviour
             skillArt.ghostFormLevel = skill.id == "ghost_form_3" ? 3 : skill.id == "ghost_form_2" ? 2 : 1;
             skillArt.dominoLevel = skill.id == "domino_3" ? 3 : skill.id == "domino_2" ? 2 : 1;
             skillArt.soulMarkLevel = skill.id == "soul_mark_3" ? 3 : skill.id == "soul_mark_2" ? 2 : 1;
-            if (skill.healthBonus > 0 || skill.attackBonus > 0 || skill.energyBonus > 0)
+            if (skill.healthBonus > 0 || skill.attackBonus > 0 || skill.energyBonus > 0 || skill.skillBonus > 0)
             {
-                int bonusValue = skill.healthBonus > 0 ? skill.healthBonus : skill.attackBonus > 0 ? skill.attackBonus : skill.energyBonus;
+                int bonusValue = skill.healthBonus > 0 ? skill.healthBonus : skill.attackBonus > 0 ? skill.attackBonus : skill.energyBonus > 0 ? skill.energyBonus : skill.skillBonus;
                 Text bonus = Label(art, "+" + bonusValue, new Vector2(20, -20), new Vector2(40, 24), 18);
                 bonus.fontStyle = FontStyle.Bold;
             }
@@ -2458,6 +2530,10 @@ public sealed class SkillPageArt : MaskableGraphic
     }
     public static Sprite GetAbilitySprite(string id)
     {
+        if (PlayerGrowthAttributes.IsBuilderSkill(id)) return BuilderCharacterSkillData.GetIcon(id == "builder_2" ? 2 : 1);
+        if (PlayerGrowthAttributes.IsHolyLightSkill(id)) return HolyLightCharacterSkillData.GetIcon(id == "holy_light_3" ? 2 : id == "holy_light_2" ? 1 : 0);
+        if (PlayerGrowthAttributes.IsHolyShieldSkill(id)) return HolyShieldCharacterSkillData.GetIcon(id == "holy_shield_3" ? 2 : id == "holy_shield_2" ? 1 : 0);
+        if (PlayerGrowthAttributes.IsMeteorShowerSkill(id)) return MeteorShowerCharacterSkillData.GetIcon(id == "meteor_shower_3" ? 2 : id == "meteor_shower_2" ? 1 : 0);
         if (PlayerGrowthAttributes.IsRoyalCommandSkill(id)) return ZeldaCharacterData.GetRankedCommandIcon(id == "royal_command_2" ? 2 : 1);
         if (PlayerGrowthAttributes.IsFearRoarSkill(id)) return FearRoarArea.GetRankedIcon(id == "fear_roar_3" ? 3 : id == "fear_roar_2" ? 2 : 1);
         if (PlayerGrowthAttributes.IsCombatExpertiseSkill(id)) return ZeldaHealthHeartsUI.GetRankedCombatExpertiseIcon(id == "combat_expertise_2" ? 2 : 1);
@@ -2500,6 +2576,17 @@ public sealed class SkillPageArt : MaskableGraphic
     public bool collectibleIcon, locked, soulMark, domino, ghostForm, combatExpertise;
     public bool strengthBonus;
     public bool energyBonus;
+    public bool builder, skillBonus;
+    public bool holyLight;
+    public int holyLightRank;
+    public bool holyShield;
+    public int holyShieldRank;
+    public bool meteorShower;
+    public int meteorShowerRank;
+    public int builderLevel = 1;
+    private static Sprite skillBonusSprite;
+    private static Sprite SkillBonusSprite => skillBonusSprite != null ? skillBonusSprite :
+        (skillBonusSprite = ZeldaHealthHeartsUI.CreateSkillIcon(out _));
     private static Sprite strengthBonusSprite;
     private static Sprite StrengthBonusSprite
     {
@@ -2514,7 +2601,11 @@ public sealed class SkillPageArt : MaskableGraphic
     public int fearRoarLevel = 1;
     public bool royalCommand;
     public int royalCommandLevel = 1;
-    public override Texture mainTexture => !locked && royalCommand ? ZeldaCharacterData.GetRankedCommandIcon(royalCommandLevel).texture : !locked && fearRoar ? FearRoarArea.GetRankedIcon(fearRoarLevel).texture : !locked && strengthBonus ? StrengthBonusSprite.texture : combatExpertise && !locked
+    public override Texture mainTexture => !locked && meteorShower ? MeteorShowerCharacterSkillData.GetIcon(meteorShowerRank).texture :
+        !locked && holyShield ? HolyShieldCharacterSkillData.GetIcon(holyShieldRank).texture :
+        !locked && holyLight ? HolyLightCharacterSkillData.GetIcon(holyLightRank).texture :
+        !locked && builder ? BuilderCharacterSkillData.GetIcon(builderLevel).texture :
+        !locked && skillBonus ? SkillBonusSprite.texture : !locked && royalCommand ? ZeldaCharacterData.GetRankedCommandIcon(royalCommandLevel).texture : !locked && fearRoar ? FearRoarArea.GetRankedIcon(fearRoarLevel).texture : !locked && strengthBonus ? StrengthBonusSprite.texture : combatExpertise && !locked
         ? ZeldaHealthHeartsUI.GetRankedCombatExpertiseIcon(combatExpertiseLevel).texture : base.mainTexture;
     private RectTransform collectibleOrbit, collectibleGlow;
     private GrowthCollectible.IconAppearance collectibleAppearance;
@@ -2581,7 +2672,7 @@ public sealed class SkillPageArt : MaskableGraphic
             Quad(vh, Vector2.zero, new Vector2(30.8f, 17.6f), ZeldaUiPalette.Ghost);
             return;
         }
-        if ((combatExpertise || strengthBonus || fearRoar || royalCommand) && !locked)
+        if ((combatExpertise || strengthBonus || fearRoar || royalCommand || builder || holyLight || holyShield || meteorShower || skillBonus) && !locked)
         {
             Color swordTint = ZeldaUiPalette.Ghost;
             Rect r = strengthBonus ? new Rect(-17f, -17f, 34f, 34f) : rectTransform.rect;

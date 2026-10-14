@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9a2f0b8e4c7d41c6a912fc0e693d45a1, type: 3}
   m_Name: Level1-Garden
   m_EditorClassIdentifier: Assembly-CSharp::RuntimeMiniMapSceneData
-  schemaVersion: 4
+  schemaVersion: 6
+  sourceRevision: 4f093bf7e536197947a59dee5822b966
   sceneName: Level1-Garden
   displayName: "\u57CE\u5821\u5EAD\u9662"
   blockPaths:
@@ -276,7 +277,7 @@ MonoBehaviour:
     - {x: 12.610245, y: -12.454346}
   transitions:
   - position: {x: -3.59, y: -16.69}
-    targetSceneName: LastScene
+    targetSceneName: Level2-Desert
     preservesSceneState: 0
   - position: {x: -29.65, y: 22.430367}
     targetSceneName: Level1-Floor-1
@@ -292,3 +293,4 @@ MonoBehaviour:
   - questId: level1.find_castle_gate_key
     position: {x: -3.6896343, y: -13.94}
   bridges: []
+  surfaces: []

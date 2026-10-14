@@ -29,7 +29,13 @@ public class GameObject {public Scene scene;public bool activeSelf;public int ch
 public class Transform {public string name;public GameObject gameObject=new GameObject();public Vector2 position;public Transform child;public Transform Find(string n)=>child!=null&&child.name==n?child:null;}
 public struct RuntimeMiniMapQuestTargetData {public string questId;public Vector2 position;}
 public class RuntimeMiniMapSceneData {public RuntimeMiniMapQuestTargetData[] QuestTargets;}
-public class QuestJournalManager {public string TrackedEntryId;public HashSet<string> completed=new HashSet<string>();public bool IsEntryCompleted(string id)=>completed.Contains(id);}
+public class QuestJournalManager {
+ public const string Level2CityTargetId="level2.hero_proof.city", Level2TrialTargetId="level2.hero_proof.trial";
+ // This legacy-map harness uses only non-staged quests; staged behavior has a Unity smoke test.
+ public static string ResolveQuestMapTargetId(string id)=>id;
+ public string TrackedEntryId;public HashSet<string> completed=new HashSet<string>();public bool IsEntryCompleted(string id)=>completed.Contains(id);
+}
+public class Level2HeroQuestTarget {public GameObject gameObject;public Transform transform;public string MapTargetId;}
 public class RuntimeMiniMapGraphic {
  public static Transform[] objects=new Transform[0];
  public static T[] FindObjectsOfType<T>(bool inactive)=>objects as T[];

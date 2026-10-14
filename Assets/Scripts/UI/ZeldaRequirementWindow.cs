@@ -27,7 +27,35 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
 
     private readonly Image[] icons = new Image[MaximumIconCount];
     private DoorData doorData;
+    private DoorHingeInteraction doorInteraction;
+    private RectTransform skillRow;
+    private Text skillLabel;
+    private int lastUnlockSkill = -1;
     private LeverData leverData;
+    private Component skillSource;
+    private int skillRequirement;
+    private Transform SourceTransform => doorData != null ? doorData.transform :
+        leverData != null ? leverData.transform : skillSource != null ? skillSource.transform : null;
+    private bool SourceAvailable => SourceTransform != null &&
+        (!(skillSource is Behaviour behaviour) || behaviour.isActiveAndEnabled) &&
+        (!(skillSource is ElectricGatePillar pillar) || pillar.HasPanel);
+
+    // Runtime attachment also covers existing scene instances without prefab migration.
+    public static ZeldaRequirementWindow AttachSkillRequirement(Component source, int required)
+    {
+        if (!Application.isPlaying || source == null) return null;
+        var window = source.GetComponentInChildren<ZeldaRequirementWindow>(true);
+        if (window == null)
+        {
+            var root = new GameObject("Skill Requirement Window");
+            root.transform.SetParent(source.transform, false);
+            window = root.AddComponent<ZeldaRequirementWindow>();
+        }
+        window.skillSource = source;
+        window.skillRequirement = required;
+        window.ConfigureCommon();
+        return window;
+    }
     private GameObject overlayObject;
     private Canvas overlayCanvas;
     private RectTransform panelRect;
@@ -51,6 +79,7 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
     public void Configure(DoorData source)
     {
         doorData = source;
+        doorInteraction = source.GetComponentInParent<DoorHingeInteraction>();
         leverData = null;
         ConfigureCommon();
     }
@@ -59,6 +88,7 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
     {
         leverData = source;
         doorData = null;
+        doorInteraction = null;
         ConfigureCommon();
     }
 
@@ -67,7 +97,7 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
         CacheHighlightRenderers();
         if (!hasFixedWorldAnchor)
         {
-            Transform sourceTransform = doorData != null ? doorData.transform : leverData.transform;
+            Transform sourceTransform = SourceTransform;
             fixedWorldPosition = sourceTransform.position + Vector3.up * 0.55f;
             hasFixedWorldAnchor = true;
         }
@@ -81,6 +111,11 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
 
     private void LateUpdate()
     {
+        if (!SourceAvailable)
+        {
+            if (canvasGroup != null) { SetVisible(false, true); ApplySourceHighlight(); }
+            return;
+        }
         EnsureVisuals();
         ResolveUiFont();
         UpdateScreenPosition();
@@ -109,6 +144,11 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
         {
             Destroy(highlightOverlayObject);
         }
+    }
+
+    private void OnDisable()
+    {
+        if (canvasGroup != null) { SetVisible(false, true); ApplySourceHighlight(); }
     }
 
     private void EnsureVisuals()
@@ -182,7 +222,26 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
             icons[i].preserveAspect = true;
             icons[i].raycastTarget = false;
         }
-        CRTScreenEffect.RegisterCanvas(overlayCanvas);
+        if (doorData != null)
+        {
+            skillRow = new GameObject("Unlock Skill Requirement", typeof(RectTransform)).GetComponent<RectTransform>();
+            skillRow.SetParent(panelRect, false);
+            skillRow.anchorMin = new Vector2(0f, .5f);
+            skillRow.anchorMax = new Vector2(1f, .5f);
+            skillRow.sizeDelta = new Vector2(0f, 40f);
+            skillRow.anchoredPosition = new Vector2(0f, -24f);
+            skillLabel = Instantiate(requirementLabel, skillRow);
+            skillLabel.text = "技巧：";
+            for (int i = 0; i < CharacterSkillRequirements.DoorUnlock; i++)
+            {
+                Image icon = Instantiate(icons[i], skillRow);
+                icon.sprite = wrenchSprite;
+                icon.color = WrenchGray;
+                icon.enabled = true;
+            }
+            skillRow.gameObject.SetActive(false);
+        }
+        CRTScreenEffect.RegisterCanvas(overlayCanvas, enableGlow: true);
     }
 
     private static void ConfigureResponsiveScaling(GameObject canvasObject)
@@ -252,7 +311,7 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
             return false;
         }
 
-        Transform source = doorData != null ? doorData.transform : leverData.transform;
+        Transform source = SourceTransform;
         Vector3 viewportPosition = camera.WorldToViewportPoint(source.position);
         if (viewportPosition.z <= 0f || viewportPosition.x < 0f || viewportPosition.x > 1f ||
             viewportPosition.y < 0f || viewportPosition.y > 1f)
@@ -276,6 +335,7 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
         if (font != null && requirementLabel.font != font)
         {
             requirementLabel.font = font;
+            if (skillLabel != null) skillLabel.font = font;
         }
 
         requirementLabel.text = "需求：";
@@ -284,7 +344,8 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
     private void Refresh(bool force)
     {
         int value = GetRequirementValue();
-        if (!force && value == lastValue)
+        int unlockSkill = doorInteraction != null ? doorInteraction.RequiredUnlockSkill : 0;
+        if (!force && value == lastValue && unlockSkill == lastUnlockSkill)
         {
             return;
         }
@@ -295,8 +356,13 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
         {
             icons[i].enabled = i < displayedIconCount;
             icons[i].color = iconColor;
+            icons[i].rectTransform.anchoredPosition = new Vector2(102f + i * 16f, unlockSkill > 0 ? 24f : 0f);
         }
 
+        if (skillRow != null) skillRow.gameObject.SetActive(unlockSkill > 0);
+        panelRect.sizeDelta = unlockSkill > 0 ? new Vector2(270f, 132f) : PanelSize;
+        requirementLabel.rectTransform.anchoredPosition = new Vector2(14f, unlockSkill > 0 ? 24f : 0f);
+        lastUnlockSkill = unlockSkill;
         lastValue = value;
     }
 
@@ -334,7 +400,7 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
 
     private void CacheHighlightRenderers()
     {
-        Transform source = doorData != null ? doorData.transform : leverData.transform;
+        Transform source = SourceTransform;
         if (source == highlightedSource && highlightedRenderers != null)
         {
             return;
@@ -572,7 +638,8 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
 
     private int GetRequirementValue()
     {
-        return Mathf.Clamp(doorData != null ? doorData.Durability : leverData.Complexity, 0, MaximumIconCount);
+        return Mathf.Clamp(doorData != null ? doorData.Durability :
+            leverData != null ? leverData.Complexity : skillRequirement, 0, MaximumIconCount);
     }
 
     private static void EnsureWorldDimmer()

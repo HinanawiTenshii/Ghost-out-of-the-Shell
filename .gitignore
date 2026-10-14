@@ -16,6 +16,8 @@
 .consulo/
 ExportedObj/
 .codex-temp/
+__pycache__/
+*.pyc
 
 # Auto-generated project files
 *.csproj

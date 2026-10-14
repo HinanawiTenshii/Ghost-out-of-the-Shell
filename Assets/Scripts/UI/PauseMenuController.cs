@@ -31,7 +31,6 @@ public sealed class PauseMenuController : MonoBehaviour
     {
         menuCanvas = GetComponent<Canvas>();
         menuCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        EnsureRenderPriority();
 
         CanvasScaler scaler = GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -40,6 +39,7 @@ public sealed class PauseMenuController : MonoBehaviour
 
         EnsureEventSystem();
         BuildMenu();
+        EnsureRenderPriority();
         SetMenuVisible(false);
     }
 
@@ -58,11 +58,6 @@ public sealed class PauseMenuController : MonoBehaviour
         {
             OpenMenu();
         }
-    }
-
-    private void LateUpdate()
-    {
-        EnsureRenderPriority();
     }
 
     private void EnsureRenderPriority()
@@ -91,7 +86,7 @@ public sealed class PauseMenuController : MonoBehaviour
             menuCanvas.planeDistance =
                 menuCanvas.worldCamera.nearClipPlane + 0.01f;
         }
-        CRTScreenEffect.RegisterCanvas(menuCanvas);
+        CRTScreenEffect.RegisterCanvas(menuCanvas, enableGlow: true);
     }
 
     public void OpenMenu()
@@ -107,6 +102,9 @@ public sealed class PauseMenuController : MonoBehaviour
         Time.timeScale = 0f;
         Cursor.visible = true;
         Cursor.lockState = CursorLockMode.None;
+        // Priority is needed when opening, not on every frame while closed.
+        // CRTScreenEffect handles rebinding persistent canvases to a new camera.
+        EnsureRenderPriority();
         SetMenuVisible(true);
     }
 
@@ -142,7 +140,7 @@ public sealed class PauseMenuController : MonoBehaviour
             Cursor.visible = true;
             Cursor.lockState = CursorLockMode.None;
             SceneTravelStateManager.GetOrCreate().ResetAllSceneStates();
-            SceneManager.LoadScene(titleSceneName.Trim());
+            RetroSceneLoadReveal.LoadSceneAsync(titleSceneName.Trim());
         });
     }
 

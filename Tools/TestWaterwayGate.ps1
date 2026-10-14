@@ -33,6 +33,7 @@ public class GateHarness {
  public enum Letter {A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z}
  private const float Depth=.72f,PostWidth=.42f,PostDepth=1.12f;
  public bool open,initialized,dirty;public float progress,moveDuration=.65f;
+ private bool initialOpenCaptured,initialOpen;
  public Transform shutter=new Transform(),sign=new Transform();
  public BoxCollider2D barrier=new BoxCollider2D();
  public Event onOpened=new Event(),onClosed=new Event();
@@ -48,7 +49,7 @@ public class GateHarness {
  public Array GetShutterPanels(float width)=>BuildShutter(width).ToArray();
  public void Post(BoxCollider2D p,float x)=>ConfigurePost(p,x);
 '@
-foreach($signature in @('    public static string FormatIdentifier(', '    public void SetOpen(', '    public void SetOpenImmediately(', '    private void OnEnable(', '    private void Update(', '    private void ApplyPose(', '    private void ApplyCollision(', '    private static Panel ClipShutterPanel(', '    private static void ConfigurePost(', '    private struct Panel', '    private static List<Panel> BuildFrame(', '    private static List<Panel> BuildShutter(')){$code+=Extract $signature}
+foreach($signature in @('    private void CaptureInitialOpen(', '    public static string FormatIdentifier(', '    public void SetOpen(', '    public void SetOpenImmediately(', '    private void OnEnable(', '    private void Update(', '    private void ApplyPose(', '    private void ApplyCollision(', '    private static Panel ClipShutterPanel(', '    private static void ConfigurePost(', '    private struct Panel', '    private static List<Panel> BuildFrame(', '    private static List<Panel> BuildShutter(')){$code+=Extract $signature}
 $code+='}'
 Add-Type -TypeDefinition $code
 $checks=0

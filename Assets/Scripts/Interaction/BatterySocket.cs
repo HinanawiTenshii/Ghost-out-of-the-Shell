@@ -4,9 +4,9 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.Serialization;
 
-/// <summary>Transfers a single inventory battery and gates one lever/controller without changing its state.</summary>
+/// <summary>Transfers one inventory battery and supplies a linked mechanism; unpowered gate controllers spring back.</summary>
 [DisallowMultipleComponent, RequireComponent(typeof(BoxCollider2D), typeof(CameraVisionStreamingExempt))]
-public sealed class BatterySocket : MonoBehaviour
+public sealed class BatterySocket : MonoBehaviour, IConsumableExplosive
 {
     [Serializable]
     public struct RuntimeState
@@ -16,7 +16,7 @@ public sealed class BatterySocket : MonoBehaviour
     }
 
     private static readonly HashSet<BatterySocket> Sockets = new HashSet<BatterySocket>();
-    [SerializeField, Tooltip("拖入 WaterwayGateController 或 LeverData 组件。未绑定不影响其他机关。")]
+    [SerializeField, Tooltip("可拖入整个水闸控制器、拉杆、警报器或带面板的电门柱对象，将自动识别同一对象上的功能组件。未绑定不影响其他机关。")]
     private MonoBehaviour linkedMechanism;
     [FormerlySerializedAs("batteryInstalled")]
     [SerializeField, InspectorName("默认带有电池"), Tooltip("勾选后首次进入场景自带一块电池；读档时优先使用存档中的安装状态。")]
@@ -27,11 +27,15 @@ public sealed class BatterySocket : MonoBehaviour
     private bool batteryInstalled;
     private bool initialized;
     private bool transferring;
+    private BatteryPickupItem.ChargeState charge;
     private GameObject promptObject;
     private TextMesh promptText;
     private Material promptMaterial;
 
     public bool HasBattery => initialized ? batteryInstalled : startsWithBattery;
+    public int RemainingCharge => HasBattery ? (initialized ? charge.remaining : BatteryPickupItem.DefaultCapacity) : 0;
+    public int MaximumCharge => initialized && HasBattery ? charge.capacity : BatteryPickupItem.DefaultCapacity;
+    public bool HasPower => HasBattery && RemainingCharge > 0;
     public MonoBehaviour LinkedMechanism => linkedMechanism;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -48,9 +52,10 @@ public sealed class BatterySocket : MonoBehaviour
         foreach (var root in scene.GetRootGameObjects())
             foreach (var socket in root.GetComponentsInChildren<BatterySocket>(true)) Sockets.Add(socket);
         Sockets.RemoveWhere(socket => socket == null);
+        foreach (var socket in Sockets) socket.NotifyMechanismPowerState();
     }
 
-    private void Awake() { Sockets.Add(this); EnsureInitialized(); }
+    private void Awake() { Sockets.Add(this); EnsureInitialized(); NotifyMechanismPowerState(); }
     private void OnEnable() => Sockets.Add(this);
 
     // Do not deregister on disable: camera suspension must never bypass power requirements.
@@ -58,16 +63,69 @@ public sealed class BatterySocket : MonoBehaviour
     {
         if (mechanism == null) return true;
         foreach (var socket in Sockets)
-            if (socket != null && socket.linkedMechanism == mechanism && !socket.HasBattery)
+            if (socket != null && socket.linkedMechanism == mechanism && !socket.HasPower)
                 return false;
         return true;
     }
 
+    // Some devices (alarms) require an actual supply; legacy levers/controllers
+    // intentionally keep their existing unbound = usable behaviour.
+    public static bool HasConnectedSocket(Component mechanism)
+    {
+        if (mechanism == null) return false;
+        foreach (var socket in Sockets)
+            if (socket != null && socket.linkedMechanism == mechanism) return true;
+        return false;
+    }
+
     public void BindMechanism(MonoBehaviour mechanism)
     {
-        if (mechanism != null && !(mechanism is LeverData) && !(mechanism is WaterwayGateController))
-            throw new ArgumentException("Battery sockets support LeverData or WaterwayGateController.");
-        linkedMechanism = mechanism;
+        if (!TryResolveMechanism(mechanism, out MonoBehaviour resolved))
+            throw new ArgumentException("电池槽只能绑定拉杆、水闸控制器、警报器或装有面板的电门柱。");
+        linkedMechanism = resolved;
+        NotifyMechanismPowerState();
+    }
+
+    private void NotifyMechanismPowerState()
+    {
+        // Event-driven: no new per-frame socket/controller polling. A normal
+        // lever keeps its position, and restoring power never replays a toggle.
+        if (linkedMechanism is WaterwayGateController controller)
+            controller.RefreshBatteryPowerState();
+    }
+
+    private static bool TryResolveMechanism(MonoBehaviour candidate, out MonoBehaviour resolved)
+    {
+        resolved = null;
+        if (SupportsMechanism(candidate)) { resolved = candidate; return true; }
+        // Unity's generic MonoBehaviour object field may select the visual script
+        // when a whole GameObject is dragged in. Resolve only on that same object;
+        // never accidentally bind an unrelated device in a parent/child hierarchy.
+        foreach (MonoBehaviour component in candidate.GetComponents<MonoBehaviour>())
+        {
+            if (component == null || !SupportsMechanism(component)) continue;
+            resolved = component;
+            return true;
+        }
+        return false;
+    }
+
+    private static bool SupportsMechanism(MonoBehaviour mechanism)
+    {
+        return mechanism == null || mechanism is LeverData || mechanism is WaterwayGateController || mechanism is AlarmDevice
+            || (mechanism is ElectricGatePillar pillar && pillar.HasPanel);
+    }
+
+    // Atomic preflight before charging. Each bound socket is charged once, never once per damage arc.
+    public static bool TryConsumeForMechanisms(Component first, Component second)
+    {
+        foreach (var socket in Sockets)
+            if (socket != null && socket.linkedMechanism != null && (socket.linkedMechanism == first || socket.linkedMechanism == second)
+                && (socket.transferring || !socket.HasPower)) return false;
+        foreach (var socket in Sockets)
+            if (socket != null && socket.linkedMechanism != null && (socket.linkedMechanism == first || socket.linkedMechanism == second))
+                socket.TryConsumeCharge();
+        return true;
     }
 
     private void EnsureInitialized()
@@ -80,13 +138,41 @@ public sealed class BatterySocket : MonoBehaviour
 
     private void EnsureBatteryIdentity()
     {
-        if (!batteryInstalled || !string.IsNullOrEmpty(storedBattery.itemInstanceId)) return;
-        storedBattery = new PersistentInventory.RuntimeSlotState {
-            itemId = BatteryPickupItem.DefaultItemId,
-            itemInstanceId = Guid.NewGuid().ToString("N"), quantity = 1,
-            itemName = BatteryPickupItem.DefaultItemName,
-            itemDescription = BatteryPickupItem.DefaultDescription
-        };
+        if (!batteryInstalled) return;
+        if (string.IsNullOrEmpty(storedBattery.itemInstanceId))
+        {
+            storedBattery.itemId = BatteryPickupItem.DefaultItemId;
+            storedBattery.itemInstanceId = Guid.NewGuid().ToString("N");
+            storedBattery.quantity = 1;
+            if (string.IsNullOrEmpty(storedBattery.itemName)) storedBattery.itemName = BatteryPickupItem.DefaultItemName;
+            if (string.IsNullOrEmpty(storedBattery.itemDescription)) storedBattery.itemDescription = BatteryPickupItem.DefaultDescription;
+        }
+        charge = BatteryPickupItem.ReadCharge(storedBattery.itemState, storedBattery.hasStoredCharge, storedBattery.storedCharge);
+        StoreCharge();
+    }
+
+    private void StoreCharge()
+    {
+        storedBattery.hasStoredCharge = true;
+        storedBattery.storedCharge = charge.remaining;
+        storedBattery.itemState = BatteryPickupItem.EncodeCharge(charge.remaining, charge.capacity);
+    }
+
+    /// <summary>Wire an explicit event on the linked device to this method, passing that device.</summary>
+    public void ConsumeChargeFrom(MonoBehaviour source)
+    {
+        if (source != null && source == linkedMechanism) TryConsumeCharge();
+    }
+
+    // No automatic subscription to gate open/close events: existing water gates consume nothing.
+    public bool TryConsumeCharge()
+    {
+        EnsureInitialized();
+        if (transferring || !HasPower) return false;
+        charge.remaining--;
+        StoreCharge();
+        NotifyMechanismPowerState();
+        return true;
     }
 
     public RuntimeState CaptureRuntimeState()
@@ -102,6 +188,7 @@ public sealed class BatterySocket : MonoBehaviour
         batteryInstalled = state.installed;
         storedBattery = state.battery;
         EnsureBatteryIdentity();
+        NotifyMechanismPowerState();
     }
 
     public bool TryInstall(PersistentInventory inventory)
@@ -132,6 +219,7 @@ public sealed class BatterySocket : MonoBehaviour
             storedBattery = battery;
             batteryInstalled = true;
             EnsureBatteryIdentity();
+            NotifyMechanismPowerState();
             return true;
         }
         finally { transferring = false; }
@@ -152,7 +240,41 @@ public sealed class BatterySocket : MonoBehaviour
                 storedBattery.hasStoredCharge, storedBattery.storedCharge, storedBattery.itemState)) return false;
             batteryInstalled = false;
             storedBattery = default;
+            NotifyMechanismPowerState();
             return true;
+        }
+        finally { transferring = false; }
+    }
+
+    /// <summary>Only the installed battery is destroyed; the empty socket remains reusable.</summary>
+    public bool TryConsumeExplosive(out int attackPower)
+    {
+        attackPower = 0;
+        if (!isActiveAndEnabled || transferring) return false;
+        EnsureInitialized();
+        if (!batteryInstalled) return false;
+        batteryInstalled = false;
+        storedBattery = default;
+        attackPower = BatteryPickupItem.ExplosionAttackPower;
+        NotifyMechanismPowerState();
+        return true;
+    }
+
+    public void ReceiveAttack(int damage, ZeldaCharacterData attacker)
+    {
+        if (damage <= 0 || !isActiveAndEnabled) return;
+        EnsureInitialized();
+        if (!batteryInstalled || transferring) return;
+        transferring = true;
+        try
+        {
+            PlacedBomb explosion = BatteryPickupItem.CreateDetonation(this, attacker);
+            if (explosion == null) return;
+            // Cut power and clear saved identity before emitting a chain-reaction hitbox.
+            batteryInstalled = false;
+            storedBattery = default;
+            NotifyMechanismPowerState();
+            explosion.DetonateImmediately();
         }
         finally { transferring = false; }
     }
@@ -180,9 +302,11 @@ public sealed class BatterySocket : MonoBehaviour
 
     private void Interact()
     {
-        if (NearbyMover() == null) return;
+        var mover = NearbyMover();
+        if (mover == null || mover.IsAttacking) return;
         bool removing = HasBattery;
         bool success = removing ? TryUninstall(PersistentInventory.Instance) : TryInstall(PersistentInventory.Instance);
+        if (success) mover.TryBeginItemAttack(.24f);
         ZeldaHealthHeartsUI.Instance?.ShowNotificationPopup(success
             ? (removing ? "已卸下魔力电池" : "已安装魔力电池")
             : (removing ? "物品栏已满，无法卸下魔力电池" : "背包中没有魔力电池"));
@@ -225,9 +349,13 @@ public sealed class BatterySocket : MonoBehaviour
     private void OnValidate()
     {
         interactionDistance = Mathf.Max(.1f, interactionDistance);
-        if (linkedMechanism != null && !(linkedMechanism is LeverData) && !(linkedMechanism is WaterwayGateController))
+        if (TryResolveMechanism(linkedMechanism, out MonoBehaviour resolved))
         {
-            Debug.LogWarning("电池槽只能绑定拉杆 LeverData 或水闸控制器 WaterwayGateController。", this);
+            linkedMechanism = resolved;
+        }
+        else
+        {
+            Debug.LogWarning("电池槽只能绑定拉杆、水闸控制器、警报器或装有面板的电门柱。", this);
             linkedMechanism = null;
         }
     }

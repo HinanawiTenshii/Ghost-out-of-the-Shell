@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>Level 2 cleric in ivory-white vestments with restrained gold edging.</summary>
-public sealed class PriestZeldaCharacterData : ZeldaCharacterData
+public class PriestZeldaCharacterData : ZeldaCharacterData
 {
     private static readonly Vector3 EditorVisualBoundsCenter = new Vector3(0f, 0.25f, 0f);
     private static readonly Vector3 EditorVisualBoundsSize = new Vector3(1f, 1f, 0f);
@@ -124,18 +124,22 @@ public sealed class PriestZeldaCharacterData : ZeldaCharacterData
         renderer.color = GetDamageFeedbackTint(Color.white);
     }
 
+    protected virtual string[] GetBodyRows(int direction) =>
+        direction == 1 ? Back : direction == 2 ? Left : direction == 3 ? Right : Front;
+
     private Sprite CreateSprite(int direction, int pose)
     {
-        string[] map = direction == 1 ? Back : direction == 2 ? Left : direction == 3 ? Right : Front;
-        var pixels = new Color[16 * 16];
-        for (int row = 0; row < 16; row++)
+        string[] map = GetBodyRows(direction);
+        int height = map.Length;
+        var pixels = new Color[16 * height];
+        for (int row = 0; row < height; row++)
         for (int x = 0; x < 16; x++)
         {
             char symbol = map[row][x];
             if (symbol == '.') continue;
-            int y = 15 - row;
+            int y = height - 1 - row;
             // Alternate boots without shifting the collision body or head.
-            if (row >= 12 && (pose == 1 || pose == 2))
+            if (y <= 3 && (pose == 1 || pose == 2))
                 y += (x < 8) == (pose == 1) ? 1 : 0;
             pixels[y * 16 + x] = PixelColor(symbol);
         }
@@ -154,15 +158,16 @@ public sealed class PriestZeldaCharacterData : ZeldaCharacterData
             for (int x = handX; x < handX + 2; x++)
                 pixels[y * 16 + x] = faceColor;
         }
-        var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false)
+        var texture = new Texture2D(16, height, TextureFormat.RGBA32, false)
         {
-            name = "Priest " + direction + " " + pose,
+            name = GetType().Name + " " + direction + " " + pose,
             filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp,
             hideFlags = HideFlags.HideAndDontSave
         };
         texture.SetPixels(pixels);
         texture.Apply();
-        var sprite = Sprite.Create(texture, new Rect(0, 0, 16, 16), new Vector2(0.5f, 0.25f), 16f);
+        // Taller ceremonial headwear extends upward without moving the feet or attack rig.
+        var sprite = Sprite.Create(texture, new Rect(0, 0, 16, height), new Vector2(0.5f, 4f / height), 16f);
         sprite.name = texture.name;
         sprite.hideFlags = HideFlags.HideAndDontSave;
         return sprite;
@@ -228,7 +233,11 @@ public sealed class PriestZeldaCharacterData : ZeldaCharacterData
         Color previousColor = Gizmos.color;
         Gizmos.matrix = transform.localToWorldMatrix;
         Gizmos.color = new Color(0.35f, 0.9f, 1f, 0.8f);
-        Gizmos.DrawWireCube(EditorVisualBoundsCenter, EditorVisualBoundsSize);
+        Vector3 size = EditorVisualBoundsSize;
+        size.y = GetBodyRows(0).Length / 16f;
+        Vector3 center = EditorVisualBoundsCenter;
+        center.y += (size.y - 1f) * 0.5f;
+        Gizmos.DrawWireCube(center, size);
         Gizmos.matrix = previousMatrix;
         Gizmos.color = previousColor;
     }

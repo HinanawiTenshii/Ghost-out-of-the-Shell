@@ -12,7 +12,7 @@ foreach($direction in 'Front','Back','Left'){
     $block=[regex]::Match($maps,'(?s)string\[\] '+$direction+' = \{(.*?)\};').Groups[1].Value
     $rows=@([regex]::Matches($block,'"([^"]+)"')|ForEach-Object{$_.Groups[1].Value})
     if($rows.Count -ne 20){throw "Incorrect row count: $direction"}
-    foreach($row in $rows){if($row.Length -ne 20 -or $row -match '[^.WHQCDLBAFSGRKE]'){throw "Invalid pixel row: $direction $row"}}
+    foreach($row in $rows){if($row.Length -ne 20 -or $row -match '[^.WHQCDLBAFSGRKENVT]'){throw "Invalid pixel row: $direction $row"}}
     foreach($r in 14..15){if($rows[$r] -ne '......KKK..KKK......'){throw 'Strongman feet no longer match existing animation rig'}}
     foreach($r in 16..19){if($rows[$r].Trim('.').Length){throw 'Legs are too long'}}
 }
@@ -74,11 +74,18 @@ foreach($pose in $poses){
 $font.Dispose()
 $left=$actor.Render(2,$false);$right=$actor.Render(3,$false)
 foreach($y in 0..19){foreach($x in 0..19){if(!$left[$y*20+$x].Equals($right[$y*20+19-$x])){throw 'Side silhouettes are not mirrored'}}}
-$prefab=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Strongman-level2.prefab"
-$template=Get-Content -Raw "$root/Assets/Prefabs/Level1NPCS/Strongman-Level1.prefab"
-foreach($field in 'health','skillValue','permissionLevel','possessionEnergy','possessionCost','moveSpeed','cameraOrthographicSize','playerVisionRadius','attackPower','attackPrefab','attackDuration','attackSpawnOffset','attackSize'){
-    $pattern="(?m)^  ${field}: (.*)$"
-    if([regex]::Match($prefab,$pattern).Groups[1].Value.Trim() -ne [regex]::Match($template,$pattern).Groups[1].Value.Trim()){throw "Inherited gameplay value changed: $field"}
+$prefab=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Idle/Strongman-level2.prefab"
+# Level2 variants now have independently tuned gameplay values. Check visual
+# defaults against both authored palettes, without requiring Level1 statistics.
+foreach($variant in 'Idle/Strongman-level2.prefab','Patrol/Strongman-level2-Patrol.prefab'){
+    $asset=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/$variant"
+    foreach($field in [DesertStrongmanHarness].GetFields([Reflection.BindingFlags]'NonPublic,Instance,DeclaredOnly')){
+        if($field.FieldType -ne [UnityEngine.Color]){continue}
+        $m=[regex]::Match($asset,'(?m)^  '+$field.Name+': \{r: ([^,]+), g: ([^,]+), b: ([^,]+), a: ([^}]+)\}')
+        if(!$m.Success){throw "Missing palette field: $variant $($field.Name)"}
+        $authored=[UnityEngine.Color]::new([float]$m.Groups[1].Value,[float]$m.Groups[2].Value,[float]$m.Groups[3].Value,[float]$m.Groups[4].Value)
+        if(!$authored.Equals($field.GetValue($actor))){throw "Prefab/default palette mismatch: $variant $($field.Name)"}
+    }
 }
 $definitions=@([regex]::Matches($prefab,'(?m)^--- !u!\d+ &(\d+)')|ForEach-Object{$_.Groups[1].Value})
 foreach($ref in [regex]::Matches($prefab,'\{fileID: (\d+)\}')){
@@ -86,4 +93,4 @@ foreach($ref in [regex]::Matches($prefab,'\{fileID: (\d+)\}')){
 }
 if(!$prefab.Contains('guid: 94e99f5562c84ae5b76ac29154ca6cee') -or !$source.Contains(': StrongmanZeldaCharacterData')){throw 'Incorrect inherited role or visual script'}
 if(!$source.Contains('new Vector2(0.5f, 0.3f), 16f') -or !$source.Contains('texture.Apply(false, false)')){throw 'Pivot/scale or walking readability regression'}
-Write-Output "PASS: $count connected directional poses, short feet, side mirrors, no duplicated attack hand, prefab links and unchanged gameplay values."
+Write-Output "PASS: $count connected directional poses, short feet, side mirrors, no duplicated attack hand, prefab links and both worker palettes."

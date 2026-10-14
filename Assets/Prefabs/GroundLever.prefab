@@ -124,9 +124,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0e21c6600ff14bb6a7e5028551f5a38e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  complexity: 0
+  complexity: 3
   interactKey: 101
   interactionDistance: 1.1
   linkedObject: {fileID: 0}
+  linkedObject2: {fileID: 0}
+  linkedObject3: {fileID: 0}
   baseColor: {r: 0.42, g: 0.28, b: 0.16, a: 1}
   leverColor: {r: 0.72, g: 0.12, b: 0.08, a: 1}
+  metalColor: {r: 0.46, g: 0.5, b: 0.5, a: 1}
+  interactionPromptOffset: {x: 0, y: 0.9}

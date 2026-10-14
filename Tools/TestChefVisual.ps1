@@ -32,7 +32,7 @@ foreach($d in 0..3){foreach($p in 0..3){
     if($p -eq 3 -and $hand -eq 'F'){throw 'Duplicate attacking hand'}
     if($p -ne 3 -and $hand -ne 'F'){throw 'Missing resting hand'}
 }}
-$prefab=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Chef-level2.prefab"
+$prefab=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Patrol/Chef-level2.prefab"
 foreach($part in @('7ff9e487d46f4c509f0b179541f6b578','a81494bb8bf44504a8f11adb1cb226c4','c7a3afec32db4e4d83d29bb18d2f601c','m_Size: {x: 0.34, y: 0.54}')){
     if(!$prefab.Contains($part)){throw "Missing prefab component/reference: $part"}
 }

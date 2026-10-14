@@ -29,6 +29,7 @@ public sealed class ClockworkPuppetBoxDriver : MonoBehaviour
     private bool addedNavigator;
     private float magic;
     private bool disembarking;
+    private int remoteControlEnteredFrame = -1;
     private string itemInstanceId;
     private string itemName;
     private string itemDescription;
@@ -62,6 +63,17 @@ public sealed class ClockworkPuppetBoxDriver : MonoBehaviour
     public bool IsMoving => !disembarking &&
         Time.time - lastMovementTime <= 0.15f;
     public float RemainingMagic => magic;
+    public string PuppetInstanceId => itemInstanceId;
+    public bool TryResumeRemoteControl(ZeldaCharacterData user)
+    {
+        var mover = user != null ? user.GetComponent<ZeldaFourWayMover>() : null;
+        if (!isActiveAndEnabled || disembarking || magic <= 0f || box == null || box.IsDestroyed ||
+            !box.HasStoredItem || mover == null || !mover.isActiveAndEnabled || user.IsDead || user.IsGhostLike ||
+            ZeldaRuntimeRegistry.GetControlledMover() != mover ||
+            ZeldaRuntimeRegistry.GetGameplayScene(user.gameObject) != gameObject.scene) return false;
+        ReleaseOwnerStreamingExemption();remoteControlOwner=mover;
+        BeginRemoteControl();return IsUnderRemoteControl;
+    }
     public bool IsUnderRemoteControl => remoteControlledDriver == this;
     public static bool IsRemoteControlActive => remoteControlledDriver != null;
     public static bool BlocksCharacterInputThroughFrame =>
@@ -123,7 +135,8 @@ public sealed class ClockworkPuppetBoxDriver : MonoBehaviour
         string configuredItemName,
         string configuredItemDescription,
         bool configuredHasVisualColor,
-        Color configuredVisualColor)
+        Color configuredVisualColor,
+        bool beginRemoteControl = true)
     {
         box = owner;
         puppet = source;
@@ -196,7 +209,8 @@ public sealed class ClockworkPuppetBoxDriver : MonoBehaviour
             box.DestroyStoredClockworkPuppet();
             return;
         }
-        BeginRemoteControl();
+        // Restoring an idle container must not interrupt a different saved controller.
+        if (beginRemoteControl) BeginRemoteControl();
     }
 
     private void Update()
@@ -227,6 +241,7 @@ public sealed class ClockworkPuppetBoxDriver : MonoBehaviour
             SetPromptVisible(false);
             return;
         }
+        if (Time.frameCount == remoteControlEnteredFrame) return;
         if (Input.GetKeyDown(KeyCode.R))
         {
             EndRemoteControl();
@@ -238,6 +253,15 @@ public sealed class ClockworkPuppetBoxDriver : MonoBehaviour
             out float doorDistance);
         LeverData nearbyLever = FindNearestManualLever(
             out float leverDistance);
+        FortressBallista nearbyBallista = FortressBallista.FindNearestPuppetMount(
+            drivingCollider, box.WorldCenter, gameObject.scene, puppet.ManualInteractionDistance, out float ballistaDistance);
+        if (nearbyBallista != null && ballistaDistance < doorDistance && ballistaDistance < leverDistance)
+        {
+            ResetPryProgress();
+            ShowPrompt("按[E]脱离纸箱并附着弩炮");
+            if (Input.GetKeyDown(KeyCode.E)) DisembarkPuppetAtMount(null, nearbyBallista);
+            return;
+        }
         bool useDoor = nearbyDoor != null &&
             (nearbyLever == null || doorDistance <= leverDistance);
 
@@ -295,11 +319,12 @@ public sealed class ClockworkPuppetBoxDriver : MonoBehaviour
             return;
         }
 
+        float movementSpeed = puppet.MoveSpeed * SpeedBoostArea.GetSpeedMultiplier(this);
         Vector2 displacement = navigator != null
             ? navigator.GetSafeDisplacement(
                 manualMoveDirection,
-                puppet.MoveSpeed * Time.fixedDeltaTime)
-            : manualMoveDirection * puppet.MoveSpeed * Time.fixedDeltaTime;
+                movementSpeed * Time.fixedDeltaTime)
+            : manualMoveDirection * movementSpeed * Time.fixedDeltaTime;
         if (displacement.sqrMagnitude <= 0.000001f)
         {
             return;
@@ -321,7 +346,9 @@ public sealed class ClockworkPuppetBoxDriver : MonoBehaviour
             remoteControlledDriver.EndRemoteControl();
         }
 
+        ClockworkPuppetRuntime.EndActiveRemoteControl();
         remoteControlledDriver = this;
+        remoteControlEnteredFrame = Time.frameCount;
         characterInputBlockedThroughFrame = Time.frameCount;
         EnsureOwnerStreamingExemption();
         manualMoveDirection = Vector2.zero;
@@ -524,11 +551,19 @@ public sealed class ClockworkPuppetBoxDriver : MonoBehaviour
 
     private void DisembarkPuppet(LeverData lever)
     {
-        if (disembarking || box == null || puppet == null || lever == null ||
-            !lever.isActiveAndEnabled)
+        DisembarkPuppetAtMount(lever, null);
+    }
+
+    private void DisembarkPuppetAtMount(LeverData lever, FortressBallista ballista)
+    {
+        if (disembarking || box == null || puppet == null ||
+            (ballista == null && (lever == null || !lever.isActiveAndEnabled)))
         {
             return;
         }
+        if (ballista != null && (!ballista.CanAcceptPuppet() ||
+            ballista.GetPuppetMountDistance(drivingCollider, box.WorldCenter, gameObject.scene) > puppet.ManualInteractionDistance ||
+            !ballista.HasClearPuppetApproach(drivingCollider, box.WorldCenter))) return;
 
         disembarking = true;
         Vector3 spawnPosition = drivingCollider != null
@@ -560,8 +595,8 @@ public sealed class ClockworkPuppetBoxDriver : MonoBehaviour
             physicsBody.velocity = Vector2.zero;
         }
         Physics2D.SyncTransforms();
-        source.DeployControlledFromCardboardBox(
-            spawnPosition,
+        ClockworkPuppetRuntime deployed = source.DeployControlledFromCardboardBox(
+            ballista != null ? ballista.RearWorldPosition : spawnPosition,
             lever,
             ownerData,
             transferredMagic,
@@ -570,6 +605,7 @@ public sealed class ClockworkPuppetBoxDriver : MonoBehaviour
             itemDescription,
             hasVisualColor,
             visualColor);
+        if (ballista != null && deployed != null) deployed.TryAttachToBallista(ballista);
         enabled = false;
     }
 

@@ -2,6 +2,8 @@
 using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEditor.Build;
+using UnityEditor.Build.Reporting;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -40,7 +42,7 @@ public static class RuntimeMiniMapSceneDataGenerator
         GenerateSnapshots(false);
     }
 
-    private static void GenerateSnapshots(bool force)
+    public static void GenerateSnapshots(bool force)
     {
         EnsureOutputFolder();
         EditorBuildSettingsScene[] buildScenes = EditorBuildSettings.scenes;
@@ -60,11 +62,15 @@ public static class RuntimeMiniMapSceneDataGenerator
             }
 
             string assetPath = OutputFolder + "/" + sceneName + ".asset";
+            // Never publish unsaved editing changes as the built scene's geometry.
+            Scene loaded = SceneManager.GetSceneByPath(buildScene.path);
+            if (loaded.IsValid() && loaded.isLoaded && loaded.isDirty) continue;
             RuntimeMiniMapSceneData existingData =
                 AssetDatabase.LoadAssetAtPath<RuntimeMiniMapSceneData>(assetPath);
             if (!force &&
                 !IsSnapshotStale(buildScene.path, assetPath) &&
                 existingData != null &&
+                existingData.SourceRevision == AssetDatabase.GetAssetDependencyHash(buildScene.path).ToString() &&
                 existingData.HasExplicitDisplayName &&
                 existingData.UsesCurrentSchema)
             {
@@ -127,6 +133,7 @@ public static class RuntimeMiniMapSceneDataGenerator
         }
 
         capture.CopyCurrentGeometryTo(data, sceneName, displayName);
+        data.SetSourceRevision(AssetDatabase.GetAssetDependencyHash(scenePath).ToString());
         EditorUtility.SetDirty(data);
         Object.DestroyImmediate(captureObject);
 
@@ -155,6 +162,25 @@ public static class RuntimeMiniMapSceneDataGenerator
         if (!AssetDatabase.IsValidFolder(OutputFolder))
         {
             AssetDatabase.CreateFolder("Assets/Resources", "MiniMaps");
+        }
+    }
+}
+
+// Build snapshots from saved source, rather than relying on a previous editor session.
+public sealed class MiniMapBuildPreparation : IPreprocessBuildWithReport
+{
+    public int callbackOrder => 100;
+    public void OnPreprocessBuild(BuildReport report)
+    {
+        RuntimeMiniMapSceneDataGenerator.GenerateSnapshots(false);
+        foreach (var scene in EditorBuildSettings.scenes)
+        {
+            if (!scene.enabled || string.IsNullOrEmpty(scene.path)) continue;
+            string name = Path.GetFileNameWithoutExtension(scene.path);
+            if (name == "TitleScreen") continue;
+            var data = AssetDatabase.LoadAssetAtPath<RuntimeMiniMapSceneData>("Assets/Resources/MiniMaps/" + name + ".asset");
+            if (data == null || !data.UsesCurrentSchema || data.SourceRevision != AssetDatabase.GetAssetDependencyHash(scene.path).ToString())
+                throw new BuildFailedException("请先保存场景并重新生成地图快照：" + scene.path);
         }
     }
 }

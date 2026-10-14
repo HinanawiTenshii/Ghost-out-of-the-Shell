@@ -86,6 +86,7 @@ public class SceneTransitionPoint : MonoBehaviour
 
     private ZeldaFourWayMover GetActiveControlledCharacterNearby()
     {
+        if (ArenaChallengeController.BlocksTransition(this)) return null;
         ZeldaFourWayMover mover = ZeldaRuntimeRegistry.GetControlledMover();
         if (mover == null || !OverlapsInteractionArea(mover))
             return null;
@@ -211,8 +212,13 @@ public class SceneTransitionPoint : MonoBehaviour
 
         RetroSceneLoadReveal.BeginTransition(targetSceneName.Trim(), () =>
         {
+            Level2HeroQuestTarget questTarget = GetComponent<Level2HeroQuestTarget>();
             SceneTravelStateManager.GetOrCreate().ResetAllSceneStates();
-            SceneManager.LoadScene(targetSceneName.Trim());
+            QuestJournalManager journal = QuestJournalManager.GetOrCreate();
+            if (questTarget != null && questTarget.IsTrialEntrance)
+                journal.ExpectLevel2TrialArrival(targetSceneName.Trim());
+            try { RetroSceneLoadReveal.LoadSceneAsync(targetSceneName.Trim()); }
+            catch { journal.CancelLevel2TrialArrival(); throw; }
         });
     }
 
@@ -230,9 +236,9 @@ public class SceneTransitionPoint : MonoBehaviour
 
     private Sprite CreateTransitionSprite()
     {
-        // Keep this geometry in sync with
-        // RuntimeMiniMapGraphic.AddTransitionIcon: a doorway outline with a
-        // left-pointing transition arrow. SceneTransitionPoint represents the
+        // World-space doorway with a left-pointing transition arrow. The map
+        // uses a simpler solid symbol so small-scale exits remain legible.
+        // SceneTransitionPoint represents the
         // non-persistent transition, so it uses the same Ghost-blue tint as
         // the corresponding minimap icon.
         const int width = 32;

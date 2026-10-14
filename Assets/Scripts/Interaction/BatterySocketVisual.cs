@@ -9,11 +9,13 @@ public sealed class BatterySocketVisual : MonoBehaviour
     private SpriteRenderer target;
     private BatterySocket socket;
     private bool lastInstalled;
+    private int lastCharge = -1, lastCapacity = -1;
 
     private void OnEnable() { socket = GetComponent<BatterySocket>(); Refresh(); }
     private void Update()
     {
-        if (sprite == null || lastInstalled != (socket != null && socket.HasBattery)) Refresh();
+        if (sprite == null || lastInstalled != (socket != null && socket.HasBattery)
+            || (socket != null && (lastCharge != socket.RemainingCharge || lastCapacity != socket.MaximumCharge))) Refresh();
     }
     private void Refresh()
     {
@@ -36,11 +38,16 @@ public sealed class BatterySocketVisual : MonoBehaviour
         Fill(2, 21, 16, 2, 'H'); Fill(2, 3, 2, 17, 'R'); Fill(16, 3, 2, 17, 'R');
         Fill(5, 4, 10, 16, 'D'); Fill(7, 18, 6, 2, 'H'); Fill(7, 4, 6, 2, 'H');
         lastInstalled = socket != null && socket.HasBattery;
+        lastCharge = socket != null ? socket.RemainingCharge : 0;
+        lastCapacity = socket != null ? socket.MaximumCharge : BatteryPickupItem.DefaultCapacity;
         if (lastInstalled)
         {
-            Fill(7, 6, 6, 12, 'B'); Fill(7, 7, 5, 10, 'R'); Fill(7, 7, 1, 10, 'L');
+            // Match the six-pixel end caps; do not leave a dark column on the right.
+            Fill(7, 6, 6, 12, 'D'); Fill(7, 8, 6, 8, 'S');
+            int height = Mathf.CeilToInt(8f * lastCharge / Mathf.Max(1, lastCapacity));
+            Fill(7, 8, 6, height, 'R'); Fill(7, 8, 1, height, 'L');
             Fill(7, 6, 6, 2, 'S'); Fill(7, 16, 6, 2, 'H');
-            Fill(9, 11, 1, 4, 'H'); Fill(8, 12, 3, 1, 'H');
+            Fill(10, 11, 1, 4, 'H'); Fill(9, 12, 3, 1, 'H');
         }
         Fill(3, 20, 2, 1, 'H'); Fill(15, 20, 2, 1, 'H');
         Fill(3, 2, 2, 1, 'H'); Fill(15, 2, 2, 1, 'H');

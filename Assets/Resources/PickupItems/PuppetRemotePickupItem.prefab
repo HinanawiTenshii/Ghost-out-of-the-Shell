@@ -142,6 +142,8 @@ MonoBehaviour:
   itemName: "人偶遥控器"
   itemDescription: "用于控制人偶的遥控器，使用可以开启或关闭附近的人偶，注意：人偶索敌系统存在故障，会攻击附近所有的人。"
   itemId: puppet_remote
+  requiredUseSkill: 3
+  useSkillRequirementInitialized: 1
   persistentIdentity: {fileID: 0}
   uniqueInstanceId: ""
   pickupQuantity: 1

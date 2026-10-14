@@ -250,14 +250,14 @@ MonoBehaviour:
   visionRadius: 7
   visionAngle: 360
   peripheralVisionAngle: 360
-  peripheralVisionRadius: 7
+  peripheralVisionRadius: 1.7
   visionRayCount: 96
   visionObstacleLayers:
     serializedVersion: 2
     m_Bits: 4294967295
   visionColor: {r: 0.88, g: 0.18, b: 0.12, a: 0.16}
   visionVisualRefreshInterval: 0.08
-  immediateResponseDistance: 5
+  immediateResponseDistance: 5.5
   maximumSuspicion: 100
   suspicionIncreasePerSecond: 35
   suspicionDecreasePerSecond: 25
@@ -376,6 +376,8 @@ MonoBehaviour:
   itemName: "\u6B66\u88C5\u9B54\u50CF"
   itemDescription: "\u5C1A\u5728\u7814\u53D1\u4E2D\u7684\u6B66\u88C5\u9B54\u50CF\uFF0C\u76EE\u524D\u7D22\u654C\u4ECD\u5B58\u5728\u6545\u969C\uFF0C\u542F\u52A8\u540E\u4F1A\u653B\u51FB\u76EE\u5149\u6240\u53CA\u7684\u6240\u6709\u4EBA\u3002"
   itemId: armed_golem
+  requiredUseSkill: 0
+  useSkillRequirementInitialized: 1
   persistentIdentity: {fileID: 0}
   uniqueInstanceId: 
   pickupQuantity: 1

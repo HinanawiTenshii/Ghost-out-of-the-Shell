@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9a2f0b8e4c7d41c6a912fc0e693d45a1, type: 3}
   m_Name: Level1-Floor2
   m_EditorClassIdentifier: Assembly-CSharp::RuntimeMiniMapSceneData
-  schemaVersion: 4
+  schemaVersion: 6
+  sourceRevision: d2b80b890aca6bfb0d4e470512ce2ba3
   sceneName: Level1-Floor2
   displayName: "\u57CE\u5821\u4E8C\u697C"
   blockPaths:
@@ -613,3 +614,4 @@ MonoBehaviour:
       - {x: -250.80826, y: 110.49045}
       - {x: -250.55826, y: 110.49045}
       - {x: -250.55826, y: 108.99045}
+  surfaces: []

@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 864300001}
   - component: {fileID: 864300003}
+  - component: {fileID: 864300004}
   m_Layer: 0
   m_Name: NoticeBoard
   m_TagString: Untagged
@@ -73,6 +74,38 @@ BoxCollider2D:
   serializedVersion: 2
   m_Size: {x: 2.6, y: 1.9}
   m_EdgeRadius: 0
+--- !u!114 &864300004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 864300000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: af9e8b3762e54152a8c79d6dfa063019, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  documentText: "请在此填写公告内容。"
+  preserveExistingAppearance: 1
+  interactionPrompt: "按[E]阅读公告牌"
+  interactionDistance: 1.2
+  documentFont: {fileID: 12800000, guid: 292af55397c443f6a5d7774297dac481, type: 3}
+  paperColor: {r: 0.92, g: 0.89, b: 0.76, a: 1}
+  inkColor: {r: 0.2, g: 0.18, b: 0.15, a: 1}
+  windowOpacity: 0.82
+  promptOffset: {x: 0, y: 0.9}
+  setTemporaryTaskOnOpen: 0
+  setTaskOnlyOnce: 1
+  temporaryTaskWorldPosition: {x: 0, y: 0}
+  temporaryTaskLabel:
+  addJournalEntryOnOpen: 0
+  addJournalEntryOnlyOnce: 1
+  journalEntryId:
+  journalEntryTitle:
+  journalEntryDetails:
+  journalChangesOnRead: []
+  applyJournalChangesOnlyOnce: 1
 --- !u!1 &864300010
 GameObject:
   m_ObjectHideFlags: 0

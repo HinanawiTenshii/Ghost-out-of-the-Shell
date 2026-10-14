@@ -6,11 +6,11 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
-/// Draws a proportional wireframe of the active scene's Blocks colliders,
-/// transition markers and the current camera position in a single UI mesh.
+/// Draws proportional geometry from Blocks and Visible Non Blocking colliders,
+/// transition markers and the current camera position using separate wall/marker meshes.
 /// </summary>
 [RequireComponent(typeof(CanvasRenderer))]
-public sealed class RuntimeMiniMapGraphic : MaskableGraphic
+public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
 {
     private const float DefaultZoom = 2.5f;
     private const float MinimumZoom = 1f;
@@ -22,6 +22,8 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
     private readonly List<bool> displayedBridgeStates = new List<bool>();
     private int staticPathCount;
     private string geometrySceneName;
+    private readonly List<MapPointOfInterestRecord> lockedDoorMarkers = new List<MapPointOfInterestRecord>();
+    private MapPointOfInterestManager subscribedPointManager;
     private readonly List<RuntimeMiniMapTransitionData> transitions =
         new List<RuntimeMiniMapTransitionData>();
     private readonly List<RuntimeMiniMapQuestTargetData> questTargets =
@@ -37,6 +39,7 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
     private bool showTrackedQuestTarget;
     private bool clampQuestTargetToBorder;
     private Vector2 trackedQuestTargetPosition;
+    private readonly List<Vector2> additionalTrackedQuestTargets = new List<Vector2>();
 
     public float Zoom => zoom;
     public float ZoomPercentage => zoom / DefaultZoom * 100f;
@@ -45,8 +48,28 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
     public float VerticalPan01 => GetPan01(viewCenterNormalized.y);
     public event Action ViewChanged;
 
+    protected override void OnEnable()
+    {
+        base.OnEnable();
+        EnsureRenderLayers();
+        if (!Application.isPlaying) return;
+        subscribedPointManager = MapPointOfInterestManager.GetOrCreate();
+        subscribedPointManager.PointsChanged += SetVerticesDirty;
+    }
+
+    protected override void OnDisable()
+    {
+        if (surfaceLayer != null) surfaceLayer.enabled = false;
+        if (wallLayer != null) wallLayer.enabled = false;
+        if (markerLayer != null) markerLayer.enabled = false;
+        if (subscribedPointManager != null) subscribedPointManager.PointsChanged -= SetVerticesDirty;
+        subscribedPointManager = null;
+        base.OnDisable();
+    }
+
     public bool TryGetQuestTarget(string questId, out Vector2 position)
     {
+        questId = QuestJournalManager.ResolveQuestMapTargetId(questId);
         for (int index = 0; index < questTargets.Count; index++)
         {
             if (questTargets[index].questId == questId)
@@ -59,8 +82,40 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
         return false;
     }
 
+    /// <summary>All cached destinations for a task; no scene searches or per-frame allocation.</summary>
+    public void GetQuestTargets(string questId, List<Vector2> positions)
+    {
+        positions.Clear();
+        questId = QuestJournalManager.ResolveQuestMapTargetId(questId);
+        if (string.IsNullOrEmpty(questId)) return;
+        for (int i = 0; i < questTargets.Count; i++)
+            if (questTargets[i].questId == questId && !positions.Contains(questTargets[i].position))
+                positions.Add(questTargets[i].position);
+    }
+
+    public void SetTrackedQuestTargets(IReadOnlyList<Vector2> positions, bool clampToBorder)
+    {
+        int count = positions != null ? positions.Count : 0;
+        if (count == 0) { SetTrackedQuestTarget(false, Vector2.zero, clampToBorder); return; }
+        bool changed = !showTrackedQuestTarget || trackedQuestTargetPosition != positions[0] ||
+            clampQuestTargetToBorder != clampToBorder || additionalTrackedQuestTargets.Count != count - 1;
+        if (!changed)
+            for (int i = 1; i < count; i++)
+                if (additionalTrackedQuestTargets[i - 1] != positions[i]) { changed = true; break; }
+        if (!changed) return;
+        showTrackedQuestTarget = true;
+        trackedQuestTargetPosition = positions[0];
+        clampQuestTargetToBorder = clampToBorder;
+        additionalTrackedQuestTargets.Clear();
+        for (int i = 1; i < count; i++) additionalTrackedQuestTargets.Add(positions[i]);
+        SetVerticesDirty();
+    }
+
     public void SetTrackedQuestTarget(bool visible, Vector2 worldPosition, bool clampToBorder)
     {
+        if (showTrackedQuestTarget == visible && trackedQuestTargetPosition == worldPosition &&
+            clampQuestTargetToBorder == clampToBorder && additionalTrackedQuestTargets.Count == 0) return;
+        additionalTrackedQuestTargets.Clear();
         showTrackedQuestTarget = visible;
         trackedQuestTargetPosition = worldPosition;
         clampQuestTargetToBorder = clampToBorder;
@@ -168,7 +223,38 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
         return true;
     }
 
+    internal static void GetLockedDoorLineGeometry(Vector2 a, Vector2 b, float scale,
+        out Vector2 center, out Vector2 half, out float width)
+    {
+        width = Mathf.Max(3.2f, 4.5f * scale);
+        center = (a + b) * .5f;
+        half = (b-a).normalized * Mathf.Max((b-a).magnitude, width * 3f) * .5f;
+    }
+
+    public bool TryGetLockedDoorHoverRect(MapPointOfInterestRecord door,
+        out Vector2 center, out Vector2 size, out float angle)
+    {
+        center = size = Vector2.zero; angle = 0f;
+        if (door == null || !TryWorldToLocal(door.LineStart, out Vector2 a) ||
+            !TryWorldToLocal(door.LineEnd, out Vector2 b)) return false;
+        GetLockedDoorLineGeometry(a, b, iconScale, out center, out Vector2 half, out float width);
+        if (half.sqrMagnitude < .0001f) return false;
+        // Slightly pad the thin line for a forgiving hover target, without changing its drawing.
+        size = new Vector2(half.magnitude * 2f + 4f, Mathf.Max(14f, width + 8f));
+        angle = Mathf.Atan2(half.y, half.x) * Mathf.Rad2Deg;
+        return true;
+    }
+
     public void RebuildFromScene(Scene scene)
+    {
+        using (SceneLoadMetrics.Measure("Map.Initialize"))
+        {
+            if (Application.isPlaying && TryLoadCachedScene(scene)) return;
+            RebuildFromSceneCore(scene);
+        }
+    }
+
+    private void RebuildFromSceneCore(Scene scene)
     {
         blockPaths.Clear();
         ResetBridgeLayouts(scene.name);
@@ -177,6 +263,8 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
         hasBounds = false;
 
         int blocksLayer = LayerMask.NameToLayer("Blocks");
+        int visibleNonBlockingLayer = LayerMask.NameToLayer("Visible Non Blocking");
+        CaptureSurfaces(scene);
         HashSet<Collider2D> additionalWalls = new HashSet<Collider2D>();
         foreach (MiniMapWallGroup group in FindObjectsOfType<MiniMapWallGroup>(true))
         {
@@ -189,7 +277,7 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
         {
             Collider2D collider = colliders[index];
             if (collider == null || collider.gameObject.scene != scene ||
-                (collider.gameObject.layer != blocksLayer && !additionalWalls.Contains(collider)))
+                !IsMapWall(collider, additionalWalls, blocksLayer, visibleNonBlockingLayer))
             {
                 continue;
             }
@@ -217,8 +305,8 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
         {
             if (mechanism.gameObject.scene != scene || mechanism.BridgeHinge == null) continue;
             DoorHingeInteraction hinge = mechanism.BridgeHinge;
-            var original = CaptureBridgePaths(mechanism, colliders, additionalWalls, blocksLayer, false);
-            var rotated = CaptureBridgePaths(mechanism, colliders, additionalWalls, blocksLayer, true);
+            var original = CaptureBridgePaths(mechanism, colliders, additionalWalls, blocksLayer, visibleNonBlockingLayer, false);
+            var rotated = CaptureBridgePaths(mechanism, colliders, additionalWalls, blocksLayer, visibleNonBlockingLayer, true);
             AddBridgeLayout(new RuntimeMiniMapBridgeData
             {
                 persistentId = SceneTravelStateManager.GetMapObjectId(hinge.transform),
@@ -279,6 +367,12 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
 
         if (snapshot != null)
         {
+            LoadSurfaces(snapshot);
+        }
+        else ClearSurfaces();
+
+        if (snapshot != null)
+        {
             RuntimeMiniMapPathData[] paths = snapshot.BlockPaths;
             if (paths != null)
             {
@@ -290,7 +384,8 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
                         continue;
                     }
 
-                    Vector2[] copy = (Vector2[])points.Clone();
+                    // Snapshot arrays are immutable; each view owns only its dynamic state.
+                    Vector2[] copy = points;
                     blockPaths.Add(copy);
                     for (int pointIndex = 0; pointIndex < copy.Length; pointIndex++)
                     {
@@ -368,12 +463,14 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
                 blockPaths.GetRange(0, staticPathCount),
                 transitions,
                 questTargets,
-                bridgeLayouts);
+                bridgeLayouts,
+                surfaces);
         }
     }
 
     public void SetCameraPosition(Vector2 worldPosition)
     {
+        if (cameraWorldPosition == worldPosition) return;
         cameraWorldPosition = worldPosition;
         SetVerticesDirty();
     }
@@ -386,6 +483,7 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
         }
 
         RefreshBridgeLayouts(false);
+        RefreshSurfaceVisibility();
 
         float alpha = Mathf.Lerp(
             0.38f,
@@ -407,9 +505,19 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
         displayedBridgeStates.Clear();
     }
 
+    private static bool IsMapWall(Collider2D collider, HashSet<Collider2D> additionalWalls,
+        int blocksLayer, int visibleNonBlockingLayer)
+    {
+        // Map geometry is independent of vision occlusion. Capture low walls and
+        // railings too, including streamed-out ones, but not interaction trigger areas.
+        // Keep the original Blocks / explicit-group policy unchanged.
+        return collider.gameObject.layer == blocksLayer || additionalWalls.Contains(collider) ||
+               (collider.gameObject.layer == visibleNonBlockingLayer && !collider.isTrigger);
+    }
+
     private static RuntimeMiniMapPathData[] CaptureBridgePaths(
         RotatingBridgeMechanism mechanism, Collider2D[] colliders,
-        HashSet<Collider2D> additionalWalls, int blocksLayer, bool rotated)
+        HashSet<Collider2D> additionalWalls, int blocksLayer, int visibleNonBlockingLayer, bool rotated)
     {
         var paths = new List<Vector2[]>();
         DoorHingeInteraction hinge = mechanism.BridgeHinge;
@@ -420,7 +528,7 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
             // invisible passage safety barriers or ordinary door geometry.
             BoxCollider2D box = collider as BoxCollider2D;
             if (box == null || box.GetComponentInParent<RotatingBridgeMechanism>(true) != mechanism ||
-                (box.gameObject.layer != blocksLayer && !additionalWalls.Contains(box))) continue;
+                !IsMapWall(box, additionalWalls, blocksLayer, visibleNonBlockingLayer)) continue;
             paths.Add(RuntimeMiniMapSceneData.CreateBoxPath(
                 toEndpoint * box.transform.localToWorldMatrix, box.offset, box.size));
         }
@@ -478,7 +586,7 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
         SetVerticesDirty();
     }
 
-    protected override void OnPopulateMesh(VertexHelper vertexHelper)
+    internal void PopulateMarkers(VertexHelper vertexHelper)
     {
         vertexHelper.Clear();
         if (!hasBounds)
@@ -498,67 +606,21 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
             mapBounds.min.x + mapBounds.size.x * viewCenterNormalized.x,
             mapBounds.min.y + mapBounds.size.y * viewCenterNormalized.y);
 
-        Color32 blockColor = Color.white;
-        const int maximumFilledWallTriangles = 20000;
-        int filledTriangleCount = Mathf.Min(
-            filledWallTriangles.Count / 3,
-            maximumFilledWallTriangles);
-        for (int triangleIndex = 0;
-             triangleIndex < filledTriangleCount;
-             triangleIndex++)
+        // Dynamic discovered locks stay aligned with the HUD and the full map.
+        var pointManager = MapPointOfInterestManager.Instance;
+        if (pointManager != null)
         {
-            int vertexIndex = triangleIndex * 3;
-            AddSolidTriangle(
-                vertexHelper,
-                MapPoint(
-                    filledWallTriangles[vertexIndex],
-                    worldCenter,
-                    rectCenter,
-                    scale),
-                MapPoint(
-                    filledWallTriangles[vertexIndex + 1],
-                    worldCenter,
-                    rectCenter,
-                    scale),
-                MapPoint(
-                    filledWallTriangles[vertexIndex + 2],
-                    worldCenter,
-                    rectCenter,
-                    scale),
-                blockColor);
-        }
-
-        const int maximumBlockSegments = 10000;
-        int renderedBlockSegments = 0;
-        for (int pathIndex = 0; pathIndex < blockPaths.Count; pathIndex++)
-        {
-            Vector2[] path = blockPaths[pathIndex];
-            if (IsClosedPath(path))
+            pointManager.CopyVisibleLockedDoors(geometrySceneName, lockedDoorMarkers);
+            foreach (var door in lockedDoorMarkers)
             {
-                continue;
-            }
-
-            for (int pointIndex = 0; pointIndex < path.Length - 1; pointIndex++)
-            {
-                if (renderedBlockSegments >= maximumBlockSegments)
-                {
-                    break;
-                }
-                AddLine(
-                    vertexHelper,
-                    MapPoint(path[pointIndex], worldCenter, rectCenter, scale),
-                    MapPoint(path[pointIndex + 1], worldCenter, rectCenter, scale),
-                    2.2f,
-                    blockColor);
-                renderedBlockSegments++;
-            }
-
-            if (renderedBlockSegments >= maximumBlockSegments)
-            {
-                break;
+                Vector2 a = MapPoint(door.LineStart, worldCenter, rectCenter, scale);
+                Vector2 b = MapPoint(door.LineEnd, worldCenter, rectCenter, scale);
+                GetLockedDoorLineGeometry(a, b, iconScale, out Vector2 center, out Vector2 half, out float width);
+                AddLine(vertexHelper, center-half, center+half, width, door.IconColor);
             }
         }
 
+        float transitionScale = GetTransitionIconScale(scale);
         for (int index = 0; index < transitions.Count; index++)
         {
             RuntimeMiniMapTransitionData transition = transitions[index];
@@ -570,7 +632,7 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
             Color iconColor = transition.preservesSceneState
                 ? new Color32(65, 175, 235, 255)
                 : ZeldaUiPalette.Ghost;
-            AddTransitionIcon(vertexHelper, center, iconColor, iconScale);
+            AddTransitionIcon(vertexHelper, center, iconColor, transitionScale);
         }
 
         if (showCameraMarker)
@@ -589,10 +651,10 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
         }
 
 
-        if (showTrackedQuestTarget)
+        for (int targetIndex = 0; showTrackedQuestTarget && targetIndex <= additionalTrackedQuestTargets.Count; targetIndex++)
         {
             Vector2 targetCenter = MapPoint(
-                trackedQuestTargetPosition,
+                targetIndex == 0 ? trackedQuestTargetPosition : additionalTrackedQuestTargets[targetIndex - 1],
                 worldCenter,
                 rectCenter,
                 scale);
@@ -623,13 +685,28 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
     {
         string[] ids = {
             "level0.escape_prison", "level0.obtain_gate_key", "level1.escape_castle",
-            "level1.craft_super_bomb", "level1.open_monster_cage", "level1.find_castle_gate_key"
+            "level1.craft_super_bomb", "level1.open_monster_cage", "level1.find_castle_gate_key",
+            QuestJournalManager.Level2CityTargetId, QuestJournalManager.Level2TrialTargetId,
+            QuestJournalManager.Level2SandwormQuestId,
+            QuestJournalManager.SandwormToolsTarget, QuestJournalManager.SandwormMerchantTarget,
+            QuestJournalManager.SandwormDeviceTarget, QuestJournalManager.SandwormMortarTarget,
+            QuestJournalManager.CounterfeitMerchantTarget, QuestJournalManager.CounterfeitCraftsmanTarget,
+            QuestJournalManager.SummoningCircleTarget,
+            QuestJournalManager.ArenaRegistrarTarget, QuestJournalManager.ArenaEntranceTarget, QuestJournalManager.ArenaCombatTarget
         };
         foreach (string id in ids)
         {
             if (TryGetSceneQuestTarget(scene, id, out Vector2 position))
                 questTargets.Add(new RuntimeMiniMapQuestTargetData { questId = id, position = position });
         }
+        // Capture all alternatives, even before acceptance and while streamed out.
+        // Repeated stable IDs intentionally represent multiple destinations.
+        var injectors = FindObjectsOfType<LiquidInjector>(true);
+        Array.Sort(injectors, (a, b) => a.transform.position.x.CompareTo(b.transform.position.x));
+        foreach (var injector in injectors)
+            if (injector.gameObject.scene == scene && !string.IsNullOrWhiteSpace(injector.PotionInjectionQuestId))
+                questTargets.Add(new RuntimeMiniMapQuestTargetData {
+                    questId = injector.PotionInjectionQuestId, position = injector.transform.position });
     }
 
     // The map and region buttons share the same live target rules, including
@@ -639,10 +716,67 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
         position = Vector2.zero;
         if (!scene.IsValid() || !scene.isLoaded)
             return false;
+        questId = QuestJournalManager.ResolveQuestMapTargetId(questId);
+        if (string.IsNullOrEmpty(questId)) return false;
+        if (questId == QuestJournalManager.ArenaInjectionQuestId)
+        {
+            foreach (var injector in FindObjectsOfType<LiquidInjector>(true))
+                if (injector.gameObject.scene == scene && injector.PotionInjectionQuestId == questId)
+                { position = injector.transform.position; return true; }
+            return false;
+        }
+        if (questId == QuestJournalManager.ArenaRegistrarTarget || questId == QuestJournalManager.ArenaEntranceTarget ||
+            questId == QuestJournalManager.ArenaCombatTarget)
+        {
+            foreach (var arena in FindObjectsOfType<ArenaChallengeController>(true))
+            {
+                if (arena.gameObject.scene != scene) continue;
+                if (questId == QuestJournalManager.ArenaCombatTarget) { position = arena.fightingArea.center; return true; }
+                if (questId == QuestJournalManager.ArenaRegistrarTarget && arena.registrar != null)
+                { position = arena.registrar.transform.position; return true; }
+                if (questId == QuestJournalManager.ArenaEntranceTarget && arena.entrance != null)
+                { position = arena.entrance.transform.position; return true; }
+            }
+            return false;
+        }
+        // Stage-specific IDs are also captured into unloaded-scene snapshots.
+        // These queries run only during map collection/target refresh, not per frame.
+        if (questId == QuestJournalManager.SummoningCircleTarget)
+        {
+            foreach (var circle in FindObjectsOfType<SummoningCircle>(true))
+                if (circle.gameObject.scene == scene && circle.JournalQuestId == QuestJournalManager.SummoningQuestId)
+                { position = circle.transform.position; return true; }
+            return false;
+        }
+        if (questId == QuestJournalManager.SandwormToolsTarget)
+            return TryGetQuestComponentPosition<SynthesisToolsPickupItem>(scene, out position);
+        if (questId == QuestJournalManager.SandwormDeviceTarget)
+            return TryGetQuestComponentPosition<MortarControlDevicePickupItem>(scene, out position);
+        if (questId == QuestJournalManager.SandwormMortarTarget)
+            return TryGetQuestComponentPosition<FortressMortarRemoteInstallation>(scene, out position);
+        if (questId == QuestJournalManager.Level2CityTargetId || questId == QuestJournalManager.Level2TrialTargetId)
+        {
+            foreach (var target in FindObjectsOfType<Level2HeroQuestTarget>(true))
+                if (target != null && target.gameObject.scene == scene && target.MapTargetId == questId)
+                { position = target.transform.position; return true; }
+            return false;
+        }
         string objectName;
         Vector2 positionOffset = Vector2.zero;
         switch (questId)
         {
+            case QuestJournalManager.CounterfeitMerchantTarget:
+                objectName = "宝石商人";
+                break;
+            case QuestJournalManager.CounterfeitCraftsmanTarget:
+                objectName = "赝品工匠";
+                break;
+            case QuestJournalManager.SandwormMerchantTarget:
+                objectName = "诡异商人";
+                break;
+            case QuestJournalManager.Level2SandwormQuestId:
+                objectName = QuestJournalManager.Level2SandwormTargetName;
+                break;
             case "level0.escape_prison":
             case "level1.escape_castle": objectName = "FinalTarget"; break;
             case "level0.obtain_gate_key":
@@ -674,6 +808,15 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
                 return true;
             }
         }
+        return false;
+    }
+
+    private static bool TryGetQuestComponentPosition<T>(Scene scene, out Vector2 position) where T : Component
+    {
+        foreach (var item in FindObjectsOfType<T>(true))
+            if (item != null && item.gameObject.scene == scene)
+            { position = item.transform.position; return true; }
+        position = Vector2.zero;
         return false;
     }
 
@@ -850,13 +993,14 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
 
     private void RebuildFilledWallTriangles()
     {
+        wallGeometryVersion++;
         filledWallTriangles.Clear();
         for (int pathIndex = 0; pathIndex < blockPaths.Count; pathIndex++)
         {
             Vector2[] path = blockPaths[pathIndex];
             if (IsClosedPath(path))
             {
-                TriangulateClosedPath(path, filledWallTriangles);
+                filledWallTriangles.AddRange(GetCachedTriangles(path));
             }
         }
     }
@@ -1027,26 +1171,30 @@ public sealed class RuntimeMiniMapGraphic : MaskableGraphic
         ViewChanged?.Invoke();
     }
 
+    private float GetTransitionIconScale(float worldToMapScale)
+    {
+        // HUD uses maximum zoom but has a tiny viewport: zoom alone is not a
+        // measure of readable map detail. Limit exits to roughly four world
+        // units as well, with a small legibility floor. Keep the same density
+        // response as before, but use a much simpler and smaller solid symbol.
+        float zoomRatio = Mathf.Clamp(zoom / DefaultZoom, 0.5f, 1f);
+        float densityRatio = Mathf.Clamp(worldToMapScale * 4f / (28f * iconScale), 0.45f, 1f);
+        return iconScale * Mathf.Min(zoomRatio, densityRatio);
+    }
+
     private static void AddTransitionIcon(
         VertexHelper vertexHelper,
         Vector2 center,
         Color color,
         float scale)
     {
-        float lineWidth = Mathf.Max(0.75f, 2.4f * scale);
-        AddLine(vertexHelper, center + new Vector2(-9f, -14f) * scale, center + new Vector2(-9f, 14f) * scale, lineWidth, color);
-        AddLine(vertexHelper, center + new Vector2(-9f, 14f) * scale, center + new Vector2(5f, 14f) * scale, lineWidth, color);
-        AddLine(vertexHelper, center + new Vector2(5f, 14f) * scale, center + new Vector2(5f, 5f) * scale, lineWidth, color);
-        AddLine(vertexHelper, center + new Vector2(5f, -5f) * scale, center + new Vector2(5f, -14f) * scale, lineWidth, color);
-        AddLine(vertexHelper, center + new Vector2(5f, -14f) * scale, center + new Vector2(-9f, -14f) * scale, lineWidth, color);
-
-        AddLine(vertexHelper, center + new Vector2(13f, 5f) * scale, center + new Vector2(-1f, 5f) * scale, lineWidth, color);
-        AddLine(vertexHelper, center + new Vector2(13f, -5f) * scale, center + new Vector2(-1f, -5f) * scale, lineWidth, color);
-        AddLine(vertexHelper, center + new Vector2(13f, 5f) * scale, center + new Vector2(13f, -5f) * scale, lineWidth, color);
-        AddLine(vertexHelper, center + new Vector2(-1f, 9f) * scale, center + new Vector2(-8f, 0f) * scale, lineWidth, color);
-        AddLine(vertexHelper, center + new Vector2(-8f, 0f) * scale, center + new Vector2(-1f, -9f) * scale, lineWidth, color);
-        AddLine(vertexHelper, center + new Vector2(-1f, 9f) * scale, center + new Vector2(-1f, 5f) * scale, lineWidth, color);
-        AddLine(vertexHelper, center + new Vector2(-1f, -9f) * scale, center + new Vector2(-1f, -5f) * scale, lineWidth, color);
+        // Two filled quads: the dark rim separates the solid square from white
+        // walls. No interior details are lost at overview/HUD resolution, and
+        // the square remains distinct from the player and quest diamonds.
+        AddLine(vertexHelper, center + Vector2.down * (7f * scale),
+            center + Vector2.up * (7f * scale), 14f * scale, new Color32(8, 24, 43, 255));
+        AddLine(vertexHelper, center + Vector2.down * (6f * scale),
+            center + Vector2.up * (6f * scale), 12f * scale, color);
     }
 
     private static void AddDiamond(

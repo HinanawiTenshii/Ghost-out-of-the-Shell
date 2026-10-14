@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="TemporaryEffectArea.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Interaction\LiquidInjector.cs;Assets\Scripts\Interaction\LiquidInjectorVisual.cs" />
+    <Compile Include="Assets\Scripts\Interaction\LiquidInjector.cs;Assets\Scripts\Interaction\LiquidInjectorVisual.cs" />
+  </ItemGroup>
+</Project>

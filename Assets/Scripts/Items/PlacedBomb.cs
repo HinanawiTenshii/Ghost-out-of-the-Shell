@@ -1,17 +1,53 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>Runtime-only armed bomb created when a bomb inventory item is used.</summary>
 [RequireComponent(typeof(SpriteRenderer))]
 [RequireComponent(typeof(BoxCollider2D))]
-public sealed class PlacedBomb : MonoBehaviour
+public sealed class PlacedBomb : MonoBehaviour, IConsumableExplosive
 {
+    private static readonly HashSet<PlacedBomb> activeBombs = new HashSet<PlacedBomb>();
+    public static IReadOnlyCollection<PlacedBomb> ActiveBombs => activeBombs;
+    public bool IsArmed => isActiveAndEnabled && configured && !exploded;
+    public bool IsDecoy => isDecoy;
+    public bool IsActiveDecoy => isDecoy && IsArmed;
+    private bool isDecoy;
+    public bool IsProximity => isProximity;
+    private bool isProximity;
+    private string proximityOwnerId;
+    private float proximityCheckRemaining;
+    // The damage trigger is an axis-aligned box in world units, not the
+    // attraction radius or the (scaled) bomb sprite bounds.
+    public Bounds ExplosionBounds => new Bounds(transform.position,
+        new Vector3(Mathf.Abs(explosionSize.x), Mathf.Abs(explosionSize.y), 1f));
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetBombRegistry() => activeBombs.Clear();
+    private void OnEnable() => activeBombs.Add(this);
+    private void OnDisable() => activeBombs.Remove(this);
     public string SaveSourceItemId { get; set; }
     public ZeldaCharacterData SaveOwner => owner;
+    // Transferring a lit bomb out of a container must not restart its fuse.
+    public void RestoreRemainingFuse(float remainingSeconds)
+    {
+        elapsed = Mathf.Clamp(fuseDuration - remainingSeconds, 0f, fuseDuration);
+    }
     public void RestoreSavedOwner(ZeldaCharacterData savedOwner)
     {
         owner = savedOwner;
+        if (isProximity)
+        {
+            if (string.IsNullOrEmpty(proximityOwnerId) && savedOwner != null)
+                proximityOwnerId = savedOwner.IndividualAccessId;
+            else if (savedOwner != null && savedOwner.IndividualAccessId != proximityOwnerId)
+                owner = null; // A newly controlled body must not inherit the original user's exemption.
+        }
         // Saved scalar configuration is applied after the prefab's Configure.
         if (configured && !exploded) RefreshStreamingRetention();
+    }
+    internal void RestoreProximityOwnerId(string savedId)
+    {
+        if (isProximity && !string.IsNullOrEmpty(savedId)) proximityOwnerId = savedId;
     }
     private SpriteRenderer bombRenderer;
     private SpriteRenderer highlightRenderer;
@@ -95,8 +131,14 @@ public sealed class PlacedBomb : MonoBehaviour
         float auraParticleLifetime,
         float auraParticleRadius,
         float auraParticleSpeed,
-        float auraParticleSize)
+        float auraParticleSize,
+        bool configuredAsDecoy = false,
+        bool configuredAsProximity = false)
     {
+        isProximity = configuredAsProximity;
+        isDecoy = configuredAsDecoy && !isProximity;
+        proximityOwnerId = configuredOwner != null ? configuredOwner.IndividualAccessId : string.Empty;
+        proximityCheckRemaining = 0f;
         fuseDuration = Mathf.Max(0.05f, configuredFuseDuration);
         flashInterval = Mathf.Max(0.02f, configuredFlashInterval);
         bombColor = configuredBombColor;
@@ -143,6 +185,7 @@ public sealed class PlacedBomb : MonoBehaviour
                 effectSortingOrder - 1);
         }
         configured = true;
+        if (isActiveAndEnabled) activeBombs.Add(this);
         RefreshStreamingRetention();
     }
 
@@ -155,14 +198,36 @@ public sealed class PlacedBomb : MonoBehaviour
         streamingRegion.Configure(StreamingRetentionRadius);
     }
 
-    private void Update()
+    private void Update() => Advance(Time.deltaTime);
+
+    public void Advance(float deltaTime)
     {
         if (!configured || exploded)
         {
             return;
         }
 
-        elapsed += Time.deltaTime;
+        elapsed += Mathf.Max(0f, deltaTime);
+        if (isProximity)
+        {
+            // Keep the casing stable; the sensor lamp breathes while waiting.
+            float pulse = .55f + .45f * (.5f + .5f * Mathf.Sin(elapsed * Mathf.PI * 2f));
+            fuseRenderer.color = new Color(pulse, pulse, pulse, 1f);
+            if (deltaTime <= 0f || GameSaveSystem.IsLoading) return;
+            proximityCheckRemaining -= deltaTime;
+            if (proximityCheckRemaining > 0f) return;
+            proximityCheckRemaining = BombProximitySensor.CheckInterval;
+            if (BombProximitySensor.HasTarget(transform.position, explosionSize, gameObject.scene, owner, proximityOwnerId))
+                Explode();
+            return;
+        }
+        if (isDecoy)
+        {
+            // The casing stays readable; only the beacon pulses. No fuse countdown.
+            float pulse = .72f + .28f * (.5f + .5f * Mathf.Sin(elapsed * Mathf.PI * 3f));
+            fuseRenderer.color = new Color(pulse, pulse, pulse, 1f);
+            return;
+        }
         int flashPhase = Mathf.FloorToInt(elapsed / flashInterval);
         bool normalPhase = (flashPhase & 1) == 0;
         bombRenderer.color = normalPhase ? bombColor : flashColor;
@@ -195,6 +260,19 @@ public sealed class PlacedBomb : MonoBehaviour
         NotifyNearbyAi(explosionPosition);
         CreateInvestigationPulse(explosionPosition);
         Destroy(gameObject);
+    }
+
+    /// <summary>Stops the fuse and removes the explosive without detonating.</summary>
+    public bool TryConsumeExplosive(out int consumedAttackPower)
+    {
+        consumedAttackPower = 0;
+        if (!configured || exploded || !isActiveAndEnabled) return false;
+        exploded = true;
+        consumedAttackPower = attackPower;
+        // Stop the fuse, physics and the retention lease now, not at deferred Destroy.
+        gameObject.SetActive(false);
+        Destroy(gameObject);
+        return true;
     }
 
     /// <summary>Skips the remaining fuse time, while preserving configured effects.</summary>
@@ -340,7 +418,7 @@ public sealed class PlacedBomb : MonoBehaviour
     private void CreateBombSprite()
     {
         ReleaseVisualResources();
-        string[] rows = BombPickupItemVisual.GetBombRows(SaveSourceItemId == "purple_bomb");
+        string[] rows = BombPickupItemVisual.GetBombRows(SaveSourceItemId == "purple_bomb", isDecoy, isProximity);
         int height = rows.Length;
         int width = rows[0].Length;
         bombTexture = CreateLayerTexture(rows, 0, "Placed Bomb Body");
@@ -374,7 +452,7 @@ public sealed class PlacedBomb : MonoBehaviour
             if (layer == 0 && (symbol == 'B' || symbol == 'D' || symbol == 'H'))
                 color = BombPickupItemVisual.SamplePixel(symbol, Color.white, false, Color.white, Color.clear);
             else if (layer == 1 && symbol == 'H') color = Color.white;
-            else if (layer == 2 && (symbol == 'K' || symbol == 'F'))
+            else if (layer == 2 && (symbol == 'K' || symbol == 'F' || symbol == 'R' || symbol == 'L'))
                 color = BombPickupItemVisual.SamplePixel(symbol, Color.clear, false, Color.clear,
                     new Color(0.78f, 0.64f, 0.43f, 1f));
             texture.SetPixel(x, height - 1 - row, color);
@@ -398,7 +476,11 @@ public sealed class PlacedBomb : MonoBehaviour
         return sprite;
     }
 
-    private void OnDestroy() => ReleaseVisualResources();
+    private void OnDestroy()
+    {
+        activeBombs.Remove(this);
+        ReleaseVisualResources();
+    }
 
     private void ReleaseVisualResources()
     {

@@ -25,7 +25,7 @@ $fields
 $derived
 "@
 Add-Type -TypeDefinition $code -CompilerOptions '/nowarn:0414,0649'
-$prefab=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Merchant-level2.prefab"
+$prefab=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Patrol/Merchant-level2.prefab"
 $actor=[DesertMerchantHarness]::new()
 foreach($type in @([CivilianHarness],[DesertMerchantHarness])){
     foreach($field in $type.GetFields([Reflection.BindingFlags]'NonPublic,Instance,DeclaredOnly')){
@@ -103,7 +103,7 @@ foreach($name in 'headclothColor','trimColor','leatherColor'){
     }
 }
 # New prefab preserves all civilian physics, AI, possession and camera settings.
-$template=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Civilian-level2.prefab"
+$template=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Patrol/Civilian-level2.prefab"
 $normalized=$prefab.Replace('840500000000000','840400000000000').Replace('Merchant-level2','Civilian-level2').Replace('2b58794e13d94d489573aa375068a119','74f92ddf9cfb44dbb9a327f5129c8660')
 $normalized=$normalized.Replace('clothingColor: {r: 0.12, g: 0.54, b: 0.48, a: 1}','clothingColor: {r: 0.34, g: 0.51, b: 0.52, a: 1}')
 $normalized=$normalized.Replace('headclothColor: {r: 0.87, g: 0.84, b: 0.72, a: 1}','headclothColor: {r: 0.8, g: 0.79, b: 0.73, a: 1}')

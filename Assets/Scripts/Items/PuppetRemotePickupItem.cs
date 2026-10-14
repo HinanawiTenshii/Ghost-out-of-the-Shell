@@ -3,6 +3,7 @@ using UnityEngine;
 /// <summary>Reusable scene-wide toggle for enabled armed automatons.</summary>
 public sealed class PuppetRemotePickupItem : PickupItemBase
 {
+    protected override int DefaultRequiredUseSkill => CharacterSkillRequirements.AutomatonRemote;
     public const string DefaultItemId = "puppet_remote";
     public const string DefaultItemName = "人偶遥控器";
     public const string DefaultDescription = "用于控制人偶的遥控器，使用可以开启或关闭附近的人偶，注意：人偶索敌系统存在故障，会攻击附近所有的人。";
@@ -14,6 +15,7 @@ public sealed class PuppetRemotePickupItem : PickupItemBase
     {
         if (user == null || user.IsDead || user.IsGhostLike) return false;
         int count = ToggleSceneAutomatons(user);
+        PlayUseGesture(user); // Reusable use succeeds without consuming the inventory item.
         ZeldaHealthHeartsUI.Instance?.ShowNotificationPopup(count > 0
             ? $"已切换 {count} 个人偶的状态"
             : "当前场景没有可控制的已启用人偶");
@@ -23,6 +25,7 @@ public sealed class PuppetRemotePickupItem : PickupItemBase
 
     public int ToggleSceneAutomatons(ZeldaCharacterData user)
     {
+        if (!CharacterSkillRequirements.Require(user, RequiredUseSkill)) return 0;
         if (user == null || user.IsDead || user.IsGhostLike) return 0;
         var scene = ZeldaRuntimeRegistry.GetGameplayScene(user.gameObject);
         if (!scene.IsValid() || !scene.isLoaded) return 0;

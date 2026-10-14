@@ -60,6 +60,8 @@ MonoBehaviour:
   radiusBreathing: 0.08
   alphaBreathing: 0.18
   randomizePhase: 1
+  glowIntensity: 3.8
+  glowRadiusMultiplier: 1.45
 --- !u!61 &103
 BoxCollider2D:
   m_ObjectHideFlags: 0

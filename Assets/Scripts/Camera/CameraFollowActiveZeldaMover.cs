@@ -12,15 +12,22 @@ public class CameraFollowActiveZeldaMover : MonoBehaviour
     [Header("Camera Size Transition / 角色大小由角色数据提供")]
     [SerializeField, Min(0.01f)] private float puppetOrthographicSize = 3f;
     [SerializeField, Min(0.01f)] private float cameraSizeSmoothTime = 0.25f;
+    [SerializeField, Min(0.01f), Tooltip("沙虫出土等临时广角效果的缓动时间；镜头与视野遮罩使用同一倍率同步过渡。")]
+    private float temporaryFramingSmoothTime = 0.4f;
     [SerializeField, Range(0.25f, 1f)] private float possessionFocusSizeMultiplier = 0.72f;
 
     private ZeldaFourWayMover currentTarget;
     private Camera followCamera;
+    private CameraCircularVision shakeVision;
     private Vector3 followVelocity;
     private float cameraSizeVelocity;
+    private float temporaryFramingMultiplier = 1f;
+    private float temporaryFramingVelocity;
     private bool soulTransferFollow;
     private Vector3 shakeOffset;
     private float shakeRemaining, shakeDuration, shakeStrength, shakeFrequency;
+
+    public float TemporaryFramingMultiplier => temporaryFramingMultiplier;
 
     /// <summary>Visual-only offset, kept out of the smooth-follow velocity.</summary>
     public void PlayShake(float duration, float strength, float frequency = 22f)
@@ -45,12 +52,14 @@ public class CameraFollowActiveZeldaMover : MonoBehaviour
 
     private void OnEnable()
     {
+        ResetZoomVelocity();
         SceneManager.sceneLoaded += OnSceneLoaded;
     }
 
     private void OnDisable()
     {
         ClearShake();
+        ResetZoomVelocity();
         SceneManager.sceneLoaded -= OnSceneLoaded;
     }
 
@@ -75,7 +84,7 @@ public class CameraFollowActiveZeldaMover : MonoBehaviour
         currentTarget = null;
         ClearShake();
         followVelocity = Vector3.zero;
-        cameraSizeVelocity = 0f;
+        ResetZoomVelocity();
 
         CameraCircularVision circularVision =
             GetComponent<CameraCircularVision>();
@@ -117,8 +126,10 @@ public class CameraFollowActiveZeldaMover : MonoBehaviour
             float phase = age * shakeFrequency * Mathf.PI * 2f;
             shakeOffset = new Vector3(Mathf.Sin(phase), Mathf.Sin(phase * 1.23f + 1.1f) * 0.65f, 0f)
                 * (shakeStrength * fade);
-            transform.position += shakeOffset;
         }
+        if (shakeVision == null) shakeVision = GetComponent<CameraCircularVision>();
+        shakeOffset += (Vector3)CameraEnvironmentalShakeSource.SampleOffset(followCamera,shakeVision,Time.deltaTime);
+        transform.position += shakeOffset;
     }
 
     public void BeginSoulTransferFollow(ZeldaFourWayMover target)
@@ -180,30 +191,54 @@ public class CameraFollowActiveZeldaMover : MonoBehaviour
         float baseTargetSize = data != null
             ? data.GetCameraOrthographicSize(gameObject.scene.path) : 7f;
         float focusMultiplier = Mathf.Lerp(1f, possessionFocusSizeMultiplier, target.PossessionProgress);
-        float targetSize = baseTargetSize * focusMultiplier;
-        followCamera.orthographicSize = Mathf.SmoothDamp(
-            followCamera.orthographicSize,
-            targetSize,
-            ref cameraSizeVelocity,
-            cameraSizeSmoothTime,
-            Mathf.Infinity,
-            Time.deltaTime);
+        UpdateCameraSize(baseTargetSize * focusMultiplier);
     }
 
     private void UpdateCameraSize(float targetSize)
+    {
+        AdvanceCameraSize(targetSize, Time.deltaTime);
+    }
+
+    private void AdvanceCameraSize(float targetSize, float deltaTime)
     {
         if (followCamera == null)
         {
             followCamera = GetComponent<Camera>();
         }
 
-        followCamera.orthographicSize = Mathf.SmoothDamp(
-            followCamera.orthographicSize,
-            Mathf.Max(0.01f, targetSize),
-            ref cameraSizeVelocity,
-            cameraSizeSmoothTime,
-            Mathf.Infinity,
-            Time.deltaTime);
+        // Smooth the character/focus size separately, then apply the encounter
+        // multiplier exactly once. The mask reads this same displayed multiplier
+        // later in LateUpdate, so its screen-space edge never jumps out and back.
+        float baseSize = followCamera.orthographicSize / temporaryFramingMultiplier;
+        baseSize = SmoothZoomValue(baseSize, Mathf.Max(0.01f, targetSize),
+            ref cameraSizeVelocity, cameraSizeSmoothTime, deltaTime);
+        temporaryFramingMultiplier = SmoothZoomValue(temporaryFramingMultiplier,
+            CameraTemporaryFraming.GetMultiplier(gameObject.scene),
+            ref temporaryFramingVelocity, temporaryFramingSmoothTime, deltaTime);
+        followCamera.orthographicSize = baseSize * temporaryFramingMultiplier;
+    }
+
+    private void ResetZoomVelocity()
+    {
+        cameraSizeVelocity = 0f;
+        temporaryFramingVelocity = 0f;
+    }
+
+    internal static float SmoothZoomValue(float current, float target, ref float velocity,
+        float smoothTime, float deltaTime)
+    {
+        // SmoothDamp can retain motion away from a newly reversed target. Drop
+        // only that stale velocity; ordinary transitions retain their soft start/end.
+        if (deltaTime <= 0f) return current;
+        float difference = target - current;
+        if (Mathf.Abs(difference) < 0.00001f)
+        { velocity = 0f; return target; }
+        if (velocity * difference < 0f) velocity = 0f;
+        float next = Mathf.SmoothDamp(current, target, ref velocity,
+            Mathf.Max(0.01f, smoothTime), Mathf.Infinity, deltaTime);
+        float bounded = Mathf.Clamp(next, Mathf.Min(current, target), Mathf.Max(current, target));
+        if (bounded != next || bounded == target) velocity = 0f;
+        return bounded;
     }
 
     private ZeldaFourWayMover FindActiveControlledCharacter()
@@ -216,6 +251,7 @@ public class CameraFollowActiveZeldaMover : MonoBehaviour
         followSmoothTime = Mathf.Max(0f, followSmoothTime);
         puppetOrthographicSize = Mathf.Max(0.01f, puppetOrthographicSize);
         cameraSizeSmoothTime = Mathf.Max(0.01f, cameraSizeSmoothTime);
+        temporaryFramingSmoothTime = Mathf.Max(0.01f, temporaryFramingSmoothTime);
         possessionFocusSizeMultiplier = Mathf.Clamp(possessionFocusSizeMultiplier, 0.25f, 1f);
     }
 }

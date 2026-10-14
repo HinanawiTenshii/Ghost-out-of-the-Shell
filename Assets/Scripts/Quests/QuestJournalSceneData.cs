@@ -21,7 +21,8 @@ public sealed class QuestJournalSceneData : MonoBehaviour
             BuildStableId(definition, entryIndex),
             definition.title,
             definition.details,
-            gameObject.scene.name);
+            gameObject.scene.name,
+            definition.parentEntryId);
     }
 
     public void RemoveEntry(int entryIndex)
@@ -51,6 +52,8 @@ public sealed class QuestJournalSceneData : MonoBehaviour
 
         bool changed = false;
         for (int index = 0; index < initialEntries.Length; index++)
+            manager.ConfigureParent(BuildStableId(initialEntries[index], index), initialEntries[index].parentEntryId);
+        for (int index = 0; index < initialEntries.Length; index++)
         {
             QuestJournalEntryDefinition definition = initialEntries[index];
             if (definition.addOnlyWhenTriggered)
@@ -62,7 +65,8 @@ public sealed class QuestJournalSceneData : MonoBehaviour
                 BuildStableId(definition, index),
                 definition.title,
                 definition.details,
-                sceneName);
+                sceneName,
+                definition.parentEntryId);
         }
 
         return changed;

@@ -38,7 +38,18 @@ public sealed class WaterwayGateController : MonoBehaviour
     public void BindGate(WaterwayGate gate)
     {
         linkedGate = gate;
+        RefreshBatteryPowerState();
         RefreshState();
+    }
+
+    // Called by the socket even while this controller is distance-unloaded.
+    // Power loss is a spring return, not a user command: it must bypass both
+    // the no-power guard and the gate/water transition lock in SetOpen.
+    internal void RefreshBatteryPowerState()
+    {
+        if (!Application.isPlaying || linkedGate == null || HasBatteryPower) return;
+        if (linkedGate.IsOpenRequested != linkedGate.InitialOpen)
+            linkedGate.SetOpen(linkedGate.InitialOpen);
     }
 
     // Also usable by scripted scene mechanisms; no duplicated local switch state.
@@ -55,8 +66,11 @@ public sealed class WaterwayGateController : MonoBehaviour
         SetOpen(!linkedGate.IsOpenRequested);
     }
 
+    private void Awake() => ZeldaRequirementWindow.AttachSkillRequirement(this, CharacterSkillRequirements.WaterwayGate);
+
     private void OnEnable()
     {
+        RefreshBatteryPowerState();
         pose = IsOpenRequested ? 1f : 0f;
         dirty = true;
     }
@@ -102,7 +116,10 @@ public sealed class WaterwayGateController : MonoBehaviour
     private void HandleInteraction()
     {
         // Recheck after arbitration: possession, menus, range or binding may have changed.
-        if (!isActiveAndEnabled || InputBlocked || IsTransitionLocked || !HasBatteryPower || linkedGate == null || GetNearbyCharacter() == null) return;
+        if (!isActiveAndEnabled || InputBlocked || IsTransitionLocked || !HasBatteryPower || linkedGate == null) return;
+        var mover = GetNearbyCharacter();
+        if (mover != null && !CharacterSkillRequirements.Require(mover.CharacterData, CharacterSkillRequirements.WaterwayGate)) return;
+        if (mover == null || !mover.TryBeginItemAttack(.24f)) return;
         ToggleFromExternal();
     }
 
@@ -124,6 +141,7 @@ public sealed class WaterwayGateController : MonoBehaviour
             string label = DisplayedIdentifier;
             if (identifierText.text != label) identifierText.text = label;
             identifierText.color = linkedGate == null ? new Color(0.50f, 0.55f, 0.57f)
+                : !HasBatteryPower ? new Color(0.76f, 0.78f, 0.80f)
                 : IsOpenRequested ? new Color(0.35f, 1f, 0.70f) : new Color(1f, 0.67f, 0.30f);
         }
     }
@@ -155,7 +173,8 @@ public sealed class WaterwayGateController : MonoBehaviour
             renderer.sortingOrder = short.MaxValue - 2;
             ZeldaPossessionProgressBar.ConfigureOverlayRenderer(renderer);
         }
-        promptText.text = "按[E]" + (IsOpenRequested ? "关闭水闸 " : "开启水闸 ") + DisplayedIdentifier;
+        promptText.text = CharacterSkillRequirements.Has(mover.CharacterData, CharacterSkillRequirements.WaterwayGate)
+            ? "按[E]" + (IsOpenRequested ? "关闭水闸 " : "开启水闸 ") + DisplayedIdentifier : "能力值不足";
         displayFont.RequestCharactersInTexture(promptText.text, 72, FontStyle.Normal);
         promptMaterial.mainTexture = displayFont.material.mainTexture;
         promptObject.transform.position = mover.GetOverheadWorldPosition(new Vector2(0f, 0.9f));

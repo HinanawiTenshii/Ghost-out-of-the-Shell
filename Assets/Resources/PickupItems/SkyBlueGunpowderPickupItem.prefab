@@ -145,6 +145,8 @@ MonoBehaviour:
   itemName: "\u5929\u84DD\u8272\u706B\u836F"
   itemDescription: "\u4E00\u79CD\u7279\u5236\u7684\u9B54\u529B\u706B\u836F\uFF0C\u6CE8\u5165\u5176\u4E2D\u7684\u9B54\u529B\u5F88\u5BB9\u6613\u6D88\u6563\uFF0C\u9700\u8981\u4F7F\u7528\u7279\u6B8A\u6750\u6599\u624D\u80FD\u4FDD\u5B58\uFF0C\u53EF\u4EE5\u5728\u57CE\u5821\u5730\u4E0B\u5BA4\u7684\u5DE5\u4F5C\u53F0\u7528\u4E8E\u5236\u4F5C\u3002"
   itemId: sky_blue_gunpowder
+  requiredUseSkill: 0
+  useSkillRequirementInitialized: 1
   persistentIdentity: {fileID: 11400000, guid: 15f668fef29f474cb67ba88fc21ee16e, type: 2}
   uniqueInstanceId: 1766f47ddb5b45ab98b73c96b99ef302
   pickupQuantity: 1

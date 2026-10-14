@@ -100,3 +100,5 @@ MonoBehaviour:
   mountingDirection: 0
   flameFrameDuration: 0.14
   baseSortingOrder: 2
+  glowIntensity: 1.35
+  flameGlowWidth: 0.045

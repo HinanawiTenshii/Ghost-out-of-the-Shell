@@ -35,6 +35,7 @@ public sealed class DoorPasswordPanel : MonoBehaviour
 
     public void Open(Font configuredFont, string configuredPassword, Action<bool> callback)
     {
+        if (!CharacterSkillRequirements.Require(CharacterSkillRequirements.ControlledActor, CharacterSkillRequirements.DoorUnlock)) return;
         if (isOpen || (activePanel != null && activePanel != this))
         {
             return;
@@ -269,7 +270,7 @@ public sealed class DoorPasswordPanel : MonoBehaviour
             48,
             FontStyle.Normal);
 
-        CRTScreenEffect.RegisterCanvas(passwordCanvas);
+        CRTScreenEffect.RegisterCanvas(passwordCanvas, enableGlow: true);
         canvasObject.SetActive(false);
     }
 
@@ -393,7 +394,7 @@ public sealed class DoorPasswordPanel : MonoBehaviour
             passwordCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
             passwordCanvas.worldCamera = null;
         }
-        CRTScreenEffect.RegisterCanvas(passwordCanvas);
+        CRTScreenEffect.RegisterCanvas(passwordCanvas, enableGlow: true);
     }
 
     private static int ReadTypedDigit()

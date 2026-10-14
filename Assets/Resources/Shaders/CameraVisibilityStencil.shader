@@ -19,6 +19,8 @@ Shader "Hidden/Cogitans/CameraVisibilityStencil"
             Stencil
             {
                 Ref 37
+                ReadMask 63
+                WriteMask 63
                 Comp Always
                 Pass Replace
             }

@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 101}
   - component: {fileID: 102}
   m_Layer: 0
-  m_Name: DoubleSlidingDoor_CenterAxis
+  m_Name: DoubleSlidingDoor
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -44,8 +44,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 95f570ba4a4e4bb59c01243551f19ee8, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   negativeLeaf: {fileID: 202}
   positiveLeaf: {fileID: 302}
   negativeSize: {x: 1.5, y: 0.25}
@@ -74,6 +74,7 @@ GameObject:
   - component: {fileID: 201}
   - component: {fileID: 202}
   - component: {fileID: 203}
+  - component: {fileID: 2701828239719451703}
   m_Layer: 7
   m_Name: NegativeLeaf
   m_TagString: Untagged
@@ -107,12 +108,33 @@ SpriteRenderer:
   m_CastShadows: 0
   m_ReceiveShadows: 0
   m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
   m_MotionVectors: 1
   m_LightProbeUsage: 1
   m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 0
+  m_RayTraceProcedural: 0
   m_RenderingLayerMask: 1
+  m_RendererPriority: 0
   m_Materials:
   - {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 0
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
@@ -141,10 +163,47 @@ BoxCollider2D:
   m_UsedByEffector: 0
   m_UsedByComposite: 0
   m_Offset: {x: 0, y: 0}
+  m_SpriteTilingProperty:
+    border: {x: 0, y: 0, z: 0, w: 0}
+    pivot: {x: 0.5, y: 0.5}
+    oldSize: {x: 1, y: 1}
+    newSize: {x: 1, y: 1}
+    adaptiveTilingThreshold: 0.5
+    drawMode: 0
+    adaptiveTiling: 0
   m_AutoTiling: 0
   serializedVersion: 2
   m_Size: {x: 1, y: 1}
   m_EdgeRadius: 0
+--- !u!114 &2701828239719451703
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 200}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 45a54a2446b64fa98583ad82d23a6ac4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  durability: 4
+  fragmentCount: 18
+  fragmentLifetime: 0.85
+  fragmentSpeed: 4.2
+  fragmentScale: 0.2
+  shakeDuration: 0.28
+  shakeAmount: 0.09
+  shakeSpeed: 95
+  breakMaterial: 0
+  breakSound: {fileID: 0}
+  breakSoundVolume: 0.7
+  breakSoundSpatialBlend: 0.8
+  breakSoundMaxDistance: 22
+  investigationRadius: 4
+  investigationPulseDuration: 0.7
+  investigationPulseColor: {r: 1, g: 1, b: 1, a: 1}
+  attachedVisuals: []
 --- !u!1 &300
 GameObject:
   m_ObjectHideFlags: 0
@@ -156,6 +215,7 @@ GameObject:
   - component: {fileID: 301}
   - component: {fileID: 302}
   - component: {fileID: 303}
+  - component: {fileID: 3719509133362341968}
   m_Layer: 7
   m_Name: PositiveLeaf
   m_TagString: Untagged
@@ -189,12 +249,33 @@ SpriteRenderer:
   m_CastShadows: 0
   m_ReceiveShadows: 0
   m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
   m_MotionVectors: 1
   m_LightProbeUsage: 1
   m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 0
+  m_RayTraceProcedural: 0
   m_RenderingLayerMask: 1
+  m_RendererPriority: 0
   m_Materials:
   - {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 0
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
@@ -223,7 +304,44 @@ BoxCollider2D:
   m_UsedByEffector: 0
   m_UsedByComposite: 0
   m_Offset: {x: 0, y: 0}
+  m_SpriteTilingProperty:
+    border: {x: 0, y: 0, z: 0, w: 0}
+    pivot: {x: 0.5, y: 0.5}
+    oldSize: {x: 1, y: 1}
+    newSize: {x: 1, y: 1}
+    adaptiveTilingThreshold: 0.5
+    drawMode: 0
+    adaptiveTiling: 0
   m_AutoTiling: 0
   serializedVersion: 2
   m_Size: {x: 1, y: 1}
   m_EdgeRadius: 0
+--- !u!114 &3719509133362341968
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 300}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 45a54a2446b64fa98583ad82d23a6ac4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  durability: 4
+  fragmentCount: 18
+  fragmentLifetime: 0.85
+  fragmentSpeed: 4.2
+  fragmentScale: 0.2
+  shakeDuration: 0.28
+  shakeAmount: 0.09
+  shakeSpeed: 95
+  breakMaterial: 0
+  breakSound: {fileID: 0}
+  breakSoundVolume: 0.7
+  breakSoundSpatialBlend: 0.8
+  breakSoundMaxDistance: 22
+  investigationRadius: 4
+  investigationPulseDuration: 0.7
+  investigationPulseColor: {r: 1, g: 1, b: 1, a: 1}
+  attachedVisuals: []

@@ -18,7 +18,7 @@ public sealed class GameSaveSystem : MonoBehaviour
     }
     [Serializable] public sealed class SaveData
     {
-        public int version = 1;
+        public int version = 2;
         public string name, savedAt, scene, levelName, world;
         public int collectibleCount;
         public List<LevelVisit> visitedLevels;
@@ -41,6 +41,7 @@ public sealed class GameSaveSystem : MonoBehaviour
     private SaveGameCatalog catalog;
     private bool loading, writing;
     private SaveData pendingLoad;
+    private bool arenaLayoutLoad;
     private int sceneGeneration;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -118,12 +119,17 @@ public sealed class GameSaveSystem : MonoBehaviour
         {
             bool included = group != null ? group.ContainsScene(template.name) :
                 id == "level1" ? template.name.StartsWith("Level1", StringComparison.OrdinalIgnoreCase) : template.name == scene;
-            if (included) visit.initialScenes.Add(template.CreateSaveSnapshot());
+            if (included) visit.initialScenes.Add(SaveSceneTemplateStore.Reference(template));
         }
         visits.Add(visit);
     }
 
     public bool Save(int slot, bool notify = true)
+    {
+        using (SceneLoadMetrics.Measure("Save.Total")) return SaveCore(slot, notify);
+    }
+
+    private bool SaveCore(int slot, bool notify)
     {
         if (slot < 0 || slot >= SlotCount || loading || writing) return false;
         var manager = SceneTravelStateManager.GetOrCreate();
@@ -139,12 +145,13 @@ public sealed class GameSaveSystem : MonoBehaviour
             EnsureLevelVisit(scene, world, player.growth.collectibleCount);
             LevelSceneGroup.TryGetLevelForScene(scene, out var group);
             var now = DateTime.Now;
+            var compactVisits = CreateCompactVisits();
             var data = new SaveData {
                 name = (slot == 0 ? "A" : slot == 1 ? "Q" : "") + now.ToString("yyyy-MM-dd-HH-mm"),
                 savedAt = now.ToString("yyyy-MM-dd HH:mm:ss"), scene = scene,
                 levelName = group != null ? group.DisplayName : scene,
                 world = world, player = player, collectibleCount = player.growth.collectibleCount,
-                visitedLevels = visits, journal = QuestJournalManager.GetOrCreate().CaptureSaveState(),
+                visitedLevels = compactVisits, journal = QuestJournalManager.GetOrCreate().CaptureSaveState(),
                 discoveredItems = ItemDescriptionWindow.CaptureDiscoveryHistory(),
                 mapPoints = MapPointOfInterestManager.GetOrCreate().CaptureSaveState()
             };
@@ -157,12 +164,27 @@ public sealed class GameSaveSystem : MonoBehaviour
             { stream.Write(bytes, 0, bytes.Length); stream.Flush(true); }
             if (File.Exists(target)) File.Replace(temporary, target, null);
             else File.Move(temporary, target);
+            visits = compactVisits;
             if (notify) Message("游戏已保存");
             Changed?.Invoke();
             return true;
         }
         catch (Exception ex) { Debug.LogException(ex); Message("存档失败：" + ex.Message); return false; }
         finally { writing = false; }
+    }
+
+    private List<LevelVisit> CreateCompactVisits()
+    {
+        var result = new List<LevelVisit>(visits.Count);
+        foreach (var visit in visits)
+        {
+            var copy = new LevelVisit { id = visit.id, name = visit.name, entryScene = visit.entryScene,
+                initialWorld = SceneTravelStateManager.CompactLegacyDiskWorld(visit.initialWorld), initialCollectibleCount = visit.initialCollectibleCount };
+            if (visit.initialScenes != null)
+                foreach (var template in visit.initialScenes) copy.initialScenes.Add(SaveSceneTemplateStore.Reference(template));
+            result.Add(copy);
+        }
+        return result;
     }
 
     public SaveData Read(int slot)
@@ -173,7 +195,13 @@ public sealed class GameSaveSystem : MonoBehaviour
             var envelope = JsonUtility.FromJson<Envelope>(File.ReadAllText(SlotPath(slot), Encoding.UTF8));
             if (envelope == null || string.IsNullOrEmpty(envelope.payload) || envelope.checksum != Hash(envelope.payload)) return null;
             var data = JsonUtility.FromJson<SaveData>(envelope.payload);
-            return data != null && data.version == 1 && data.player != null && !string.IsNullOrEmpty(data.world) ? data : null;
+            if (data == null || (data.version != 1 && data.version != 2) || data.player == null || string.IsNullOrEmpty(data.world)) return null;
+            if (data.visitedLevels != null)
+                foreach (var visit in data.visitedLevels)
+                    if (visit.initialScenes != null)
+                        foreach (var template in visit.initialScenes)
+                            if (!string.IsNullOrEmpty(template.templateKey) && !SaveSceneTemplateStore.Validate(template.templateKey)) return null;
+            return data;
         }
         catch (Exception ex) { Debug.LogWarning("Cannot read save slot " + slot + ": " + ex.Message); return null; }
     }
@@ -206,14 +234,44 @@ public sealed class GameSaveSystem : MonoBehaviour
         return RetroSceneLoadReveal.BeginTransition(data.scene, () => LoadCovered(data));
     }
 
+    /// <summary>Use the normal covered loader, replacing only arena poses/doors.
+    /// Capture the live inventory/player and all non-arena progress at the actual reload boundary.</summary>
+    public bool ReloadArenaLayout(ArenaChallengeController arena, bool returning)
+    {
+        if (loading || writing || arena == null) return false;
+        string scene = arena.gameObject.scene.name;
+        return RetroSceneLoadReveal.BeginTransition(scene, () =>
+        {
+            try
+            {
+                var manager = SceneTravelStateManager.GetOrCreate();
+                var arenaState = arena.CaptureRuntimeState();
+                string world = manager.MergeArenaLayout(manager.CaptureDiskWorld(), arenaState.layoutSnapshot);
+                var data = new SaveData {
+                    scene = scene, world = world, player = manager.CaptureDiskPlayer(),
+                    visitedLevels = CreateCompactVisits(), journal = QuestJournalManager.GetOrCreate().CaptureSaveState(),
+                    discoveredItems = ItemDescriptionWindow.CaptureDiscoveryHistory(),
+                    mapPoints = MapPointOfInterestManager.GetOrCreate().CaptureSaveState()
+                };
+                arenaLayoutLoad = true;
+                if (!LoadCovered(data)) { arenaLayoutLoad = false; arena.CancelLayoutLoad(); }
+            }
+            catch (Exception ex)
+            {
+                arenaLayoutLoad = false; arena.CancelLayoutLoad();
+                Debug.LogException(ex); Message("竞技场布局载入失败，请重试。");
+            }
+        });
+    }
+
     private bool LoadCovered(SaveData data)
     {
         loading = true;
         pendingLoad = data;
         try
         {
-            SceneTravelStateManager.GetOrCreate().RestoreDiskWorld(data.world, data.scene, data.player, catalog);
             Time.timeScale = 1f;
+            SceneTravelStateManager.GetOrCreate().RestoreDiskWorld(data.world, data.scene, data.player, catalog);
             return true;
         }
         catch (Exception ex)
@@ -227,7 +285,7 @@ public sealed class GameSaveSystem : MonoBehaviour
         if (!loading || pendingLoad == null) return;
         if (!SceneTravelStateManager.GetOrCreate().LastQuickRestartRestoreSucceeded)
         {
-            pendingLoad = null; loading = false;
+            pendingLoad = null; loading = false; arenaLayoutLoad = false;
             Message("存档与当前场景不兼容，恢复失败；原存档文件保持不变。");
             return;
         }
@@ -253,11 +311,19 @@ public sealed class GameSaveSystem : MonoBehaviour
                     break;
                 }
             }
-            Message("游戏已读取");
+            if (!arenaLayoutLoad) Message("游戏已读取");
         }
-        finally { pendingLoad = null; loading = false; Changed?.Invoke(); }
+        finally { pendingLoad = null; loading = false; arenaLayoutLoad = false; Changed?.Invoke(); }
+        ArenaChallengeController.FinalizeSceneRestoration();
         // Loading a slot is also a scene transition; update auto only after restoration.
         Save(0, false);
+    }
+    internal void CancelPendingSceneLoad()
+    {
+        arenaLayoutLoad = false;
+        if (!loading) return;
+        pendingLoad = null; loading = false;
+        Message("场景载入失败，原存档文件保持不变。");
     }
     private void Message(string message)
     {

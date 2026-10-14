@@ -46,4 +46,28 @@ public sealed class CameraVisionStreamingRegion : MonoBehaviour
         }
         return false;
     }
+
+    public static void CopyActiveBounds(List<Bounds> result)
+    {
+        result.Clear();
+        foreach (var region in regions)
+            if (region != null && region.configured && region.isActiveAndEnabled)
+                result.Add(new Bounds(region.transform.position, Vector3.one * region.radius * 2f));
+    }
+
+    // Patrol route retention: test the segment, not its potentially large AABB.
+    public static bool IntersectsSegment(Scene scene, Vector2 a, Vector2 b)
+    {
+        Vector2 delta = b - a;
+        float lengthSquared = delta.sqrMagnitude;
+        foreach (var region in regions)
+        {
+            if (region == null || !region.configured || !region.isActiveAndEnabled ||
+                ZeldaRuntimeRegistry.GetGameplayScene(region.gameObject) != scene) continue;
+            Vector2 center = region.transform.position;
+            float t = lengthSquared > 0f ? Mathf.Clamp01(Vector2.Dot(center - a, delta) / lengthSquared) : 0f;
+            if ((a + delta * t - center).sqrMagnitude <= region.radius * region.radius) return true;
+        }
+        return false;
+    }
 }

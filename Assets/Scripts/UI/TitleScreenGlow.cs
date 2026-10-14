@@ -3,13 +3,15 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// A restrained, same-colour phosphor halo for title-menu text and thin edges.
-/// Uses the graphic's existing texture/material; the unmodified core is drawn last.
+/// Shared fluorescent phosphor halos for menu/window text, icons and thin edges.
+/// The original class name is retained for existing scene and prefab references.
+/// Keeps the existing UI material/atlas and draws the crisp, brighter blue core last.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class TitleScreenGlow : BaseMeshEffect
 {
-    private const int HaloCopies = 16;
+    private const int HaloCopies = 24;
+    private const float CyanHaloIntensity = .75f;
     private readonly List<UIVertex> source = new List<UIVertex>();
     private readonly List<UIVertex> output = new List<UIVertex>();
     private static readonly Vector2[] Directions =
@@ -46,16 +48,40 @@ public sealed class TitleScreenGlow : BaseMeshEffect
         if (output.Capacity < count) output.Capacity = count;
 
         // Distances are reference-canvas pixels, so the halo follows CanvasScaler.
-        AppendRing(3f, 0.025f);
-        AppendRing(1.25f, 0.055f);
-        output.AddRange(source);
+        // Only luminous blue accents are enhanced; muted/disabled labels retain their old halo.
+        AppendRing(6f, 0.035f, 0f);
+        AppendRing(3f, 0.085f, 0.025f);
+        AppendRing(1.25f, 0.16f, 0.055f);
+        for (int i = 0; i < source.Count; i++)
+        {
+            UIVertex core = source[i];
+            if (IsLuminousBlue(core.color)) core.color = FluorescentTint(core.color, true);
+            output.Add(core);
+        }
         vertices.Clear();
         vertices.AddUIVertexTriangleStream(output);
         source.Clear();
         output.Clear();
     }
 
-    private void AppendRing(float radius, float opacity)
+    private static bool IsLuminousBlue(Color32 color)
+    {
+        // Exclude dark panel fills, grey disabled labels, white and warm accents.
+        return color.b >= 140 && color.g >= 70 && color.b >= color.r + 40;
+    }
+
+    private static Color32 FluorescentTint(Color32 color, bool core)
+    {
+        // Preserve alpha so fades/CanvasGroup transparency do not leave glowing ghosts.
+        // Gameplay UI uses cyan, while the title uses blue. Do not recolour cyan HUD accents blue.
+        bool cyan = color.g > color.b;
+        color.r = (byte)Mathf.RoundToInt(color.r + ((cyan ? (core ? 140f : 55f) : (core ? 82f : 28f)) - color.r) * .75f);
+        color.g = (byte)Mathf.RoundToInt(color.g + ((cyan ? 255f : (core ? 186f : 146f)) - color.g) * .75f);
+        color.b = (byte)Mathf.RoundToInt(color.b + ((cyan ? 245f : 255f) - color.b) * .75f);
+        return color;
+    }
+
+    private void AppendRing(float radius, float opacity, float mutedOpacity)
     {
         for (int direction = 0; direction < Directions.Length; direction++)
         {
@@ -68,7 +94,11 @@ public sealed class TitleScreenGlow : BaseMeshEffect
                 position.y += offset.y;
                 vertex.position = position;
                 Color32 color = vertex.color;
-                color.a = (byte)Mathf.RoundToInt(color.a * opacity);
+                bool blue = IsLuminousBlue(color);
+                // Cyan is perceptually brighter than blue: soften only its halo, not the crisp core.
+                float intensity = blue && color.g > color.b ? CyanHaloIntensity : 1f;
+                if (blue) color = FluorescentTint(color, false);
+                color.a = (byte)Mathf.RoundToInt(color.a * (blue ? opacity : mutedOpacity) * intensity);
                 vertex.color = color;
                 output.Add(vertex);
             }

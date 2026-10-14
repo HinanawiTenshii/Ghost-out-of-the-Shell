@@ -15,6 +15,7 @@ public class CameraCircularVision : MonoBehaviour
         public readonly CameraVisibilityPolygonBuilder.SourceQueryCache
             QueryCache =
                 new CameraVisibilityPolygonBuilder.SourceQueryCache();
+        public readonly CameraVisionOriginResolver OriginResolver = new CameraVisionOriginResolver();
         public Vector2 LastBuiltPosition;
         public float LastBuiltRadius;
         public float NextRefreshTime;
@@ -27,6 +28,7 @@ public class CameraCircularVision : MonoBehaviour
             Vertices.Clear();
             Triangles.Clear();
             QueryCache.Invalidate();
+            OriginResolver.Reset();
             BlockerRevision = -1;
             IsValid = false;
         }
@@ -94,6 +96,7 @@ public class CameraCircularVision : MonoBehaviour
     private int maxMovingAdditionalSourceRebuildsPerFrame = 1;
 
     private Camera mainCamera;
+    private CameraFollowActiveZeldaMover cameraFollow;
     private Camera blocksCamera;
     private Camera uiCompositeCamera;
     private MeshFilter overlayMeshFilter;
@@ -139,6 +142,7 @@ public class CameraCircularVision : MonoBehaviour
     private int cachedBoundaryRayCount;
     private int sampledRevealSourceCount;
     private Transform sampledPrimaryTransform;
+    private int primaryOriginRevision = -1;
     private readonly Vector4[] targetRevealSources =
         new Vector4[MaximumRevealSources];
     private readonly Vector4[] revealShaderSources =
@@ -191,6 +195,17 @@ public class CameraCircularVision : MonoBehaviour
     public LayerMask BlockLayers => blockLayers;
     public float VisionRadius => visionRadius;
     public float VisionMaskRadius => visionRadius;
+
+    /// <summary>Read-only access to the exact mask for world post effects. Fail closed during transfers.</summary>
+    public bool TryGetPostEffectVisibilityMesh(out Mesh mesh, out Matrix4x4 localToWorld)
+    {
+        mesh = visibilityStencilMesh;
+        localToWorld = visibilityStencilRenderer != null
+            ? visibilityStencilRenderer.localToWorldMatrix : Matrix4x4.identity;
+        return isActiveAndEnabled && !SoulMarkRuntime.IsVisionCovered &&
+            visibilityStencilRenderer != null && visibilityStencilRenderer.enabled &&
+            mesh != null && mesh.vertexCount > 0;
+    }
 
     public static void NotifyBlockersChanged()
     {
@@ -256,7 +271,15 @@ public class CameraCircularVision : MonoBehaviour
     public void SetVisionMaskRadius(float radius)
     {
         sceneFallbackVisionRadius = Mathf.Max(0.1f, radius);
-        ApplyVisionRadius(sceneFallbackVisionRadius);
+        ApplyVisionRadius(sceneFallbackVisionRadius * GetDisplayedFramingMultiplier());
+    }
+
+    private float GetDisplayedFramingMultiplier()
+    {
+        if (cameraFollow == null) cameraFollow = GetComponent<CameraFollowActiveZeldaMover>();
+        return cameraFollow != null && cameraFollow.isActiveAndEnabled
+            ? cameraFollow.TemporaryFramingMultiplier
+            : CameraTemporaryFraming.GetMultiplier(gameObject.scene);
     }
 
     private void ApplyVisionRadius(float radius)
@@ -679,8 +702,11 @@ public class CameraCircularVision : MonoBehaviour
 
         ZeldaFourWayMover controlledMover = ZeldaRuntimeRegistry.GetControlledMover();
         ZeldaCharacterData characterData = controlledMover != null ? controlledMover.CharacterData : null;
-        ApplyVisionRadius(characterData != null
-            ? characterData.GetPlayerVisionRadius(gameObject.scene.path) : sceneFallbackVisionRadius);
+        float baseRadius = characterData != null
+            ? characterData.GetPlayerVisionRadius(gameObject.scene.path) *
+                (CharacterPotionBuffs.Has(characterData, AlchemyPotionKind.Sight) ? 1.25f : 1f)
+            : sceneFallbackVisionRadius;
+        ApplyVisionRadius(baseRadius * GetDisplayedFramingMultiplier());
         EnsureRayDirectionCaches();
         if (forceRefresh || NeedsCoverGeometryRebuild())
         {
@@ -693,6 +719,8 @@ public class CameraCircularVision : MonoBehaviour
 
         Transform primaryTransform = GetPrimaryVisionTransform();
         Vector2 primaryOrigin = GetPrimaryVisionOrigin();
+        bool originCorrectionChanged = primaryOriginRevision != visibilitySourceCaches[0].OriginResolver.Revision;
+        primaryOriginRevision = visibilitySourceCaches[0].OriginResolver.Revision;
         bool primaryChanged = primaryTransform != sampledPrimaryTransform;
         Vector2 lastTargetOrigin = sampledRevealSourceCount > 0
             ? new Vector2(
@@ -705,7 +733,7 @@ public class CameraCircularVision : MonoBehaviour
         bool selectedSourceUnavailable = HasUnavailableSampledSource();
         bool forceVisibilityRebuild =
             forceRefresh || forceVisualSample || primaryChanged ||
-            primaryTeleported || selectedSourceUnavailable;
+            primaryTeleported || selectedSourceUnavailable || originCorrectionChanged;
 
         if (forceVisibilityRebuild ||
             visualRaycastTimer <= 0f)
@@ -714,7 +742,7 @@ public class CameraCircularVision : MonoBehaviour
                 primaryTransform,
                 primaryOrigin,
                 forceRefresh || forceVisualSample || primaryChanged ||
-                primaryTeleported || selectedSourceUnavailable);
+                primaryTeleported || selectedSourceUnavailable || originCorrectionChanged);
             visualRaycastTimer = 1f /
                 Mathf.Max(10f, visualRaycastFrequency);
             forceVisualSample = false;
@@ -727,7 +755,7 @@ public class CameraCircularVision : MonoBehaviour
         bool boundaryTeleported = hasBoundarySample &&
             (primaryOrigin - lastBoundaryOrigin).sqrMagnitude >=
             teleportRefreshDistance * teleportRefreshDistance;
-        if (forceRefresh || forceBoundarySample || boundaryTeleported ||
+        if (forceRefresh || forceBoundarySample || boundaryTeleported || originCorrectionChanged ||
             boundaryRefreshTimer <= 0f)
         {
             RefreshVisibleBoundary(primaryOrigin);
@@ -835,7 +863,7 @@ public class CameraCircularVision : MonoBehaviour
                 sampledAdditionalSources[sourceIndex - 1];
             WriteTargetRevealSource(
                 sourceIndex,
-                source.WorldPosition,
+                GetAdditionalVisionOrigin(sourceIndex, source),
                 source.Radius);
         }
 
@@ -1266,7 +1294,7 @@ public class CameraCircularVision : MonoBehaviour
             {
                 continue;
             }
-            Vector2 position = source.WorldPosition;
+            Vector2 position = GetAdditionalVisionOrigin(sourceIndex, source);
             targetRevealSources[sourceIndex] = new Vector4(
                 position.x,
                 position.y,
@@ -1561,10 +1589,16 @@ public class CameraCircularVision : MonoBehaviour
     private Vector2 GetPrimaryVisionOrigin()
     {
         Transform primaryTransform = GetPrimaryVisionTransform();
-        return primaryTransform != null
+        Vector2 requested = primaryTransform != null
             ? (Vector2)primaryTransform.position
             : (Vector2)transform.position;
+        return visibilitySourceCaches[0].OriginResolver.Resolve(primaryTransform != null ? primaryTransform : transform,
+            requested, blockLayers, blockerSkin, blockerGeometryRevision);
     }
+
+    private Vector2 GetAdditionalVisionOrigin(int sourceIndex, CameraVisionRevealSource source) =>
+        visibilitySourceCaches[sourceIndex].OriginResolver.Resolve(source.transform,
+            source.WorldPosition, blockLayers, blockerSkin, blockerGeometryRevision);
 
     private static Transform GetPrimaryVisionTransform()
     {

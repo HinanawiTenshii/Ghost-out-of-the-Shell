@@ -47,34 +47,51 @@ $mesh = [UnityEngine.UI.VertexHelper]::new()
 $original = @()
 foreach ($i in 0..5) {
     $v = [UnityEngine.UIVertex]::new()
-    $v.position.x = $i % 3; $v.position.y = [Math]::Floor($i / 3)
-    $v.uv0.x = $i / 6.0; $v.uv0.y = 0.75
-    $v.color.r = 40; $v.color.g = 130; $v.color.b = 210
-    $v.color.a = @(255,128,0)[$i % 3]
+    # Nested value types must be copied back; direct PowerShell field edits modify a boxed copy.
+    $position=$v.position; $position.x = $i % 3; $position.y = [Math]::Floor($i / 3); $v.position=$position
+    $uv=$v.uv0; $uv.x = $i / 6.0; $uv.y = 0.75; $v.uv0=$uv
+    $color=$v.color; $color.r = 40; $color.g = 130; $color.b = 210
+    $color.a = @(255,128,0)[$i % 3]; $v.color=$color
     $original += $v; $mesh.data.Add($v)
 }
 $effect.ModifyMesh($mesh)
-Check ($mesh.currentVertCount -eq 102) 'Two eight-direction rings plus the core'
+Check ($mesh.currentVertCount -eq 150) 'Three eight-direction rings plus the core'
 for ($i = 0; $i -lt 6; $i++) {
-    $v = $mesh.data[96 + $i]; $s = $original[$i]
-    Check ($v.Equals($s)) 'Original geometry, colour, alpha and UVs preserved on top'
+    $v = $mesh.data[144 + $i]; $s = $original[$i]
+    Check ($v.position.Equals($s.position) -and $v.uv0.Equals($s.uv0) -and $v.color.a -eq $s.color.a) 'Crisp core geometry, alpha and UVs preserved on top'
+    Check ($v.color.r -eq [Math]::Round(71.5) -and $v.color.g -eq 172 -and $v.color.b -eq 244) 'Blue core brightened without bleaching to white'
 }
-for ($copy = 0; $copy -lt 16; $copy++) {
-    $radius = if ($copy -lt 8) { 3.0 } else { 1.25 }
-    $opacity = if ($copy -lt 8) { 0.025 } else { 0.055 }
+for ($copy = 0; $copy -lt 24; $copy++) {
+    $radius = if ($copy -lt 8) { 6.0 } elseif ($copy -lt 16) { 3.0 } else { 1.25 }
+    $opacity = if ($copy -lt 8) { 0.035 } elseif ($copy -lt 16) { 0.085 } else { 0.16 }
     for ($i = 0; $i -lt 6; $i++) {
         $v = $mesh.data[$copy * 6 + $i]; $s = $original[$i]
         $dx = $v.position.x - $s.position.x; $dy = $v.position.y - $s.position.y
         Check ([Math]::Abs([Math]::Sqrt($dx*$dx+$dy*$dy)-$radius) -lt 0.00001) 'Bounded halo radius'
         Check ($v.uv0.Equals($s.uv0)) 'Texture/font atlas coordinates unchanged'
-        Check ($v.color.r -eq $s.color.r -and $v.color.g -eq $s.color.g -and $v.color.b -eq $s.color.b) 'Same-colour halo'
-        Check ($v.color.a -eq [Math]::Round($s.color.a*$opacity)) 'Weak halo respects source transparency'
+        Check ($v.color.r -eq 31 -and $v.color.g -eq 142 -and $v.color.b -eq 244) 'Saturated fluorescent blue halo'
+        Check ($v.color.a -eq [Math]::Round($s.color.a*$opacity)) 'Stronger halo still respects source transparency'
     }
 }
 $next = [UnityEngine.UI.VertexHelper]::new()
 $next.data.AddRange([UnityEngine.UIVertex[]]$original)
 $effect.ModifyMesh($next)
-Check ($next.currentVertCount -eq 102) 'Buffers do not accumulate between rebuilds'
+Check ($next.currentVertCount -eq 150) 'Buffers do not accumulate between rebuilds'
+foreach ($rgb in @(@(46,71,89),@(255,255,255),@(220,80,30),@(9,30,51))) {
+    $muted = [UnityEngine.UI.VertexHelper]::new()
+    $originalMuted = [UnityEngine.UIVertex[]]::new(6)
+    for ($i=0;$i -lt 6;$i++) {
+        $v=$original[$i];$color=$v.color;$color.r=$rgb[0];$color.g=$rgb[1];$color.b=$rgb[2];$v.color=$color
+        $originalMuted[$i]=$v;$muted.data.Add($v)
+    }
+    $effect.ModifyMesh($muted)
+    for ($i=0;$i -lt 6;$i++) {
+        Check ($muted.data[144+$i].Equals($originalMuted[$i])) 'Disabled, white, warm and dark background cores remain unchanged'
+        Check ($muted.data[$i].color.a -eq 0) 'Nonblue accents receive no new outer glow'
+        Check ($muted.data[48+$i].color.a -eq [Math]::Round($originalMuted[$i].color.a*.025)) 'Nonblue middle glow retains original opacity'
+        Check ($muted.data[96+$i].color.a -eq [Math]::Round($originalMuted[$i].color.a*.055)) 'Nonblue inner glow retains original opacity'
+    }
+}
 $empty = [UnityEngine.UI.VertexHelper]::new(); $effect.ModifyMesh($empty)
 Check ($empty.currentVertCount -eq 0) 'Empty text supported'
 $effect.enabled = $false
@@ -93,5 +110,5 @@ $controller = Get-Content -Raw "$taskRoot/Assets/Scripts/UI/TitleScreenControlle
 $slots = Get-Content -Raw "$taskRoot/Assets/Scripts/UI/SaveSlotPanel.cs"
 Check (([regex]::Matches($controller, 'TitleScreenGlow.Attach\(text\)')).Count -eq 2) 'Title and menu labels are covered'
 Check ($controller.Contains('TitleScreenGlow.Attach(image)')) 'Thin frame edges are covered'
-Check ($slots.Contains('if (useTitleLayout) TitleScreenGlow.Attach(text);')) 'In-game save UI is excluded'
+Check ($slots.Contains('if (useTitleLayout) TitleScreenGlow.Attach(text);')) 'Legacy explicit title attachment retained; gameplay is covered by the Canvas scope'
 Write-Output "PASS: $checks title-screen glow checks (production mesh modifier, Unity data stubs)."

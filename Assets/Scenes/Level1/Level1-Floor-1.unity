@@ -2030,11 +2030,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 918620450781230005, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
       propertyPath: journalEntryTitle
-      value: "\u7206\u7834\u624B"
+      value: "\u6570\u5230\u4E09\uFF0C\u4E0D\u8BB8\u6570\u5230\u4E94"
       objectReference: {fileID: 0}
     - target: {fileID: 918620450781230005, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
       propertyPath: journalEntryDetails
-      value: "\u4FE1\u4EF6\u4E2D\u63D0\u5230\u7684\u8D85\u7EA7\u70B8\u5F39\u4F3C\u4E4E\u53EF\u4EE5\u7834\u574F\u57CE\u5821\u5927\u95E8\uFF0C\u9700\u8981\u627E\u5230[\u5F15\u7EBF][\u8D85\u7EA7\u70B8\u5F39\u5916\u58F3]\u4E0E[\u9B54\u6CD5\u706B\u836F]\u540E\u5728\u4FE1\u4EF6\u65C1\u8FB9\u7684\u5DE5\u4F5C\u53F0\u4E0A\u5408\u6210\u8D85\u7EA7\u70B8\u5F39"
+      value: "\u4FE1\u4EF6\u8BB0\u8F7D\u4E86\u8D85\u7EA7\u70B8\u5F39\u7684\u5236\u4F5C\u65B9\u6CD5\u3002\u9700\u8981\u6536\u96C6[\u5F15\u4FE1]\u3001[\u8D85\u7EA7\u70B8\u5F39\u5916\u58F3]\u548C[\u9B54\u529B\u706B\u836F]\uFF0C\u5E76\u5728\u4FE1\u4EF6\u65C1\u7684\u5DE5\u4F5C\u53F0\u5B8C\u6210\u5408\u6210\u3002\u8D85\u7EA7\u70B8\u5F39\u53EF\u7528\u4E8E\u7834\u574F\u57CE\u5821\u5927\u95E8\u3002\n\n\u5F53\u524D\u76EE\u6807\uFF1A\u6536\u96C6\u4E09\u79CD\u6750\u6599\uFF0C\u5728\u5DE5\u4F5C\u53F0\u5408\u6210\u8D85\u7EA7\u70B8\u5F39\u3002"
       objectReference: {fileID: 0}
     - target: {fileID: 918620450781230005, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
       propertyPath: addJournalEntryOnOpen
@@ -4522,6 +4522,14 @@ PrefabInstance:
   m_Modification:
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 2481516793516481736, guid: 4cabe481333a16040816eded09dad475, type: 3}
+      propertyPath: contrast
+      value: 1.3
+      objectReference: {fileID: 0}
+    - target: {fileID: 2481516793516481736, guid: 4cabe481333a16040816eded09dad475, type: 3}
+      propertyPath: phosphorGlow
+      value: 0.5
+      objectReference: {fileID: 0}
     - target: {fileID: 2481516793516481738, guid: 4cabe481333a16040816eded09dad475, type: 3}
       propertyPath: m_RootOrder
       value: 10
@@ -10767,3 +10775,48 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 22
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &8914301200001000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8914301200001001}
+  - component: {fileID: 8914301200001002}
+  m_Layer: 0
+  m_Name: Shared Player Hostility Timer
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8914301200001001
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8914301200001000}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 9999
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8914301200001002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8914301200001000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5219a8a77f704d9db5b972a9f734005c, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  hostileDuration: 9
+  searchDuration: 12

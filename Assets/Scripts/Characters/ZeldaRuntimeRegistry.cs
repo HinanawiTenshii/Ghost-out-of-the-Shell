@@ -9,6 +9,37 @@ using UnityEngine.SceneManagement;
 /// </summary>
 public static class ZeldaRuntimeRegistry
 {
+    public readonly struct SetView<T> : IReadOnlyCollection<T>
+    {
+        private readonly HashSet<T> set;
+        public SetView(HashSet<T> value) { set = value; }
+        public int Count => set.Count;
+        public HashSet<T>.Enumerator GetEnumerator() => set.GetEnumerator();
+        IEnumerator<T> IEnumerable<T>.GetEnumerator() => set.GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => set.GetEnumerator();
+    }
+    private static readonly HashSet<ZeldaFourWayMover> controlledSet = new HashSet<ZeldaFourWayMover>();
+    private static readonly SpatialBoundsIndex2D<ZeldaFourWayMover> characterIndex = new SpatialBoundsIndex2D<ZeldaFourWayMover>(8f);
+    private static int spatialFrame = -1;
+    private static float spatialPhysicsTime = -1f;
+
+    public static void InvalidateSpatialSnapshot() { spatialFrame = -1; }
+    public static void QueryNearbyMovers(Vector2 center, float radius, List<ZeldaFourWayMover> result)
+    {
+        if (spatialFrame != Time.frameCount || spatialPhysicsTime != Time.fixedTime)
+        {
+            spatialFrame = Time.frameCount; spatialPhysicsTime = Time.fixedTime;
+            foreach (var actor in moverSet)
+            {
+                if (actor != null && actor.gameObject.activeInHierarchy)
+                    characterIndex.Set(actor, new Bounds(actor.transform.position, Vector3.zero));
+                else if (!ReferenceEquals(actor, null)) characterIndex.Remove(actor);
+            }
+        }
+        // Broad-phase padding accommodates movement within this frame; callers
+        // still use live positions for exact vision, scene and distance tests.
+        characterIndex.Query(new Bounds(center, Vector3.one * (Mathf.Max(0f, radius) + 1f) * 2f), result);
+    }
     private static readonly HashSet<ZeldaFourWayMover> moverSet =
         new HashSet<ZeldaFourWayMover>();
     private static readonly HashSet<ZeldaCharacterAiBase> aiSet =
@@ -18,11 +49,26 @@ public static class ZeldaRuntimeRegistry
 
     private static ZeldaFourWayMover controlledMover;
 
-    public static IReadOnlyCollection<ZeldaFourWayMover> Movers => moverSet;
-    public static IReadOnlyCollection<ZeldaCharacterAiBase> AiCharacters => aiSet;
-    public static IReadOnlyCollection<PermissionArea> PermissionAreas => permissionAreaSet;
+    public static SetView<ZeldaFourWayMover> Movers => new SetView<ZeldaFourWayMover>(moverSet);
+    public static SetView<ZeldaFourWayMover> ControlledMovers => new SetView<ZeldaFourWayMover>(controlledSet);
+    public static SetView<ZeldaCharacterAiBase> AiCharacters => new SetView<ZeldaCharacterAiBase>(aiSet);
+    public static SetView<PermissionArea> PermissionAreas => new SetView<PermissionArea>(permissionAreaSet);
     public static event Action ControlledMoverChanged;
     public static event Action PermissionAreasChanged;
+
+    /// <summary>Live command status for the HUD, without boxing an interface enumerator.</summary>
+    public static float GetRoyalCommandBuffRemaining(Scene scene)
+    {
+        float remaining = 0f;
+        foreach (var ai in aiSet)
+        {
+            if (ai == null) continue;
+            float candidate = ai.RoyalCommandBuffRemaining;
+            if (candidate > remaining && GetGameplayScene(ai.gameObject) == scene)
+                remaining = candidate;
+        }
+        return remaining;
+    }
 
     /// <summary>
     /// Traveling bodies live in DontDestroyOnLoad, but act in the active level.
@@ -42,6 +88,8 @@ public static class ZeldaRuntimeRegistry
     private static void Reset()
     {
         moverSet.Clear();
+        controlledSet.Clear();
+        characterIndex.Clear(); InvalidateSpatialSnapshot();
         aiSet.Clear();
         permissionAreaSet.Clear();
         controlledMover = null;
@@ -53,7 +101,8 @@ public static class ZeldaRuntimeRegistry
     {
         if (mover != null)
         {
-            moverSet.Add(mover);
+            if (moverSet.Add(mover)) InvalidateSpatialSnapshot();
+            if (mover.isActiveAndEnabled) controlledSet.Add(mover);
         }
     }
 
@@ -63,6 +112,7 @@ public static class ZeldaRuntimeRegistry
             return;
 
         moverSet.Remove(mover);
+        controlledSet.Remove(mover); characterIndex.Remove(mover); InvalidateSpatialSnapshot();
         if (controlledMover == mover)
         {
             controlledMover = null;
@@ -86,6 +136,8 @@ public static class ZeldaRuntimeRegistry
 
     public static void NotifyMoverDisabled(ZeldaFourWayMover mover)
     {
+        controlledSet.Remove(mover);
+        InvalidateSpatialSnapshot();
         if (controlledMover == mover)
         {
             controlledMover = null;

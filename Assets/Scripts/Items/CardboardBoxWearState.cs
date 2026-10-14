@@ -4,6 +4,8 @@ using UnityEngine;
 /// <summary>Runtime disguise attached to the currently controlled character.</summary>
 public sealed class CardboardBoxWearState : MonoBehaviour
 {
+    private static readonly HashSet<CardboardBoxWearState> ActiveWornBoxes =
+        new HashSet<CardboardBoxWearState>();
     private const float TransitionAnimationDuration = 0.2f;
     private const float TransitionAnimationDistance = 0.22f;
 
@@ -44,6 +46,24 @@ public sealed class CardboardBoxWearState : MonoBehaviour
     public Vector2 WorldCenter => transform.position;
     public int RemainingBlockedAttacks => remainingBlockedAttacks;
     public string SaveSourceItemId => sourceItemId;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetVisionRegistry() => ActiveWornBoxes.Clear();
+    private void OnEnable() => ActiveWornBoxes.Add(this);
+    private void OnDisable() => ActiveWornBoxes.Remove(this);
+
+    internal static float ClipNpcVisionRay(Vector2 origin, Vector2 direction,
+        float distance, Transform observer, Transform ignoredTarget)
+    {
+        foreach (CardboardBoxWearState box in ActiveWornBoxes)
+        {
+            if (box == null || !box.isActiveAndEnabled || box.remainingBlockedAttacks <= 0)
+                continue;
+            distance = CardboardBoxNpcVision.Clip(origin, direction, distance,
+                observer, ignoredTarget, box.transform, box.visualRenderer);
+        }
+        return distance;
+    }
 
     public void Configure(
         CardboardBoxPickupItem source,
@@ -218,6 +238,7 @@ public sealed class CardboardBoxWearState : MonoBehaviour
 
         exiting = true;
         suppressItemReturn = !returnToInventory;
+        ActiveWornBoxes.Remove(this);
         mover?.UnregisterCardboardBox(this);
         RestoreCharacterVisuals();
         if (returnToInventory)
@@ -398,6 +419,7 @@ public sealed class CardboardBoxWearState : MonoBehaviour
 
     private void OnDestroy()
     {
+        ActiveWornBoxes.Remove(this);
         mover?.UnregisterCardboardBox(this);
         RestoreCharacterVisuals();
         ReturnBoxToInventory();

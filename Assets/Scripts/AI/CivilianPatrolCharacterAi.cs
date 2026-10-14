@@ -1,5 +1,5 @@
 /// <summary>
-/// Four-point civilian patrol. Civilians ignore permission warnings, but react
+/// Configurable civilian patrol. Civilians ignore permission warnings, but react
 /// like other characters when the player enters a fully hostile area.
 /// </summary>
 public sealed class CivilianPatrolCharacterAi : ZeldaPatrolCharacterAi

@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>Sky-blue plate armor, sealed helmet and a blue shoulder cape.</summary>
-public sealed class PaladinZeldaCharacterData : ZeldaCharacterData
+public class PaladinZeldaCharacterData : ZeldaCharacterData
 {
     private static readonly Vector3 EditorVisualBoundsCenter = new Vector3(0f, 0.25f, 0f);
     private static readonly Vector3 EditorVisualBoundsSize = new Vector3(1f, 1f, 0f);
@@ -119,7 +119,7 @@ public sealed class PaladinZeldaCharacterData : ZeldaCharacterData
         renderer.color = GetDamageFeedbackTint(Color.white);
     }
 
-    private Sprite CreateSprite(int direction, int pose)
+    protected virtual Sprite CreateSprite(int direction, int pose)
     {
         string[] map = direction == 1 ? Back : direction == 2 ? Left : direction == 3 ? Right : Front;
         var pixels = new Color[16 * 16];
@@ -184,7 +184,7 @@ public sealed class PaladinZeldaCharacterData : ZeldaCharacterData
         }
     }
 
-    private Color PixelColor(char symbol)
+    protected virtual Color PixelColor(char symbol)
     {
         switch (symbol)
         {

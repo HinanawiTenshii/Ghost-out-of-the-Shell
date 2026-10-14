@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="Chandelier.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Items\HerbPowderPickupItem.cs;Assets\Scripts\Items\HerbPowderPickupItemVisual.cs;Assets\Scripts\Items\GlassBottlePickupItem.cs;Assets\Scripts\Items\GlassBottlePickupItemVisual.cs;Assets\Scripts\Items\ThrownGlassBottle.cs;Assets\Scripts\Items\GlassBottleShatterVisual.cs" />
+    <Compile Include="Assets\Scripts\Items\HerbPowderPickupItem.cs;Assets\Scripts\Items\HerbPowderPickupItemVisual.cs;Assets\Scripts\Items\GlassBottlePickupItem.cs;Assets\Scripts\Items\GlassBottlePickupItemVisual.cs;Assets\Scripts\Items\ThrownGlassBottle.cs;Assets\Scripts\Items\GlassBottleShatterVisual.cs" />
+  </ItemGroup>
+</Project>

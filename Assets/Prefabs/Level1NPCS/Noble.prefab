@@ -110,10 +110,18 @@ SpriteRenderer:
     subMeshCount: 0
   m_StaticBatchRoot: {fileID: 0}
   m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
   m_ScaleInLightmap: 1
   m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
   m_ImportantGI: 0
   m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 0
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 1
@@ -138,17 +146,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 463239fb737b4c5ba99e9ac334efc8f2, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
-  cameraOrthographicSize: 7
-  playerVisionRadius: 13
-  sceneCameraOverrides: []
+  m_Name: 
+  m_EditorClassIdentifier: 
   health: 3
-  skillValue: 0
+  skillValue: 2
   permissionLevel: 0
   possessionEnergy: 2
   possessionCost: 1
   moveSpeed: 3
+  cameraOrthographicSize: 7
+  playerVisionRadius: 13
+  sceneCameraOverrides: []
   deathExplosionDuration: 0.35
   deathExplosionScale: 1.9
   deathExplosionTint: {r: 0.22, g: 0.25, b: 0.52, a: 1}
@@ -156,6 +164,21 @@ MonoBehaviour:
   damageTint: {r: 1, g: 0.2, b: 0.2, a: 1}
   damageShakeAmount: 0.04
   damageShakeSpeed: 80
+  attackSound: {fileID: 0}
+  attackSoundVolume: 1
+  attackSoundPitch: 1
+  attackSoundSpatialBlend: 0.75
+  attackSoundMaxDistance: 16
+  damageSound: {fileID: 0}
+  damageSoundVolume: 1
+  damageSoundPitch: 1
+  damageSoundSpatialBlend: 0.75
+  damageSoundMaxDistance: 16
+  deathSound: {fileID: 0}
+  deathSoundVolume: 1
+  deathSoundPitch: 1
+  deathSoundSpatialBlend: 0.75
+  deathSoundMaxDistance: 16
   attributeWindowOffset: {x: 0, y: 0}
   attributeWindowScale: 2.2
   attackPower: 1
@@ -168,6 +191,9 @@ MonoBehaviour:
   skinColor: {r: 0.84, g: 0.64, b: 0.46, a: 1}
   hairColor: {r: 0.14, g: 0.09, b: 0.07, a: 1}
   attackVisualTint: {r: 0.85, g: 0.72, b: 0.56, a: 0.8}
+  showCrown: 0
+  crownColor: {r: 0.95, g: 0.76, b: 0.18, a: 1}
+  crownJewelColor: {r: 0.22, g: 0.72, b: 0.92, a: 1}
 --- !u!114 &730100000000000007
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -178,12 +204,13 @@ MonoBehaviour:
   m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9a6df8c329184af4a985710734a46f2c, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   initialFacingDirection: 1
   controlSwitchDistance: 0.5
   controlSwitchRadius: 0.5
   controlSwitchHoldDuration: 3
+  nonGhostPossessionDurationBonus: 2
   controlSwitchProgressOffset: {x: 0, y: 1.1}
   controlSwitchProgressScale: 0.8
   controlSwitchFailureDuration: 0.9
@@ -197,6 +224,16 @@ MonoBehaviour:
     m_Bits: 4294967295
   collisionSkinWidth: 0.01
   deathGhostPrefab: {fileID: 4527040845616928534, guid: 3686e58a077f8534bbf32cc6244eab34, type: 3}
+  sprintKey: 32
+  sprintSpeedMultiplier: 2
+  maximumStamina: 15
+  staminaConsumptionPerSecond: 1
+  staminaRecoveryDelay: 1.25
+  staminaRecoveryPerSecond: 1.5
+  exhaustedResumeThreshold: 0.25
+  staminaProgressOffset: {x: 0, y: 1.3}
+  staminaProgressScale: 0.8
+  staminaProgressColor: {r: 0.22, g: 0.86, b: 0.4, a: 1}
 --- !u!114 &730100000000000008
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -207,8 +244,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a81494bb8bf44504a8f11adb1cb226c4, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   visionRadius: 4
   visionAngle: 90
   peripheralVisionAngle: 180
@@ -218,19 +255,22 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   visionColor: {r: 0.45, g: 0.8, b: 1, a: 0.22}
+  visionVisualRefreshInterval: 0.08
   immediateResponseDistance: 3
   maximumSuspicion: 100
   suspicionIncreasePerSecond: 35
   suspicionDecreasePerSecond: 25
+  cardboardBoxApproachDistance: 1.05
+  cardboardBoxSightMemoryDuration: 1.5
   attackDistance: 1.1
   attackFacingTolerance: 20
   attackCooldown: 0.35
-  regularHostileLoseSightDelay: 7
+  hostileAttackStartRangeMultiplier: 1.4
+  missedAttackPursuitDuration: 0.22
   solidCollisionLayers:
     serializedVersion: 2
     m_Bits: 4294967295
   collisionSkinWidth: 0.01
-  searchDuration: 4
   searchRadius: 1.8
   searchWaypointTolerance: 0.15
   searchWaypointChangeInterval: 1.2
@@ -240,6 +280,9 @@ MonoBehaviour:
   investigationWaypointPauseDuration: 0.65
   investigationTargetRelocationRadius: 1.5
   investigationRelocationSamplesPerRing: 12
+  investigationApproachMinimumRadius: 0.75
+  investigationApproachMaximumRadius: 1.45
+  investigationApproachTargetSpacing: 0.45
   recoveryPositionTolerance: 0.15
   warningFollowDistance: 1.4
   warningEscalationTime: 4
@@ -247,6 +290,10 @@ MonoBehaviour:
   stateIndicatorOffset: {x: 0, y: 1.15}
   stateIndicatorScale: 0.65
   hostileIndicatorDuration: 0.7
+  enableAwarenessSound: 1
+  awarenessSound: {fileID: 0}
+  awarenessSoundVolume: 0.55
+  awarenessSoundMaxDistance: 18
   possessionShakeAmount: 0.025
   possessionShakeSpeed: 45
   obstacleProbeDistance: 0.75
@@ -266,22 +313,40 @@ MonoBehaviour:
   gridCellSize: 0.5
   gridSearchPadding: 5
   maximumGridDimension: 45
+  expandedGridDimension: 121
+  minimumGridCellSize: 0.25
   gridPathRefreshInterval: 0.35
   hostileGridPathRefreshInterval: 0.18
+  movingTargetGridRepathInterval: 0.3
+  gridPathMaintenanceInterval: 1.25
+  maximumAStarBuildsPerFrame: 1
+  globalAStarBuildInterval: 0.04
+  expensiveGridFallbackInterval: 0.5
+  gridPathValidationInterval: 0.12
   gridWaypointTolerance: 0.14
   gridWallClearance: 0.16
   maximumWallSeparationStep: 0.12
   preferredGridObstacleDistance: 0.7
   gridObstacleProximityCost: 3.5
+  gridTurnCost: 0.08
   characterSeparationDistance: 0.75
   characterSeparationStrength: 1.25
+  characterAvoidanceLookAheadDistance: 1.35
+  characterAvoidanceClearancePadding: 0.12
+  characterYieldSpeedMultiplier: 0.62
   characterSeparationRefreshInterval: 0.12
+  characterSeparationForcedRefreshInterval: 0.05
   showNavigationDebug: 0
   navigationPathColor: {r: 0.15, g: 0.85, b: 1, a: 0.9}
   navigationTargetColor: {r: 1, g: 0.25, b: 0.75, a: 1}
   navigationPathWidth: 0.035
   navigationTargetMarkerSize: 0.18
   navigationDebugSortingOrder: 200
+  pursuitSpacing: 0.16
+  pursuitLookAheadTime: 0.7
+  pursuitOvertakeSpeedAdvantage: 0.15
+  patrolSpeedMultiplier: 0.75
+  legacyPatrolPointCount: 4
   patrolPoint2Offset: {x: 0, y: 0}
   patrolPoint3Offset: {x: 0, y: 0}
   patrolPoint4Offset: {x: 0, y: 0}
@@ -290,3 +355,5 @@ MonoBehaviour:
   waitAtPoint2Duration: 1
   waitAtPoint3Duration: 1
   waitAtPoint4Duration: 1
+  useCustomPatrolRoute: 0
+  customPatrolPoints: []

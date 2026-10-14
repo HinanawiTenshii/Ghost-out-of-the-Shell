@@ -90,7 +90,7 @@ public sealed class TitleScreenController : MonoBehaviour
         {
             GameSaveSystem.Instance?.BeginNewGame();
             SceneTravelStateManager.GetOrCreate().ResetAllSceneStates();
-            SceneManager.LoadScene(sceneName.Trim());
+            RetroSceneLoadReveal.LoadSceneAsync(sceneName.Trim());
         });
     }
 
@@ -311,7 +311,7 @@ public sealed class TitleScreenController : MonoBehaviour
             titleCanvas.planeDistance =
                 titleCanvas.worldCamera.nearClipPlane + 0.01f;
         }
-        CRTScreenEffect.RegisterCanvas(titleCanvas);
+        CRTScreenEffect.RegisterCanvas(titleCanvas, enableGlow: true);
     }
 
     private static void EnsureEventSystem()

@@ -10,7 +10,7 @@ using UnityEngine.SceneManagement;
 /// </summary>
 [DefaultExecutionOrder(1000)]
 [RequireComponent(typeof(Camera), typeof(CameraCircularVision))]
-public sealed class CameraVisionObjectStreaming : MonoBehaviour
+public sealed partial class CameraVisionObjectStreaming : MonoBehaviour
 {
     [Header("Streaming Toggle")]
     [SerializeField, Tooltip("Unload objects outside the camera viewport and its preload margin.")]
@@ -48,11 +48,42 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
         public bool containsLever;
         public ZeldaFourWayMover[] movers;
         public ZeldaCharacterAiBase[] aiCharacters;
+        public EnergyCrystal[] energyCrystals;
         public float lastVisibilityCheckTime;
         public bool queuedForActivation;
+        public Matrix4x4 boundsMatrix;
+        public Bounds worldBounds;
+        public bool hasWorldBounds;
     }
 
     private readonly List<ManagedObject> managedObjects = new List<ManagedObject>();
+    private readonly SpatialBoundsIndex2D<ManagedObject> spatialIndex = new SpatialBoundsIndex2D<ManagedObject>();
+    private readonly List<ManagedObject> nearbyObjects = new List<ManagedObject>(128);
+    private readonly List<ManagedObject> nearbyRetentionObjects = new List<ManagedObject>(128);
+    private readonly List<Bounds> retentionBounds = new List<Bounds>(8);
+    private bool restoringRetention;
+
+    private Bounds GetWorldBounds(ManagedObject item)
+    {
+        Matrix4x4 matrix = item.gameObject.transform.localToWorldMatrix;
+        if (!item.hasWorldBounds || matrix != item.boundsMatrix)
+        {
+            item.boundsMatrix = matrix;
+            item.worldBounds = TransformLocalBoundsToWorld(item.gameObject.transform, item.localBounds);
+            item.hasWorldBounds = true;
+            spatialIndex.Set(item, item.worldBounds);
+        }
+        return item.worldBounds;
+    }
+
+    private void UpdateSpatialIndex()
+    {
+        // A cheap transform check also catches teleports of disabled objects and
+        // moving parents. Do not clear Transform.hasChanged (other systems use it).
+        foreach (var item in managedObjects)
+            if (item.gameObject != null) GetWorldBounds(item);
+            else spatialIndex.Remove(item);
+    }
     private readonly Dictionary<GameObject, ManagedObject> managedLookup =
         new Dictionary<GameObject, ManagedObject>();
     private readonly Queue<Transform> discoveryQueue = new Queue<Transform>();
@@ -89,6 +120,7 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
         {
             RestoreAllObjects();
             managedObjects.Clear();
+            spatialIndex.Clear();
             managedLookup.Clear();
             discoveryQueue.Clear();
             activationQueue.Clear();
@@ -123,6 +155,29 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
         }
 
         return false;
+    }
+
+    /// <summary>Wake only streaming-owned suspensions, never deliberately hidden objects.</summary>
+    public static void RestoreForGameplay(GameObject candidate)
+    {
+        if (candidate == null) return;
+        var managers = FindObjectsOfType<CameraVisionObjectStreaming>();
+        // Restore parents first so Awake/OnEnable run before the caller assigns AI work.
+        var hierarchy = new List<GameObject>();
+        for (Transform current = candidate.transform; current != null; current = current.parent)
+            hierarchy.Add(current.gameObject);
+        for (int i = hierarchy.Count - 1; i >= 0; i--)
+        {
+            foreach (var manager in managers)
+            {
+                if (!manager.managedLookup.TryGetValue(hierarchy[i], out ManagedObject entry) ||
+                    !entry.suspendedByManager) continue;
+                entry.suspendedByManager = false;
+                entry.queuedForActivation = false;
+                entry.outsideTimer = 0f;
+                hierarchy[i].SetActive(true);
+            }
+        }
     }
 
     private void Awake()
@@ -174,11 +229,14 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
 
         RefreshStreamingViewport();
         ProcessDiscoveryScan();
+        UpdateSpatialIndex();
+        UpdatePatrolStreamingGroups();
         RestoreObjectsInRetentionRegions();
         RestoreObjectsNearViewport();
         QueueLeverHighlightsWhenSelectionStarts();
         UpdateStreaming();
         ProcessActivationQueue();
+        CompletePatrolGroupActivations();
     }
 
     private void QueueLeverHighlightsWhenSelectionStarts()
@@ -212,6 +270,7 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
     private void OnDisable()
     {
         SceneManager.sceneLoaded -= OnSceneLoaded;
+        ReleasePatrolStreamingGroups();
         if (restoreObjectsWhenDisabled)
         {
             RestoreAllObjects();
@@ -233,6 +292,7 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
         {
             RestoreAllObjects();
                 managedObjects.Clear();
+                spatialIndex.Clear();
                 managedLookup.Clear();
         }
     }
@@ -244,6 +304,7 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
         managedLookup.Clear();
         discoveryQueue.Clear();
         activationQueue.Clear();
+        spatialIndex.Clear();
         puppetHighlightWasActive = false;
         visibilityCursor = 0;
         sceneRescanTimer = sceneRescanInterval;
@@ -303,6 +364,7 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
                         candidate.GetComponentInChildren<LeverData>(true) != null,
                     movers = candidate.GetComponentsInChildren<ZeldaFourWayMover>(true),
                     aiCharacters = candidate.GetComponentsInChildren<ZeldaCharacterAiBase>(true),
+                    energyCrystals = candidate.GetComponentsInChildren<EnergyCrystal>(true),
                     lastVisibilityCheckTime = Time.unscaledTime - visibilityCheckInterval
                 };
                 managedObjects.Add(managedObject);
@@ -346,6 +408,7 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
             GameObject target = managedObject.gameObject;
             if (target == null)
             {
+                spatialIndex.Remove(managedObject);
                 managedObjects.RemoveAt(visibilityCursor);
                 continue;
             }
@@ -360,7 +423,8 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
             if (HasRuntimeStreamingExemption(target.transform) ||
                 ContainsActivePlayer(managedObject.movers) ||
                 HasActivePlayerAncestor(target.transform) ||
-                ContainsStreamingRetainedAi(managedObject.aiCharacters))
+                ContainsStreamingRetainedAi(managedObject.aiCharacters) ||
+                ContainsRetainedCrystal(managedObject.energyCrystals))
             {
                 managedObject.outsideTimer = 0f;
                 if (managedObject.suspendedByManager)
@@ -376,7 +440,9 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
             }
 
             managedObject.lastVisibilityCheckTime = now;
-            bool visible = IsInsideStreamingRetentionRange(managedObject);
+            bool grouped = groupedPatrolObjects.Contains(managedObject);
+            bool visible = retainedPatrolObjects.Contains(managedObject) ||
+                IsInsideStreamingRetentionRange(managedObject);
             if (visible)
             {
                 managedObject.outsideTimer = 0f;
@@ -387,7 +453,9 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
                 continue;
             }
 
-            managedObject.outsideTimer += elapsed;
+            // A group already waited one shared unload delay and froze all
+            // members. Individual round-robin timing must not add another delay.
+            managedObject.outsideTimer = grouped ? unloadDelay : managedObject.outsideTimer + elapsed;
             if (!managedObject.suspendedByManager && target.activeSelf &&
                 managedObject.outsideTimer >= unloadDelay && suspensionsRemaining > 0)
             {
@@ -450,12 +518,14 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
                 continue;
             }
 
-            bool stillVisible = IsInsideStreamingRetentionRange(managedObject);
+            bool stillVisible = retainedPatrolObjects.Contains(managedObject) ||
+                IsInsideStreamingRetentionRange(managedObject);
             if (!stillVisible &&
                 !HasRuntimeStreamingExemption(target.transform) &&
                 !ContainsActivePlayer(managedObject.movers) &&
                 !HasActivePlayerAncestor(target.transform) &&
-                !ContainsStreamingRetainedAi(managedObject.aiCharacters))
+                !ContainsStreamingRetainedAi(managedObject.aiCharacters) &&
+                !ContainsRetainedCrystal(managedObject.energyCrystals))
             {
                 continue;
             }
@@ -480,9 +550,7 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
                 continue;
             }
 
-            Bounds worldBounds = TransformLocalBoundsToWorld(
-                candidate.gameObject.transform,
-                candidate.localBounds);
+            Bounds worldBounds = GetWorldBounds(candidate);
             float distance = worldBounds.SqrDistance(cameraPosition);
             if (distance < closestDistance)
             {
@@ -502,9 +570,7 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
         }
 
         Transform target = managedObject.gameObject.transform;
-        Bounds worldBounds = TransformLocalBoundsToWorld(
-            target,
-            managedObject.localBounds);
+        Bounds worldBounds = GetWorldBounds(managedObject);
         if (CameraVisionStreamingRegion.Intersects(managedObject.gameObject.scene, worldBounds))
             return true;
         if (circularVision != null &&
@@ -581,14 +647,26 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
         // of the preload band provides headroom even on fast pans/zoom-outs.
         // Outer-band loading and all unloading retain their normal budgets.
         float urgentPadding = currentPreloadPadding * 0.5f;
-        for (int i = 0; i < managedObjects.Count; i++)
+        // Query an enclosing world rectangle, then retain the exact frustum test.
+        if (!hasStreamingPlanes || streamingCamera == null || !streamingCamera.orthographic ||
+            Mathf.Abs(streamingCamera.transform.forward.z) < .999f)
+        { nearbyObjects.Clear(); nearbyObjects.AddRange(managedObjects); }
+        else
         {
-            ManagedObject managedObject = managedObjects[i];
+            Bounds view = new Bounds(streamingCamera.ViewportToWorldPoint(new Vector3(0, 0, streamingCamera.nearClipPlane)), Vector3.zero);
+            view.Encapsulate(streamingCamera.ViewportToWorldPoint(new Vector3(1, 0, streamingCamera.nearClipPlane)));
+            view.Encapsulate(streamingCamera.ViewportToWorldPoint(new Vector3(0, 1, streamingCamera.nearClipPlane)));
+            view.Encapsulate(streamingCamera.ViewportToWorldPoint(new Vector3(1, 1, streamingCamera.nearClipPlane)));
+            view.Expand(urgentPadding * 2f * 1.415f);
+            spatialIndex.Query(view, nearbyObjects);
+        }
+        for (int i = 0; i < nearbyObjects.Count; i++)
+        {
+            ManagedObject managedObject = nearbyObjects[i];
             if (!managedObject.suspendedByManager || managedObject.gameObject == null)
                 continue;
 
-            Bounds worldBounds = TransformLocalBoundsToWorld(
-                managedObject.gameObject.transform, managedObject.localBounds);
+            Bounds worldBounds = GetWorldBounds(managedObject);
             if (hasStreamingPlanes &&
                 !IntersectsStreamingViewport(worldBounds, streamingPlanes, urgentPadding))
                 continue;
@@ -606,28 +684,45 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
         foreach (CameraVisionObjectStreaming manager in FindObjectsOfType<CameraVisionObjectStreaming>())
         {
             if (manager.isActiveAndEnabled && manager.enableVisionStreaming)
+            {
+                manager.UpdateSpatialIndex();
                 manager.RestoreObjectsInRetentionRegions();
+            }
         }
     }
 
     private void RestoreObjectsInRetentionRegions()
     {
         if (!CameraVisionStreamingRegion.HasActiveRegions) return;
-        for (int i = 0; i < managedObjects.Count; i++)
+        // Re-enabling a bomb can synchronously configure another retention region.
+        // A rare reentrant call uses the stable registry, not the outer query buffer.
+        if (restoringRetention)
         {
-            ManagedObject item = managedObjects[i];
-            if (item.gameObject == null) continue;
-            Bounds bounds = TransformLocalBoundsToWorld(item.gameObject.transform, item.localBounds);
-            if (!CameraVisionStreamingRegion.Intersects(item.gameObject.scene, bounds)) continue;
-
-            item.outsideTimer = 0f;
-            item.lastVisibilityCheckTime = Time.unscaledTime;
-            // Only undo THIS manager's suspension. Puzzle-disabled objects must
-            // stay disabled, and do not gain permanent exemption components.
-            if (!item.suspendedByManager) continue;
-            item.suspendedByManager = false;
-            item.gameObject.SetActive(true);
+            for (int i = 0; i < managedObjects.Count; i++) RestoreRetentionObject(managedObjects[i]);
+            return;
         }
+        restoringRetention = true;
+        try
+        {
+            CameraVisionStreamingRegion.CopyActiveBounds(retentionBounds);
+            foreach (Bounds region in retentionBounds)
+            {
+                spatialIndex.Query(region, nearbyRetentionObjects);
+                for (int i = 0; i < nearbyRetentionObjects.Count; i++) RestoreRetentionObject(nearbyRetentionObjects[i]);
+            }
+        }
+        finally { restoringRetention = false; }
+    }
+
+    private void RestoreRetentionObject(ManagedObject item)
+    {
+        if (item.gameObject == null || !CameraVisionStreamingRegion.Intersects(item.gameObject.scene, GetWorldBounds(item))) return;
+        item.outsideTimer = 0f;
+        item.lastVisibilityCheckTime = Time.unscaledTime;
+        // Never enable objects deliberately disabled by puzzle logic.
+        if (!item.suspendedByManager) return;
+        item.suspendedByManager = false;
+        item.gameObject.SetActive(true);
     }
 
     private static Bounds TransformLocalBoundsToWorld(Transform target, Bounds localBounds)
@@ -709,6 +804,14 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
             }
         }
 
+        return false;
+    }
+
+    private static bool ContainsRetainedCrystal(EnergyCrystal[] crystals)
+    {
+        if (crystals == null) return false;
+        foreach (var crystal in crystals)
+            if (crystal != null && crystal.HasActiveBoundSkeletons) return true;
         return false;
     }
 
@@ -849,6 +952,8 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
         Renderer[] renderers = target.GetComponentsInChildren<Renderer>(true);
         for (int i = 0; i < renderers.Length; i++)
         {
+            // Link endpoints are other actors, not part of the crystal's loading footprint.
+            if (renderers[i].name == EnergyCrystalVisual.LinkMeshName) continue;
             EncapsulateWorldBounds(target.transform, renderers[i].bounds, ref localBounds, ref initialized);
         }
 
@@ -904,6 +1009,7 @@ public sealed class CameraVisionObjectStreaming : MonoBehaviour
 
     private void RestoreAllObjects()
     {
+        ReleasePatrolStreamingGroups();
         for (int i = 0; i < managedObjects.Count; i++)
         {
             ManagedObject managedObject = managedObjects[i];

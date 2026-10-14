@@ -1,8 +1,9 @@
 using UnityEngine;
 
 /// <summary>Restores normal E.G.O, or supplies up to three temporary thirds.</summary>
-public sealed class StabilityCrystalPickupItem : PickupItemBase
+public sealed class StabilityCrystalPickupItem : PickupItemBase, IConsumableExplosive
 {
+    public override bool UsesSimpleUseGesture => false;
     [SerializeField] private Vector2 burstSize = new Vector2(2.4f, 2.4f);
     private bool burstTriggered;
     public override bool TryPickUp()
@@ -50,6 +51,16 @@ public sealed class StabilityCrystalPickupItem : PickupItemBase
             }
         }
         Destroy(gameObject);
+    }
+
+    public bool TryConsumeExplosive(out int attackPower)
+    {
+        attackPower = 0; // Its normal burst stuns but does not deal health damage.
+        if (burstTriggered || !isActiveAndEnabled) return false;
+        burstTriggered = true;
+        gameObject.SetActive(false);
+        Destroy(gameObject);
+        return true;
     }
     protected override bool ApplyUseEffect(ZeldaCharacterData user)
     {

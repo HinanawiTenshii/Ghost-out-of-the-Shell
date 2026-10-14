@@ -25,6 +25,9 @@ public sealed class SaveGameCatalog : ScriptableObject
         // Scene YAML contains PPtr-like inline mappings. Keep it out of the
         // catalog asset's YAML parser/reference scanner by storing safe text.
         public string authoredStateBase64;
+        // Version-2 saves reference an immutable compressed baseline. Catalog
+        // assets and legacy saves keep their original inline representation.
+        public string templateKey;
 
         public static SceneTemplate FromSceneText(string sceneName, string scenePath, string text)
         {
@@ -39,7 +42,8 @@ public sealed class SaveGameCatalog : ScriptableObject
             // Preserve the original save-file schema and support old raw-text catalogs.
             return new SceneTemplate {
                 name = name, path = path,
-                authoredState = string.IsNullOrEmpty(authoredStateBase64) ? authoredState :
+                authoredState = !string.IsNullOrEmpty(templateKey) ? SaveSceneTemplateStore.Read(templateKey) :
+                    string.IsNullOrEmpty(authoredStateBase64) ? authoredState :
                     System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(authoredStateBase64))
             };
         }

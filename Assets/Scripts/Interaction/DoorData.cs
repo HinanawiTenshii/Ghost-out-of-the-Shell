@@ -84,7 +84,7 @@ public class DoorData : MonoBehaviour
         ZeldaCharacterData attackSource,
         bool isDirectCharacterAttack)
     {
-        if (isDestroyed)
+        if (isDestroyed || ArenaChallengeController.ProtectsDoor(this))
         {
             return;
         }
@@ -173,6 +173,7 @@ public class DoorData : MonoBehaviour
     {
         StopShake();
         isDestroyed = true;
+        GetComponentInParent<LockedDoorMapMarker>()?.NotifyLeafDestroyed();
         Vector3 destructionPosition = spriteRenderer != null ? spriteRenderer.bounds.center : transform.position;
         // Destroy is deferred until the end of the frame. Disable the broken
         // object's colliders immediately so it cannot incorrectly block the

@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="SpeedBoostArea.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Characters\SkeletonZeldaCharacterData.cs;Assets\Scripts\AI\SkeletonCharacterAi.cs" />
+    <Compile Include="Assets\Scripts\Characters\SkeletonZeldaCharacterData.cs;Assets\Scripts\AI\SkeletonCharacterAi.cs" />
+  </ItemGroup>
+</Project>

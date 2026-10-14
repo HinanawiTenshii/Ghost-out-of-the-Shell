@@ -90,7 +90,7 @@ foreach($segments in 0..6){
 foreach($i in 0..($full.Length-1)){foreach($channel in @('r','g','b','a')){Check ($texture.pixels[$i].$channel -eq $full[$i].$channel) 'Full recharge restores original palette'}}
 [ClockworkPuppetPickupItemVisual]::ApplyRuntimeEnergy($null,0)
 $bombVisual=[BombPickupItemVisual]::new()
-$bombPrefab=Get-Content -Raw "$root/Assets/Resources/PickupItems/BombPickupItem.prefab"
+$bombPrefab=Get-Content -Raw "$root/Assets/Resources/PickupItems/Bombs/BombPickupItem.prefab"
 foreach($field in @('bodyColor','bodyHighlightColor','fuseColor')){
     $m=[regex]::Match($bombPrefab,$field+': \{r: ([\d.]+), g: ([\d.]+), b: ([\d.]+), a: ([\d.]+)\}')
     $c=[UnityEngine.Color]::new([float]$m.Groups[1].Value,[float]$m.Groups[2].Value,[float]$m.Groups[3].Value,[float]$m.Groups[4].Value)

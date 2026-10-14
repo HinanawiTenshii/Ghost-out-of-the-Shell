@@ -5,8 +5,9 @@ using UnityEngine;
 /// Stackable cardboard-box disguise and one-slot world container.
 /// Ground boxes take two attacks; worn boxes redirect two character hits.
 /// </summary>
-public sealed class CardboardBoxPickupItem : PickupItemBase
+public sealed class CardboardBoxPickupItem : PickupItemBase, IConsumableExplosive
 {
+    public override bool UsesSimpleUseGesture => false;
     private static readonly HashSet<CardboardBoxPickupItem> ActiveBoxes =
         new HashSet<CardboardBoxPickupItem>();
 
@@ -34,6 +35,15 @@ public sealed class CardboardBoxPickupItem : PickupItemBase
     private bool storedItemHasCharge;
     private float storedItemCharge;
     private PickupItemBase storedItemPrefab;
+    // Primitive fields are captured by the existing container save system.
+    // Do not create a separate PlacedBomb until release: it would be saved twice.
+    private bool storedBombArmed;
+    private float storedBombProximityCheckRemaining;
+    private float storedBombRemainingFuse;
+    private string storedBombOwnerId;
+    private ZeldaCharacterData storedBombOwner;
+    private CameraVisionStreamingRegion storedBombRetention;
+    private CameraVisionStreamingExempt ownedBombExemption;
     private ClockworkPuppetBoxDriver storedPuppetDriver;
     private int receivedGroundAttacks;
     private bool isDestroyed;
@@ -43,6 +53,22 @@ public sealed class CardboardBoxPickupItem : PickupItemBase
 
     public static IReadOnlyCollection<CardboardBoxPickupItem> WorldBoxes =>
         ActiveBoxes;
+
+    // NPC-only occlusion: do not turn the pickup trigger into solid geometry
+    // or move it onto Blocks (either would also change player vision/physics).
+    internal static float ClipNpcVisionRay(Vector2 origin, Vector2 direction,
+        float distance, Transform observer, Transform ignoredTarget)
+    {
+        foreach (CardboardBoxPickupItem box in ActiveBoxes)
+        {
+            if (box == null || !box.isActiveAndEnabled || box.isDestroyed)
+                continue;
+            distance = CardboardBoxNpcVision.Clip(origin, direction, distance,
+                observer, ignoredTarget, box.transform, box.boxRenderer);
+        }
+        return CardboardBoxWearState.ClipNpcVisionRay(
+            origin, direction, distance, observer, ignoredTarget);
+    }
     public float StaminaDrainPerSecond => staminaDrainPerSecond;
     public float WornMovementSpeedMultiplier => wornMovementSpeedMultiplier;
     public int MaximumBlockedAttacks => maximumBlockedAttacks;
@@ -66,13 +92,14 @@ public sealed class CardboardBoxPickupItem : PickupItemBase
         if (!hasStoredItem) return;
         foreach (var item in SaveGameCatalog.LoadPickupTemplates())
             if (item.ItemId == storedItemId) { storedItemPrefab = item; break; }
+        if (storedBombArmed) RefreshStoredBombRetention();
         var puppet = storedItemPrefab as ClockworkPuppetPickupItem;
         if (puppet == null) return;
         storedPuppetDriver = GetComponent<ClockworkPuppetBoxDriver>();
         if (storedPuppetDriver == null) storedPuppetDriver = gameObject.AddComponent<ClockworkPuppetBoxDriver>();
         storedPuppetDriver.Configure(this, puppet, storedItemHasCharge ? storedItemCharge : puppet.MaximumMagic,
-            storedItemInstanceId, storedItemName, storedItemDescription, storedItemHasVisualColor, storedItemVisualColor);
-        if (!wasRemoteControlled) ClockworkPuppetBoxDriver.EndActiveRemoteControl();
+            storedItemInstanceId, storedItemName, storedItemDescription, storedItemHasVisualColor,
+            storedItemVisualColor, wasRemoteControlled);
     }
     public bool IsDestroyed => isDestroyed;
     public bool IsClockworkPuppetDriven => storedPuppetDriver != null;
@@ -126,13 +153,21 @@ public sealed class CardboardBoxPickupItem : PickupItemBase
         NotifyPickedUp();
         if (hasStoredItem)
         {
-            // Picking up a container is not the same as breaking it. Release
-            // the contents safely, without invoking destruction reactions
-            // such as a stored bomb exploding.
+            // Safe contents remain recoverable. An already lit bomb instead
+            // stays in the world with its remaining fuse; pickup cannot defuse it.
             ReleaseStoredItem(null, false);
         }
+        ActiveBoxes.Remove(this);
         Destroy(gameObject);
         return true;
+    }
+
+    internal override void CompleteShopPurchase(PersistentInventory inventory)
+    {
+        base.CompleteShopPurchase(inventory);
+        // Match normal pickup: buying the container must not silently delete
+        // something the player stored in it, nor defuse an already lit bomb.
+        if (hasStoredItem) ReleaseStoredItem(null, false);
     }
 
     protected override bool ApplyUseEffect(ZeldaCharacterData user)
@@ -293,6 +328,7 @@ public sealed class CardboardBoxPickupItem : PickupItemBase
             return false;
         }
 
+        PersistentInventory.Instance?.RemoveClockworkPuppetRemote(storedItemInstanceId);
         ClearStoredItem();
         return true;
     }
@@ -300,6 +336,77 @@ public sealed class CardboardBoxPickupItem : PickupItemBase
     public void CancelLastStoredItem()
     {
         ClearStoredItem();
+    }
+
+    public bool TryConsumeExplosive(out int attackPower)
+    {
+        attackPower = 0;
+        if (!isActiveAndEnabled || isDestroyed || !hasStoredItem) return false;
+        if (storedItemPrefab is BombPickupItem bomb) attackPower = bomb.ExplosionAttackPower;
+        else if (storedItemPrefab is BatteryPickupItem) attackPower = BatteryPickupItem.ExplosionAttackPower;
+        else if (!(storedItemPrefab is StabilityCrystalPickupItem)) return false;
+        ClearStoredItem(); // Also cancels a hidden lit fuse and its streaming lease.
+        return true;
+    }
+
+    public void ArmStoredBomb(ZeldaCharacterData user)
+    {
+        var bomb = storedItemPrefab as BombPickupItem;
+        if (!hasStoredItem || isDestroyed || storedBombArmed || bomb == null) return;
+        storedBombArmed = true;
+        storedBombProximityCheckRemaining = 0f;
+        storedBombRemainingFuse = bomb.FuseDuration;
+        storedBombOwner = user;
+        storedBombOwnerId = user != null ? user.IndividualAccessId : string.Empty;
+        RefreshStoredBombRetention();
+    }
+
+    private void RefreshStoredBombRetention()
+    {
+        var bomb = storedItemPrefab as BombPickupItem;
+        if (!storedBombArmed || bomb == null) return;
+        if (storedBombRetention == null)
+        {
+            if (GetComponent<CameraVisionStreamingExempt>() == null)
+                ownedBombExemption = gameObject.AddComponent<CameraVisionStreamingExempt>();
+            storedBombRetention = gameObject.AddComponent<CameraVisionStreamingRegion>();
+        }
+        storedBombRetention.Configure(bomb.StreamingRetentionRadius);
+    }
+
+    private ZeldaCharacterData ResolveStoredBombOwner()
+    {
+        if (storedBombOwner != null) return storedBombOwner;
+        if (string.IsNullOrEmpty(storedBombOwnerId)) return null;
+        foreach (var mover in ZeldaRuntimeRegistry.Movers)
+        {
+            if (mover == null) continue;
+            var candidate = mover.GetComponent<ZeldaCharacterData>();
+            if (candidate != null && candidate.IndividualAccessId == storedBombOwnerId)
+                return storedBombOwner = candidate;
+        }
+        return null;
+    }
+
+    private void TickStoredBomb(float deltaTime)
+    {
+        if (!hasStoredItem || !storedBombArmed || isDestroyed) return;
+        if (storedItemPrefab is BombPickupItem bomb)
+        {
+            if (bomb.IsProximity)
+            {
+                if (deltaTime <= 0f) return;
+                storedBombProximityCheckRemaining -= deltaTime;
+                if (storedBombProximityCheckRemaining > 0f) return;
+                storedBombProximityCheckRemaining = BombProximitySensor.CheckInterval;
+                if (BombProximitySensor.HasTarget(transform.position, bomb.ExplosionSize, gameObject.scene,
+                    ResolveStoredBombOwner(), storedBombOwnerId)) BreakGroundBox(null);
+                return;
+            }
+            if (bomb.IsDecoy) return;
+        }
+        storedBombRemainingFuse = Mathf.Max(0f, storedBombRemainingFuse - deltaTime);
+        if (storedBombRemainingFuse <= 0f) BreakGroundBox(null);
     }
 
     public void ReceiveAttack(int attackPower, ZeldaCharacterData attacker)
@@ -321,6 +428,8 @@ public sealed class CardboardBoxPickupItem : PickupItemBase
 
     private void LateUpdate()
     {
+        if (!GameSaveSystem.IsLoading) TickStoredBomb(Time.deltaTime);
+        if (isDestroyed) return;
         if (shakeTimer <= 0f)
         {
             transform.localPosition = baseLocalPosition;
@@ -346,6 +455,7 @@ public sealed class CardboardBoxPickupItem : PickupItemBase
             // A deployed puppet is physically inside this box. Destroying
             // the container destroys the mechanism instead of turning it
             // back into a recoverable pickup.
+            PersistentInventory.Instance?.RemoveClockworkPuppetRemote(storedItemInstanceId);
             ClearStoredItem();
         }
         else
@@ -362,6 +472,23 @@ public sealed class CardboardBoxPickupItem : PickupItemBase
         if (!hasStoredItem || storedItemPrefab == null)
         {
             ClearStoredItem();
+            return;
+        }
+
+        var armedBomb = storedItemPrefab as BombPickupItem;
+        if (storedBombArmed && armedBomb != null)
+        {
+            PlacedBomb releasedBomb = armedBomb.CreateConfiguredPlacedBomb(
+                transform.position, ResolveStoredBombOwner());
+            // The owner may be gone or in another scene; the explosion belongs
+            // to the container's scene, never the owner's current scene.
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(
+                releasedBomb.gameObject, gameObject.scene);
+            releasedBomb.RestoreRemainingFuse(storedBombRemainingFuse);
+            releasedBomb.RestoreProximityOwnerId(storedBombOwnerId);
+            releasedBomb.RestoreSavedOwner(ResolveStoredBombOwner());
+            ClearStoredItem();
+            if (invokeReleaseEffect) releasedBomb.DetonateImmediately();
             return;
         }
 
@@ -402,6 +529,22 @@ public sealed class CardboardBoxPickupItem : PickupItemBase
 
     private void ClearStoredItem()
     {
+        storedBombArmed = false;
+        storedBombProximityCheckRemaining = 0f;
+        storedBombRemainingFuse = 0f;
+        storedBombOwnerId = string.Empty;
+        storedBombOwner = null;
+        if (storedBombRetention != null)
+        {
+            storedBombRetention.enabled = false;
+            Destroy(storedBombRetention);
+            storedBombRetention = null;
+        }
+        if (ownedBombExemption != null)
+        {
+            Destroy(ownedBombExemption);
+            ownedBombExemption = null;
+        }
         if (storedPuppetDriver != null)
         {
             Destroy(storedPuppetDriver);
@@ -518,4 +661,63 @@ public sealed class CardboardBoxPickupItem : PickupItemBase
         fragmentScale = Mathf.Max(0f, fragmentScale);
     }
 #endif
+}
+
+/// <summary>Ray clipping shared by ground and worn boxes, independent of pickup triggers.</summary>
+internal static class CardboardBoxNpcVision
+{
+    internal static float Clip(Vector2 origin, Vector2 direction, float distance,
+        Transform observer, Transform ignoredTarget, Transform owner, SpriteRenderer renderer)
+    {
+        if (distance <= 0f || renderer == null || renderer.sprite == null || !renderer.enabled ||
+            !renderer.gameObject.activeInHierarchy ||
+            (observer != null && owner.IsChildOf(observer)) ||
+            (ignoredTarget != null && owner.IsChildOf(ignoredTarget)))
+            return distance;
+
+        // Reject distant boxes before transforming the segment. No scene scan,
+        // new colliders, or physics-layer changes.
+        Vector2 end = origin + direction * distance;
+        Bounds world = renderer.bounds;
+        if (Mathf.Max(origin.x, end.x) < world.min.x || Mathf.Min(origin.x, end.x) > world.max.x ||
+            Mathf.Max(origin.y, end.y) < world.min.y || Mathf.Min(origin.y, end.y) > world.max.y)
+            return distance;
+
+        // The usual same-scene path avoids scene-name lookups on every ray.
+        // Traveling wearers live in DontDestroyOnLoad and belong to the active floor.
+        if (observer != null && owner.gameObject.scene != observer.gameObject.scene &&
+            ZeldaRuntimeRegistry.GetGameplayScene(owner.gameObject) !=
+            ZeldaRuntimeRegistry.GetGameplayScene(observer.gameObject))
+            return distance;
+
+        Bounds sprite = renderer.sprite.bounds;
+        // The 24x20 box art has loose lower flaps and transparent margins.
+        // Only its main body casts a sight shadow. Sprite-local coordinates
+        // also preserve the different ground/worn pivots, flips and transforms.
+        Vector2 min = (Vector2)sprite.min + Vector2.Scale(sprite.size, new Vector2(4f / 24f, 4f / 20f));
+        Vector2 max = (Vector2)sprite.min + Vector2.Scale(sprite.size, new Vector2(23f / 24f, 18f / 20f));
+        if (renderer.flipX) { float x = min.x; min.x = -max.x; max.x = -x; }
+        if (renderer.flipY) { float y = min.y; min.y = -max.y; max.y = -y; }
+        Vector2 start = renderer.transform.InverseTransformPoint(origin);
+        Vector2 delta = (Vector2)renderer.transform.InverseTransformPoint(end) - start;
+        // Boxes remain passable. An NPC crossing one must not blind itself.
+        if (start.x >= min.x && start.x <= max.x && start.y >= min.y && start.y <= max.y)
+            return distance;
+        float enter = 0f, exit = 1f;
+        if (!ClipAxis(start.x, delta.x, min.x, max.x, ref enter, ref exit) ||
+            !ClipAxis(start.y, delta.y, min.y, max.y, ref enter, ref exit))
+            return distance;
+        return distance * Mathf.Clamp01(enter);
+    }
+
+    private static bool ClipAxis(float start, float delta, float min, float max,
+        ref float enter, ref float exit)
+    {
+        if (Mathf.Abs(delta) < .000001f)
+            return start >= min && start <= max;
+        float a = (min - start) / delta, b = (max - start) / delta;
+        enter = Mathf.Max(enter, Mathf.Min(a, b));
+        exit = Mathf.Min(exit, Mathf.Max(a, b));
+        return enter <= exit;
+    }
 }

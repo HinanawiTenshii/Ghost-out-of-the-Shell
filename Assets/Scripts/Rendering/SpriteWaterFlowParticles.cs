@@ -165,8 +165,12 @@ public sealed class SpriteWaterFlowParticles : MonoBehaviour
         particleRenderer.sortingOrder = sourceRenderer.sortingOrder + sortingOrderOffset;
         particleRenderer.maskInteraction = sourceRenderer.maskInteraction;
         flowTime += Time.deltaTime;
-        UpdateRibbonMaterial();
-        int liveCount = UpdateCurrentParticles();
+        bool updateArt = SceneVisualWorkBudget.IsVisible(sourceRenderer.bounds) ||
+            (stationarySurface && sourceRenderer.transform.localToWorldMatrix != previousSurfaceToWorld);
+        if (updateArt) UpdateRibbonMaterial();
+        // Native particle lifetime/emission continues outside the camera. Only
+        // C# per-particle corrections are deferred, and resume before entry.
+        int liveCount = updateArt ? UpdateCurrentParticles() : particles.particleCount;
 
         float dt = Time.deltaTime;
         if (dt <= 0f) return;
@@ -407,6 +411,8 @@ public sealed class SpriteWaterFlowParticles : MonoBehaviour
         int count = particles.GetParticles(buffer);
         int active = 0;
         Matrix4x4 surfaceToWorld = sourceRenderer.transform.localToWorldMatrix;
+        Matrix4x4 worldToSurface = sourceRenderer.transform.worldToLocalMatrix;
+        Vector3 surfaceCenter = sourceRenderer.bounds.center;
         Matrix4x4 surfaceDelta = stationarySurface
             ? surfaceToWorld * previousSurfaceToWorld.inverse : Matrix4x4.identity;
         Vector3 forward = WorldFlowDirection();
@@ -417,12 +423,13 @@ public sealed class SpriteWaterFlowParticles : MonoBehaviour
             if (buffer[i].remainingLifetime <= 0f) continue;
             // Still water belongs to its surface: moving/scaling a pool never leaves ripples behind.
             if (stationarySurface) buffer[i].position = surfaceDelta.MultiplyPoint3x4(buffer[i].position);
-            if (keepInsideSprite && !IsInsideSurface(sourceRenderer.transform.InverseTransformPoint(buffer[i].position)))
+            Vector3 localPosition = keepInsideSprite ? worldToSurface.MultiplyPoint3x4(buffer[i].position) : Vector3.zero;
+            if (keepInsideSprite && !IsInsideSurface(localPosition))
             {
                 // Re-enter at the opposite edge without restarting the fade/lifetime.
                 // Killing every exit makes narrow sprites disproportionately full of
                 // invisible newborn particles, even at the same target population.
-                Vector3 p = sourceRenderer.transform.InverseTransformPoint(buffer[i].position);
+                Vector3 p = localPosition;
                 p.x = surfaceBounds.min.x + Mathf.Repeat(p.x - surfaceBounds.min.x, Mathf.Max(0.0001f, surfaceBounds.size.x));
                 p.y = surfaceBounds.min.y + Mathf.Repeat(p.y - surfaceBounds.min.y, Mathf.Max(0.0001f, surfaceBounds.size.y));
                 if (!IsInsideSurface(p))
@@ -436,13 +443,13 @@ public sealed class SpriteWaterFlowParticles : MonoBehaviour
                     }
                     if (!found) continue;
                 }
-                buffer[i].position = sourceRenderer.transform.TransformPoint(p);
+                buffer[i].position = surfaceToWorld.MultiplyPoint3x4(p);
             }
             // Shrinking surfaces/density values also converge immediately.
             if (active >= TargetParticleCount) continue;
             // Neighbours share a gently undulating current instead of independently
             // flying in random directions like snow/sparks. Seed fixes each speed.
-            Vector3 relative = buffer[i].position - sourceRenderer.bounds.center;
+            Vector3 relative = buffer[i].position - surfaceCenter;
             float phase = Vector3.Dot(relative, forward) * 2.2f + Vector3.Dot(relative, sideways) * 1.4f - flowTime * 1.3f;
             Vector3 direction = (forward + sideways * (Mathf.Sin(phase) * currentSway)).normalized;
             float variation = (buffer[i].randomSeed % 997u) / 996f;

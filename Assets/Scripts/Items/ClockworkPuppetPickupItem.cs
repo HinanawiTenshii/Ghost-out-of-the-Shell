@@ -3,6 +3,7 @@ using UnityEngine;
 /// <summary>A magic-powered puppet that autonomously seeks and operates levers.</summary>
 public sealed class ClockworkPuppetPickupItem : PickupItemBase
 {
+    protected override string AdditionalSkillRequirementDescription => CharacterSkillRequirements.PryDescription;
     public const string DefaultItemId = "clockwork_puppet";
 
     [Header("Clockwork Puppet")]
@@ -33,6 +34,7 @@ public sealed class ClockworkPuppetPickupItem : PickupItemBase
     [SerializeField, Min(0.05f)] private float navigationTargetMarkerSize = 0.18f;
     [SerializeField] private int navigationDebugSortingOrder = 200;
     private float storedMagic = -1f;
+    public ClockworkPuppetRuntime LastDeployedPuppet { get; private set; }
 
     public float MaximumMagic => maximumMagic;
     public float MoveSpeed => moveSpeed;
@@ -68,12 +70,15 @@ public sealed class ClockworkPuppetPickupItem : PickupItemBase
 
     protected override bool ApplyUseEffect(ZeldaCharacterData user)
     {
-        DeployPuppet(
-            user != null ? user.transform.position : transform.position,
+        if (user == null || user.IsDead || user.IsGhostLike) return false;
+        LastDeployedPuppet = DeployPuppet(
+            ResolvePlacementPosition(user, transform.position,
+                new Vector2(.72f, .88f) * deployedScale,
+                new Vector2(0f, .03f) * deployedScale, gameObject),
             user,
             null,
             storedMagic >= 0f ? storedMagic : maximumMagic);
-        return true;
+        return LastDeployedPuppet != null;
     }
 
     public ClockworkPuppetRuntime DeployFromCardboardBox(
@@ -141,6 +146,11 @@ public sealed class ClockworkPuppetPickupItem : PickupItemBase
         float initialMagic)
     {
         GameObject deployed = new GameObject("Deployed Clockwork Puppet");
+        UnityEngine.SceneManagement.Scene scene = deployingCharacter != null
+            ? ZeldaRuntimeRegistry.GetGameplayScene(deployingCharacter.gameObject)
+            : UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+        if (scene.IsValid() && scene.isLoaded)
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(deployed,scene);
         deployed.transform.position = worldPosition;
         deployed.AddComponent<SpriteRenderer>();
         Rigidbody2D body = deployed.AddComponent<Rigidbody2D>();

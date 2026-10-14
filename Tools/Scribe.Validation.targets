@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="ArabStrongman.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Characters\ScribeZeldaCharacterData.cs" />
+    <Compile Include="Assets\Scripts\Characters\ScribeZeldaCharacterData.cs" />
+  </ItemGroup>
+</Project>

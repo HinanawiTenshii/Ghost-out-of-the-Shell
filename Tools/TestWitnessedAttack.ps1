@@ -42,7 +42,7 @@ public static class ZeldaRuntimeRegistry {
  public static ZeldaFourWayMover GetControlledMover()=>controlled;
  public static string GetGameplayScene(GameObject g)=>g.scene=="DontDestroyOnLoad"?"level":g.scene;
 }
-public enum ZeldaAiState {Idle,Hostile}
+public enum ZeldaAiState {Idle,Hostile,Suspicious,Alert,Search,Recovery,Stunned}
 public class ZeldaCharacterData:Component {
  public bool isDead,IsGhostLike;public bool IsDead=>isDead;public bool CanBeDetectedByAi=true;
  public int currentHealth=6,health=6;public string name="victim";public Action ValuesChanged;
@@ -56,6 +56,8 @@ $code+=Extract $data '    private void ApplyDamage('
 $code+=@'
 }
 public class ZeldaCharacterAiBase:Component {
+ public virtual bool SharesHostilityWithOtherNpcs=>true;
+ public bool PollPropagation(ZeldaFourWayMover player)=>IsNonGhostPlayerHostileToAnotherAi(player);
  public ZeldaCharacterData characterData;public ZeldaFourWayMover mover,targetMover;
  public bool IsIgnoringPlayer,IsStunned,possessionLocked,blocked,regularHostile,hostileUntilTargetDeath;
  public int responses,damageMultiplier=1;public ZeldaAiState currentState;
@@ -66,15 +68,26 @@ public class ZeldaCharacterAiBase:Component {
  private bool IsVisionBlocked(Vector2 a,Vector2 d,float distance,Transform t)=>blocked;
  private void BeginTemporaryHostility(ZeldaFourWayMover p,bool ghost){responses++;targetMover=p;currentState=ZeldaAiState.Hostile;regularHostile=true;}
 '@
-$signatures = @('    public static void NotifyPlayerAttackWitnesses(', '    public virtual void OnPlayerAttackedCharacter(', '    protected virtual bool CanSeePlayer(', '    public bool IsActivelyHostileTo(')
+$signatures = @('    public static void NotifyPlayerAttackWitnesses(', '    public virtual void OnPlayerAttackedCharacter(', '    public static void NotifyPlayerBombPlacement(', '    public virtual void OnPlayerPlacedBomb(', '    protected virtual bool CanSeePlayer(', '    public bool IsActivelyHostileTo(', '    private bool IsNonGhostPlayerHostileToAnotherAi(')
 foreach($sig in $signatures){$code+=Extract $ai $sig}
 $code+='}'
+$skeletonSource=Get-Content -Raw "$root/Assets/Scripts/AI/SkeletonCharacterAi.cs"
+$automatonSource=Get-Content -Raw "$root/Assets/Scripts/AI/AutomatonCharacterAi.cs"
+$skeletonPolicy=[regex]::Match($skeletonSource,'public override bool SharesHostilityWithOtherNpcs[^;]+;').Value
+$automatonPolicy=[regex]::Match($automatonSource,'public override bool SharesHostilityWithOtherNpcs[^;]+;').Value
+$code+="public class SkeletonWitnessAi:ZeldaCharacterAiBase { $skeletonPolicy }"
+$code+="public class AutomatonWitnessAi:ZeldaCharacterAiBase { public bool hostilityActivated; $automatonPolicy }"
 $code+=@'
 public static class WitnessedAttackTests {
  static int checks;static void Check(bool v,string s){if(!v)throw new Exception(s);checks++;}
  static ZeldaCharacterData Make(bool player=false){var g=new GameObject();var d=new ZeldaCharacterData{gameObject=g};var m=new ZeldaFourWayMover{gameObject=g,enabled=player};var a=new ZeldaCharacterAiBase{gameObject=g,characterData=d,mover=m};g.components.Add(d);g.components.Add(m);g.components.Add(a);ZeldaRuntimeRegistry.AiCharacters.Add(a);if(player)ZeldaRuntimeRegistry.controlled=m;return d;}
  static ZeldaCharacterData attacker,victim;static ZeldaCharacterAiBase witness;
  static void Setup(){ZeldaRuntimeRegistry.AiCharacters.Clear();attacker=Make(true);attacker.transform.position=new Vector2(2,0);victim=Make();victim.transform.position=new Vector2(2.5f,0);witness=Make().GetComponent<ZeldaCharacterAiBase>();}
+ static void SetVictimAi(ZeldaCharacterAiBase replacement){
+  var old=victim.GetComponent<ZeldaCharacterAiBase>();victim.gameObject.components.Remove(old);ZeldaRuntimeRegistry.AiCharacters.Remove(old);
+  replacement.gameObject=victim.gameObject;replacement.characterData=victim;replacement.mover=victim.GetComponent<ZeldaFourWayMover>();
+  victim.gameObject.components.Add(replacement);ZeldaRuntimeRegistry.AiCharacters.Add(replacement);
+ }
  public static int Run(){
   Setup();victim.Damage(6,attacker);Check(victim.IsDead&&witness.responses==1&&witness.targetMover==attacker.GetComponent<ZeldaFourWayMover>(),"Lethal hit immediately alerts visible bystander");
   Check(!ZeldaRuntimeRegistry.AiCharacters.Contains(victim.GetComponent<ZeldaCharacterAiBase>())&&witness.IsActivelyHostileTo(attacker.GetComponent<ZeldaFourWayMover>()),"Witness survives removal of victim from registry");
@@ -104,6 +117,46 @@ public static class WitnessedAttackTests {
   Setup();victim.Damage(10,attacker,true);Check(witness.responses==0,"Domino damage does not dispatch duplicate direct-attack evidence");
   Setup();attacker.Damage(10,attacker);Check(witness.responses==0,"Self damage not treated as attacking another character");
   Setup();victim.isDead=true;victim.Damage(10,attacker);Check(witness.responses==0,"Already dead victim cannot dispatch");
+  foreach(var state in new[]{ZeldaAiState.Idle,ZeldaAiState.Suspicious,ZeldaAiState.Alert,ZeldaAiState.Search,ZeldaAiState.Recovery}){
+   Setup();witness.currentState=state;ZeldaCharacterAiBase.NotifyPlayerBombPlacement(attacker);
+   Check(witness.responses==1&&witness.currentState==ZeldaAiState.Hostile&&witness.targetMover==attacker.GetComponent<ZeldaFourWayMover>(),"Bomb placement hostility from "+state);
+   ZeldaCharacterAiBase.NotifyPlayerBombPlacement(attacker);Check(witness.responses==1,"Repeated placement keeps hostile attack cycle");
+  }
+  Setup();witness.currentState=ZeldaAiState.Hostile;witness.targetMover=victim.GetComponent<ZeldaFourWayMover>();
+  ZeldaCharacterAiBase.NotifyPlayerBombPlacement(attacker);Check(witness.responses==0&&witness.targetMover==victim.GetComponent<ZeldaFourWayMover>(),"Already hostile to another target remains unchanged");
+  foreach(var guard in new[]{"wall","range","cone","other-scene","stun","ignore","lock","disabled","dead","controlled","ghost","invisible","wear-box","npc-source","dead-source","null-source"}){
+   Setup();
+   if(guard=="wall")witness.blocked=true;
+   if(guard=="range")attacker.transform.position=new Vector2(20,0);
+   if(guard=="cone")attacker.transform.position=new Vector2(-3,0);
+   if(guard=="other-scene")witness.gameObject.scene="other";
+   if(guard=="stun")witness.IsStunned=true;if(guard=="ignore")witness.IsIgnoringPlayer=true;
+   if(guard=="lock")witness.possessionLocked=true;if(guard=="disabled")witness.enabled=false;
+   if(guard=="dead")witness.characterData.isDead=true;if(guard=="controlled")witness.mover.enabled=true;
+   if(guard=="ghost")attacker.IsGhostLike=true;if(guard=="invisible")attacker.CanBeDetectedByAi=false;
+   if(guard=="wear-box")attacker.GetComponent<ZeldaFourWayMover>().ActiveCardboardBox=new CardboardBoxWearState();
+   if(guard=="npc-source")ZeldaRuntimeRegistry.controlled=null;if(guard=="dead-source")attacker.isDead=true;
+   ZeldaCharacterAiBase.NotifyPlayerBombPlacement(guard=="null-source"?null:attacker);
+   Check(witness.responses==0,"Bomb witness filter: "+guard);
+  }
+  Setup();attacker.gameObject.scene="DontDestroyOnLoad";ZeldaCharacterAiBase.NotifyPlayerBombPlacement(attacker);
+  Check(witness.responses==1,"Bomb placement from persistent player mapped to gameplay scene");
+  foreach(bool machine in new[]{false,true})foreach(int damage in new[]{1,6}){
+   Setup();ZeldaCharacterAiBase enemy=machine?(ZeldaCharacterAiBase)new AutomatonWitnessAi{hostilityActivated=true}:new SkeletonWitnessAi();
+   SetVictimAi(enemy);enemy.targetMover=attacker.GetComponent<ZeldaFourWayMover>();enemy.currentState=ZeldaAiState.Hostile;enemy.regularHostile=true;
+   Check(!witness.PollPropagation(enemy.targetMover),"Independent enemy hostility never recruits bystanders");
+   victim.Damage(damage,attacker);Check(witness.responses==0,"Hitting/killing skeleton or active automaton causes no witness hostility");
+   Check(!witness.PollPropagation(attacker.GetComponent<ZeldaFourWayMover>()),"No delayed chain after retaliation");
+  }
+  Setup();var dormant=new AutomatonWitnessAi();SetVictimAi(dormant);victim.Damage(1,attacker);
+  Check(witness.responses==1,"Dormant automaton is outside requested hostile-machine exemption");
+  Setup();var regularGuard=victim.GetComponent<ZeldaCharacterAiBase>();regularGuard.targetMover=attacker.GetComponent<ZeldaFourWayMover>();regularGuard.currentState=ZeldaAiState.Hostile;regularGuard.regularHostile=true;
+  Check(witness.PollPropagation(regularGuard.targetMover),"Ordinary NPC hostility still propagates");
+  Setup();var skeleton=new SkeletonWitnessAi();SetVictimAi(skeleton);skeleton.targetMover=attacker.GetComponent<ZeldaFourWayMover>();skeleton.currentState=ZeldaAiState.Hostile;skeleton.regularHostile=true;
+  var ordinary=Make().GetComponent<ZeldaCharacterAiBase>();ordinary.targetMover=skeleton.targetMover;ordinary.currentState=ZeldaAiState.Hostile;ordinary.regularHostile=true;
+  Check(witness.PollPropagation(skeleton.targetMover),"A separate ordinary hostile NPC still propagates when a skeleton also exists");
+  Setup();SetVictimAi(new SkeletonWitnessAi());witness.currentState=ZeldaAiState.Hostile;witness.targetMover=attacker.GetComponent<ZeldaFourWayMover>();witness.regularHostile=true;victim.Damage(1,attacker);
+  Check(witness.IsActivelyHostileTo(attacker.GetComponent<ZeldaFourWayMover>()),"Existing unrelated hostility is not cleared");
   return checks;
  }
 }
@@ -113,3 +166,15 @@ Write-Output "PASS: $([WitnessedAttackTests]::Run()) production damage/witness/p
 $apply=Extract $data '    private void ApplyDamage('
 if($apply.IndexOf('NotifyPlayerAttackWitnesses') -gt $apply.IndexOf('DominoSkillRuntime.ShareDamage') -or $apply.IndexOf('NotifyPlayerAttackWitnesses') -gt $apply.IndexOf('Die();')){throw 'Witness dispatch must precede direct and linked deaths'}
 Write-Output 'PASS: witness notification occurs before victim death and linked damage.'
+$inventory=Get-Content -Raw "$root/Assets/Scripts/Items/PersistentInventory.cs"
+$use=Extract $inventory '    public bool TryUseSelectedItem()'
+$drop=Extract $inventory '    public bool TryDropSelectedItem()'
+if(([regex]::Matches($use,'NotifyBombPlacement\(')).Count -ne 1 -or $drop.Contains('NotifyBombPlacement(')){throw 'Only armed R world deployment may notify; Q must remain ignored'}
+$containerStart=$use.IndexOf('if (nearbyBox != null')
+$runtimeStart=$use.IndexOf('PickupItemBase runtimeItem =')
+$container=$use.Substring($containerStart,$runtimeStart-$containerStart)
+if($container.Contains('NotifyBombPlacement') -or !$container.Contains('nearbyBox.ArmStoredBomb(user);') -or !$container.Contains('return true;')){throw 'R box insertion must still arm and return without notifying witnesses'}
+if(!$use.Contains('if (removedAfterUse) NotifyBombPlacement') -or $use.IndexOf('NotifyBombPlacement(') -lt $use.IndexOf('bool consumed = runtimeItem.ExecuteUse(user);')){throw 'Witness event must follow successful armed deployment and inventory transaction'}
+$bomb=Get-Content -Raw "$root/Assets/Scripts/Items/BombPickupItem.cs"
+if((Extract $bomb '    public PlacedBomb CreateConfiguredPlacedBomb(').Contains('NotifyPlayerBombPlacement')){throw 'Bomb creation during load/chain explosion must not emit placement evidence'}
+Write-Output 'PASS: only successful R world deployment notifies; R/Q box insertion and all Q drops ignored; no retroactive creation/load evidence.'

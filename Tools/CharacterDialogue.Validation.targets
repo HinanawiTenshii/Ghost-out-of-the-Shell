@@ -1,0 +1,11 @@
+<Project>
+  <Import Project="DisposableHandgun.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Interaction\CharacterDialogue*.cs;Assets\Scripts\Interaction\DialogueOptionEffect.cs" />
+    <Compile Include="Assets\Scripts\Interaction\CharacterDialogue*.cs;Assets\Scripts\Interaction\DialogueOptionEffect.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp-Editor'">
+    <Compile Remove="Assets\Editor\CharacterDialogueEditor.cs" />
+    <Compile Include="Assets\Editor\CharacterDialogueEditor.cs" />
+  </ItemGroup>
+</Project>

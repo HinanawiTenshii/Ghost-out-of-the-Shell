@@ -27,7 +27,7 @@ public sealed class SaveSlotPanel : MonoBehaviour
         IsOpen = true;
         panel.Build(titleLayout);
         var canvas = root.GetComponentInParent<Canvas>();
-        if (canvas != null) CRTScreenEffect.RegisterCanvas(canvas);
+        if (canvas != null) CRTScreenEffect.RegisterCanvas(canvas, enableGlow: true);
     }
     private void Update()
     {

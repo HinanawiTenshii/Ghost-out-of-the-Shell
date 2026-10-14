@@ -21,6 +21,8 @@ Shader "Hidden/Cogitans/CameraVisionReveal"
         Stencil
         {
             Ref 37
+            ReadMask 63
+            WriteMask 0
             Comp NotEqual
             Pass Keep
         }

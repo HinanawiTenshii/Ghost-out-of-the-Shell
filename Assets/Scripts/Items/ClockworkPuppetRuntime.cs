@@ -12,6 +12,8 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
     private static int characterInputBlockedThroughFrame = -1;
 
     private LeverData targetLever;
+    private FortressBallista targetBallista;
+    private readonly List<Collider2D> ignoredBallistaColliders = new List<Collider2D>();
     private Rigidbody2D physicsBody;
     private Collider2D bodyCollider;
     private ZeldaReusableGridNavigator navigator;
@@ -46,6 +48,7 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
     private int maxStackSize;
     private float maximumMagic;
     private float moveSpeed;
+    private float AreaMoveSpeed => moveSpeed * SpeedBoostArea.GetSpeedMultiplier(this);
     private float movementMagicPerSecond;
     private float operationMagicCost;
     private float operationInterval;
@@ -57,6 +60,7 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
     private float lockedDoorPryHoldDuration;
     private float lockedDoorPryMagicFraction;
     private bool manualControlMode;
+    private int remoteControlEnteredFrame = -1;
     private Vector2 manualMoveDirection;
     private int manualInputSequence;
     private int leftInputOrder;
@@ -78,18 +82,38 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
     public LeverData TargetLever => targetLever;
     public float RemainingMagic => magic;
     public bool IsBroken => broken;
+    public string PuppetInstanceId => itemInstanceId;
+    public bool TryResumeRemoteControl(ZeldaCharacterData user)
+    {
+        var mover = user != null ? user.GetComponent<ZeldaFourWayMover>() : null;
+        if (!isActiveAndEnabled || broken || magic <= 0f || mover == null || !mover.isActiveAndEnabled ||
+            user.IsDead || user.IsGhostLike || ZeldaRuntimeRegistry.GetControlledMover() != mover ||
+            ZeldaRuntimeRegistry.GetGameplayScene(user.gameObject) != gameObject.scene) return false;
+        // Release any previous owner's streaming lease before changing the controlling character.
+        ReleaseControlledCharacterStreamingExemption();
+        remoteControlOwner = mover;
+        BeginRemoteControl();return IsUnderRemoteControl;
+    }
+    public static void EndActiveRemoteControl()
+    {
+        if (remoteControlledPuppet != null) remoteControlledPuppet.EndRemoteControl();
+    }
     public bool IsUnderRemoteControl => remoteControlledPuppet == this;
     public string SaveSourceItemId => itemId;
     public LeverData SaveTargetLever => targetLever;
+    public FortressBallista SaveTargetBallista => targetBallista;
+    public bool IsAttachedToBallista(FortressBallista ballista) => attached && targetBallista != null && targetBallista == ballista;
     public bool SaveAttached => attached;
-    public void RestoreSavedControl(LeverData lever, bool wasAttached, bool wasRemote)
+    public void RestoreSavedControl(LeverData lever, bool wasAttached, bool wasRemote, FortressBallista ballista = null)
     {
         remoteControlOwner = ZeldaRuntimeRegistry.GetControlledMover();
         initialOwner = remoteControlOwner != null ? remoteControlOwner.transform : null;
         manualControlMode = true;
         targetLever = lever;
         attached = false;
-        if (wasAttached && lever != null) AttachToLever(lever);
+        AssignTargetBallista(null);
+        if (wasAttached && ballista != null) AttachToBallista(ballista);
+        else if (wasAttached && lever != null) AttachToLever(lever);
         if (wasRemote) BeginRemoteControl(); else EndRemoteControl();
     }
     public static ClockworkPuppetRuntime RemoteControlledPuppet =>
@@ -324,8 +348,8 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
                 ? navigator.GetDirection(mountPoint, leverContactDistance)
                 : (mountPoint - (Vector2)transform.position).normalized;
             Vector2 displacement = navigator != null
-                ? navigator.GetSafeDisplacement(direction, moveSpeed * Time.fixedDeltaTime)
-                : direction * moveSpeed * Time.fixedDeltaTime;
+                ? navigator.GetSafeDisplacement(direction, AreaMoveSpeed * Time.fixedDeltaTime)
+                : direction * AreaMoveSpeed * Time.fixedDeltaTime;
             if (physicsBody != null)
                 physicsBody.MovePosition(physicsBody.position + displacement);
             else
@@ -375,7 +399,7 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
                 : targetLever != null && targetLever.isActiveAndEnabled);
         // Sample actual displacement, not input: a puppet pushing a wall must stop stepping.
         // A short grace bridges render frames between physics steps; ignore teleport-sized jumps.
-        float maximumStep = Mathf.Max(0.1f, moveSpeed * Time.deltaTime * 3f);
+        float maximumStep = Mathf.Max(0.1f, AreaMoveSpeed * Time.deltaTime * 3f);
         if (mayWalk && travelled > 0.0001f && travelled <= maximumStep)
             walkMotionRemaining = 0.06f;
         else
@@ -419,6 +443,7 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
 
         manualControlMode = true;
         remoteControlledPuppet = this;
+        remoteControlEnteredFrame = Time.frameCount;
         characterInputBlockedThroughFrame = Time.frameCount;
         EnsureControlledCharacterStreamingExemption();
         manualMoveDirection = Vector2.zero;
@@ -453,6 +478,8 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
 
     private void UpdateRemoteControl()
     {
+        // R that resumes control must not also exit in this puppet's later Update.
+        if (Time.frameCount == remoteControlEnteredFrame) return;
         if (Input.GetKeyDown(KeyCode.R))
         {
             EndRemoteControl();
@@ -463,6 +490,14 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
         {
             manualMoveDirection = Vector2.zero;
             ResetPryProgress();
+            if (targetBallista != null)
+            {
+                UpdateAttachedPose();
+                if (!attached) return;
+                ShowRemotePrompt(targetBallista.IsCoolingDown ? "弩炮冷却中" : "按[E]发射弩炮");
+                if (Input.GetKeyDown(KeyCode.E)) TryFireMountedBallista();
+                return;
+            }
             ShowRemotePrompt("按[E]控制拉杆");
             if (Input.GetKeyDown(KeyCode.E) && targetLever != null &&
                 targetLever.isActiveAndEnabled)
@@ -480,6 +515,15 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
             out float doorDistance);
         LeverData nearbyLever = FindNearestManualLever(
             out float leverDistance);
+        FortressBallista nearbyBallista = FortressBallista.FindNearestPuppetMount(
+            bodyCollider, transform.position, gameObject.scene, manualInteractionDistance, out float ballistaDistance);
+        if (nearbyBallista != null && ballistaDistance < doorDistance && ballistaDistance < leverDistance)
+        {
+            ResetPryProgress();
+            ShowRemotePrompt("按[E]附着弩炮尾部");
+            if (Input.GetKeyDown(KeyCode.E)) TryAttachToBallista(nearbyBallista);
+            return;
+        }
         bool useDoor = nearbyDoor != null &&
             (nearbyLever == null || doorDistance <= leverDistance);
 
@@ -544,8 +588,8 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
         Vector2 displacement = navigator != null
             ? navigator.GetSafeDisplacement(
                 manualMoveDirection,
-                moveSpeed * Time.fixedDeltaTime)
-            : manualMoveDirection * moveSpeed * Time.fixedDeltaTime;
+                AreaMoveSpeed * Time.fixedDeltaTime)
+            : manualMoveDirection * AreaMoveSpeed * Time.fixedDeltaTime;
         if (displacement.sqrMagnitude <= 0.000001f)
         {
             return;
@@ -569,6 +613,7 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
             return;
         }
 
+        AssignTargetBallista(null);
         AssignTargetLever(lever);
         attached = true;
         manualMoveDirection = Vector2.zero;
@@ -580,12 +625,76 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
         AttachToLever(lever);
     }
 
+    public bool TryAttachToBallista(FortressBallista ballista)
+    {
+        if (!IsUnderRemoteControl || broken || magic <= 0f || DocumentReader.IsInputBlocked ||
+            Time.timeScale <= 0f || ballista == null || !ballista.CanAcceptPuppet(this) ||
+            ballista.GetPuppetMountDistance(bodyCollider, transform.position, gameObject.scene) > manualInteractionDistance ||
+            !ballista.HasClearPuppetApproach(bodyCollider, transform.position)) return false;
+        return AttachToBallista(ballista);
+    }
+
+    private bool AttachToBallista(FortressBallista ballista)
+    {
+        if (ballista == null || !ballista.CanAcceptPuppet(this) || ballista.gameObject.scene != gameObject.scene) return false;
+        AssignTargetLever(null);
+        AssignTargetBallista(ballista);
+        attached = true;
+        manualControlMode = true;
+        manualMoveDirection = Vector2.zero;
+        UpdateAttachedPose();
+        return true;
+    }
+
+    public bool TryFireMountedBallista()
+    {
+        if (targetBallista == null || !attached || broken || magic <= 0f || !IsUnderRemoteControl) return false;
+        var owner = remoteControlOwner != null ? remoteControlOwner.CharacterData : null;
+        if (owner == null || ZeldaRuntimeRegistry.GetControlledMover() != remoteControlOwner ||
+            !targetBallista.TryFireFromPuppet(this, owner)) return false;
+        // Match other mechanism operations; blocked/cooling-down shots cost nothing.
+        SpendMagic(operationMagicCost);
+        return true;
+    }
+
+    private void AssignTargetBallista(FortressBallista next)
+    {
+        foreach (var collider in ignoredBallistaColliders)
+            if (bodyCollider != null && collider != null) Physics2D.IgnoreCollision(bodyCollider, collider, false);
+        ignoredBallistaColliders.Clear();
+        targetBallista = next;
+        if (next == null || bodyCollider == null) return;
+        foreach (var collider in next.GetComponentsInChildren<Collider2D>(true))
+        {
+            if (collider == bodyCollider) continue;
+            Physics2D.IgnoreCollision(bodyCollider, collider, true);
+            ignoredBallistaColliders.Add(collider);
+        }
+    }
+
     private void UpdateAttachedPose()
     {
+        if (attached && targetBallista != null && targetBallista.isActiveAndEnabled)
+        {
+            float angle = Vector2.SignedAngle(Vector2.up, targetBallista.ShotDirection);
+            if (physicsBody != null)
+            {
+                physicsBody.velocity = Vector2.zero;
+                physicsBody.position = targetBallista.RearWorldPosition;
+                physicsBody.SetRotation(angle);
+            }
+            else
+            {
+                transform.position = targetBallista.RearWorldPosition;
+                transform.rotation = Quaternion.Euler(0, 0, angle);
+            }
+            return;
+        }
         if (!attached || targetLever == null ||
             !targetLever.isActiveAndEnabled)
         {
             attached = false;
+            AssignTargetBallista(null);
             AssignTargetLever(null);
             if (physicsBody != null)
             {
@@ -626,14 +735,19 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
             return;
         }
 
-        float pryCost = maximumMagic * Mathf.Clamp01(
-            lockedDoorPryMagicFraction);
         if (!Input.GetKey(KeyCode.E))
         {
             ResetPryProgress();
             return;
         }
 
+        var actor = remoteControlOwner != null ? remoteControlOwner.CharacterData : null;
+        if (!CharacterSkillRequirements.Require(actor, CharacterSkillRequirements.PuppetPry, Input.GetKeyDown(KeyCode.E)))
+        {
+            ResetPryProgress();
+            return;
+        }
+        int pryCost = GetPryMagicCost(actor);
         if (magic + 0.0001f < pryCost)
         {
             ResetPryProgress();
@@ -666,9 +780,8 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
             return;
         }
 
-        door.SetLocked(false);
+        TryCompleteDoorPry(door);
         ResetPryProgress();
-        SpendMagic(pryCost);
     }
 
     private void ResetPryProgress()
@@ -1181,34 +1294,27 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
                 true,
                 magic))
         {
+            ZeldaRuntimeRegistry.GetControlledMover()?.TryBeginItemAttack(.24f);
             Destroy(gameObject);
         }
     }
 
-    private bool TryPryNearestLockedDoor()
+    public int GetPryMagicCost(ZeldaCharacterData actor)
     {
-        DoorHingeInteraction closest = null;
-        float best = lockedDoorPryDistance * lockedDoorPryDistance;
-        foreach (DoorHingeInteraction door in DoorHingeInteraction.WorldDoors)
-        {
-            if (door == null || !door.isActiveAndEnabled || !door.IsLocked)
-            {
-                continue;
-            }
-            float sqr = ((Vector2)door.transform.position - (Vector2)transform.position).sqrMagnitude;
-            if (sqr <= best)
-            {
-                best = sqr;
-                closest = door;
-            }
-        }
-        if (closest == null)
-        {
-            return false;
-        }
-        closest.SetLocked(false);
-        magic = 0f;
-        BreakPuppet();
+        return CharacterSkillRequirements.PryEnergyCost(maximumMagic * Mathf.Clamp01(lockedDoorPryMagicFraction),
+            actor != null ? actor.FinalSkillValue : 0);
+    }
+
+    private bool TryCompleteDoorPry(DoorHingeInteraction door)
+    {
+        var actor = remoteControlOwner != null ? remoteControlOwner.CharacterData : null;
+        if (broken || !IsUnderRemoteControl || ZeldaRuntimeRegistry.GetControlledMover() != remoteControlOwner ||
+            door == null || !door.isActiveAndEnabled || !door.IsLocked || !door.CanBeLockpicked ||
+            !CharacterSkillRequirements.Require(actor, CharacterSkillRequirements.PuppetPry)) return false;
+        int cost = GetPryMagicCost(actor);
+        if (magic + .0001f < cost) return false;
+        door.SetLocked(false);
+        SpendMagic(cost);
         return true;
     }
 
@@ -1229,6 +1335,7 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
             return;
         }
         broken = true;
+        PersistentInventory.Instance?.RemoveClockworkPuppetRemote(itemInstanceId);
         EndRemoteControl();
         if (physicsBody != null) physicsBody.velocity = Vector2.zero;
         SetReclaimPromptVisible(false);
@@ -1297,6 +1404,7 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
 
     private void OnDestroy()
     {
+        AssignTargetBallista(null);
         EndRemoteControl();
         RestoreMovingDoorCollisions();
         ActiveSet.Remove(this);

@@ -1,0 +1,47 @@
+<Project>
+  <Import Project="BuffDurationHud.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Rendering\SceneVisualWorkBudget.cs" />
+    <Compile Include="Assets\Scripts\Rendering\SceneVisualWorkBudget.cs" />
+    <Compile Remove="Assets\Scripts\Map\RuntimeMiniMapGraphic.Layers.cs;Assets\Scripts\Map\RuntimeMiniMapLayerGraphic.cs;Assets\Scripts\Camera\SpatialBoundsIndex2D.cs" />
+    <Compile Include="Assets\Scripts\Map\RuntimeMiniMapGraphic.Layers.cs;Assets\Scripts\Map\RuntimeMiniMapLayerGraphic.cs;Assets\Scripts\Camera\SpatialBoundsIndex2D.cs" />
+    <Compile Remove="Assets\Scripts\AI\SquadPatrolCharacterAi.cs" />
+    <Compile Include="Assets\Scripts\AI\SquadPatrolCharacterAi.cs" />
+    <Compile Remove="Assets\Scripts\AI\CivilianIdleCharacterAi.cs" />
+    <Compile Include="Assets\Scripts\AI\CivilianIdleCharacterAi.cs" />
+    <Compile Remove="Assets\Scripts\Characters\BodyguardZeldaCharacterData.cs" />
+    <Compile Include="Assets\Scripts\Characters\BodyguardZeldaCharacterData.cs" />
+    <Compile Remove="Assets\Scripts\Characters\DesertScoutZeldaCharacterData.cs" />
+    <Compile Include="Assets\Scripts\Characters\DesertScoutZeldaCharacterData.cs" />
+    <Compile Remove="Assets\Scripts\UI\MiniMapIncidentTimerGraphic.cs" />
+    <Compile Include="Assets\Scripts\UI\MiniMapIncidentTimerGraphic.cs" />
+    <Compile Remove="Assets\Scripts\AI\ZeldaCharacterAiBase.PursuitSpacing.cs" />
+    <Compile Include="Assets\Scripts\AI\ZeldaCharacterAiBase.PursuitSpacing.cs" />
+    <Compile Remove="Assets\Scripts\AI\SharedPlayerHostilityTimer.cs;Assets\Scripts\AI\ZeldaCharacterAiBase.SharedHostility.cs" />
+    <Compile Include="Assets\Scripts\AI\SharedPlayerHostilityTimer.cs;Assets\Scripts\AI\ZeldaCharacterAiBase.SharedHostility.cs" />
+    <Compile Remove="Assets\Scripts\Characters\SandwormAudio.cs" />
+    <Compile Include="Assets\Scripts\Characters\SandwormAudio.cs" />
+    <Compile Remove="Assets\Scripts\UI\RuntimeSandwormBossBar.cs;Assets\Scripts\UI\SandwormBossBarGraphic.cs" />
+    <Compile Include="Assets\Scripts\UI\RuntimeSandwormBossBar.cs;Assets\Scripts\UI\SandwormBossBarGraphic.cs" />
+    <Compile Remove="Assets\Scripts\Characters\SandwormEruptionAttack.Roar.cs" />
+    <Compile Include="Assets\Scripts\Characters\SandwormEruptionAttack.Roar.cs" />
+    <Compile Remove="Assets\Scripts\Characters\SandwormDeathSequence.cs" />
+    <Compile Include="Assets\Scripts\Characters\SandwormDeathSequence.cs" />
+    <Compile Remove="Assets\Scripts\Characters\SandwormEruptionAttack.Clearance.cs" />
+    <Compile Include="Assets\Scripts\Characters\SandwormEruptionAttack.Clearance.cs" />
+    <Compile Remove="Assets\Scripts\Characters\SandwormAttackWarning.cs" />
+    <Compile Include="Assets\Scripts\Characters\SandwormAttackWarning.cs" />
+    <Compile Remove="Assets\Scripts\Camera\CameraEnvironmentalShakeSource.cs;Assets\Scripts\Characters\SandwormCameraTremor.cs" />
+    <Compile Include="Assets\Scripts\Camera\CameraEnvironmentalShakeSource.cs;Assets\Scripts\Characters\SandwormCameraTremor.cs" />
+    <Compile Remove="Assets\Scripts\Items\IConsumableExplosive.cs;Assets\Scripts\Characters\SandwormEruptionAttack.Recovery.cs" />
+    <Compile Include="Assets\Scripts\Items\IConsumableExplosive.cs;Assets\Scripts\Characters\SandwormEruptionAttack.Recovery.cs" />
+    <Compile Remove="Assets\Scripts\Camera\CameraTemporaryFraming.cs" />
+    <Compile Include="Assets\Scripts\Camera\CameraTemporaryFraming.cs" />
+    <Compile Remove="Assets\Scripts\Characters\SandwormEruptionAttack.cs;Assets\Scripts\Characters\SandwormEruptionSite.cs" />
+    <Compile Include="Assets\Scripts\Characters\SandwormEruptionAttack.cs;Assets\Scripts\Characters\SandwormEruptionSite.cs" />
+    <Compile Remove="Assets\Scripts\Characters\SandwormStateController.cs" />
+    <Compile Include="Assets\Scripts\Characters\SandwormStateController.cs" />
+    <Compile Remove="Assets\Scripts\Characters\SandwormBossPrototype.cs;Assets\Scripts\Characters\SandwormSegmentVisual.cs;Assets\Scripts\Characters\SandwormObstacleQuery.cs;Assets\Scripts\Characters\SandwormZeldaCharacterData.cs" />
+    <Compile Include="Assets\Scripts\Characters\SandwormBossPrototype.cs;Assets\Scripts\Characters\SandwormSegmentVisual.cs;Assets\Scripts\Characters\SandwormObstacleQuery.cs;Assets\Scripts\Characters\SandwormZeldaCharacterData.cs" />
+  </ItemGroup>
+</Project>

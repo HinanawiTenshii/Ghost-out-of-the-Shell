@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-/// <summary>Scene-local links. Unlink the group before death propagation to prevent recursion.</summary>
+/// <summary>Scene-local damage links. Death removes only that member; shared damage never propagates again.</summary>
 [DefaultExecutionOrder(1000)]
 public sealed class DominoSkillRuntime : MonoBehaviour
 {
@@ -94,56 +94,10 @@ public sealed class DominoSkillRuntime : MonoBehaviour
 
     public static void ShareDamage(ZeldaCharacterData origin, int damage, ZeldaCharacterData attacker)
     {
-        if (!links.TryGetValue(origin, out var group)) return;
+        if (origin == null || damage <= 0 || !links.TryGetValue(origin, out var group)) return;
+        // Snapshot before applying hits: a lethal shared hit removes members from the live group.
         foreach (var target in group.members.ToArray())
             if (target != null && target != origin && !target.IsDead) target.TakeDominoDamage(damage, attacker);
-    }
-
-    public static void ShareDeath(ZeldaCharacterData origin)
-    {
-        if (!links.TryGetValue(origin, out var group)) return;
-        var targets = group.members.ToArray();
-        // Ghosts have no death-ghost prefab; a linked body supplies the fallback.
-        var controlled = ZeldaRuntimeRegistry.GetControlledMover();
-        GameObject ghostPrefab = null;
-        Vector3 ghostPosition = Vector3.zero;
-        if (controlled != null && controlled.isActiveAndEnabled && controlled.GetComponent<GhostZeldaCharacterData>() != null &&
-            group.members.Contains(controlled.GetComponent<ZeldaCharacterData>()))
-        {
-            ghostPosition = controlled.transform.position;
-            controlled.enabled = false;
-            foreach (var target in targets)
-            {
-                var mover = target != null ? target.GetComponent<ZeldaFourWayMover>() : null;
-                if (mover != null && mover.SoulTransferFallbackPrefab != null) { ghostPrefab = mover.SoulTransferFallbackPrefab; break; }
-            }
-        }
-        group.Dissolve();
-        foreach (var target in targets)
-            if (target != null && target != origin && !target.IsDead) target.DieFromDomino();
-        SpawnGhost(ghostPrefab, ghostPosition);
-    }
-
-    public static bool TryPossess(ZeldaFourWayMover user, ZeldaFourWayMover target)
-    {
-        var targetData = target.GetComponent<ZeldaCharacterData>();
-        if (targetData == null || !links.ContainsKey(targetData)) return false;
-        var prefab = user.SoulTransferFallbackPrefab != null ? user.SoulTransferFallbackPrefab : target.SoulTransferFallbackPrefab;
-        Vector3 position = target.transform.position;
-        user.enabled = false; // Suppress the normal source-position ghost.
-        SoulMarkRuntime.ClearAfterDirectPossession(target);
-        targetData.DieFromDomino();
-        var source = user.GetComponent<ZeldaCharacterData>();
-        if (source != null && !source.IsDead) source.DieFromDomino();
-        SpawnGhost(prefab, position);
-        return true;
-    }
-
-    private static void SpawnGhost(GameObject prefab, Vector3 position)
-    {
-        if (prefab == null) return;
-        var ghost = Instantiate(prefab, position, Quaternion.identity).GetComponent<ZeldaFourWayMover>();
-        if (ghost != null) ghost.ReceiveControl(Vector2.down);
     }
 
     private void LateUpdate()
@@ -152,7 +106,7 @@ public sealed class DominoSkillRuntime : MonoBehaviour
         {
             var data = members[i];
             if (data == null) { Dissolve(); return; }
-            if (data.IsDead) { ShareDeath(data); return; }
+            if (data.IsDead) { RemoveMark(data); return; }
             var visual = data.GetComponentInChildren<SpriteRenderer>();
             var marker = markers[i];
             marker.enabled = data != caster && !DominoSkillPreview.IsPreviewTarget(data);

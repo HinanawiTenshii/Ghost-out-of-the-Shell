@@ -59,13 +59,13 @@ public static class ZeldaRuntimeRegistry {public static string GetGameplayScene(
 public static class DominoSkillRuntime {
     public static int shares,deaths;public static Action<ZeldaCharacterData> deathCallback;
     public static void ShareDamage(ZeldaCharacterData o,int d,ZeldaCharacterData a){shares++;}
-    public static void ShareDeath(ZeldaCharacterData o){deaths++;if(deathCallback!=null)deathCallback(o);}
+    public static void RemoveMark(ZeldaCharacterData o){deaths++;if(deathCallback!=null)deathCallback(o);}
 }
 public class ZeldaCharacterData {
     public GameObject gameObject=new GameObject();public string name {get{return gameObject.name;}}
     public Transform transform {get{return gameObject.transform;}}
     public int currentHealth=6,health=6;public bool isDead,soulDetonationDeath;
-    public bool IsGhostLike;private bool silentGhostPossessionDeath;
+    public bool IsGhostLike;private bool silentGhostPossessionDeath;private int controlTransferDamage;
     public AudioClip damageSound,deathSound;public float damageSoundVolume=1,deathSoundVolume=1;
     public float damageSoundPitch=1,deathSoundPitch=1,damageSoundSpatialBlend=.75f,deathSoundSpatialBlend=.75f,damageSoundMaxDistance=16,deathSoundMaxDistance=16;
     private AudioSource damageAudioSource;private static AudioClip defaultDamageSound,defaultDeathSound;
@@ -80,7 +80,7 @@ public class ZeldaCharacterData {
 '@
 $production=''
 foreach($signature in @('    private void PlayDamageSound()','    private void PlayDeathSound()',
-    '    private void ApplyDamage(', '    protected virtual void Die()', '    public void DestroyAfterSuccessfulPossession()',
+    '    private void ApplyDamage(', '    protected virtual bool TryHandleDeathRemains()', '    protected virtual void Die()', '    public void DestroyAfterSuccessfulPossession()',
     '    private void EnsureDamageAudioSource()', '    private static void InitializeAudioSource(',
     '    private static void ConfigureAudioSource(')){$production+=(Method $signature)+"`n"}
 $tests=@'
@@ -120,7 +120,7 @@ public static class FeedbackTests {
         Check(LastDeath().gameObject.scene=="Level1","Persistent player death sound belongs to active level");
         var other=new ZeldaCharacterData();other.gameObject.scene="Level2";other.Kill();Check(LastDeath().gameObject.scene=="Level2","Ordinary scene ownership retained");
         var chained=new ZeldaCharacterData();count=DeathCount();DominoSkillRuntime.deathCallback=x=>x.Kill();chained.Kill();DominoSkillRuntime.deathCallback=null;
-        Check(DeathCount()==count+1,"Reentrant shared death still plays once");
+        Check(DeathCount()==count+1,"Reentrant death cleanup still plays once");
         var ghost=new ZeldaCharacterData {IsGhostLike=true,deathSound=new AudioClip(1)};count=DeathCount();ghost.DestroyAfterSuccessfulPossession();
         Check(DeathCount()==count,"Ghost possession suppresses default and custom death audio");
         Check(ghost.isDead&&ghost.gameObject.destroyed&&ghost.notifications==1&&ghost.explosions==1,"Silent ghost transfer preserves notification, explosion and cleanup");

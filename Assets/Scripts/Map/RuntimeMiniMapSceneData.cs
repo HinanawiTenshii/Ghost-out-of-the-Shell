@@ -31,22 +31,34 @@ public struct RuntimeMiniMapQuestTargetData
     public Vector2 position;
 }
 
-/// <summary>
-/// Editor-generated Blocks and transition geometry for an unloaded scene.
-/// This ScriptableObject intentionally lives in a matching file so Unity can
-/// serialize a stable MonoScript reference into Player builds.
-/// </summary>
+[Serializable]
+public struct RuntimeMiniMapSurfaceData
+{
+    public Vector2[] points;
+    public MiniMapSurfaceGroup.SurfaceKind kind;
+    public string visibilityId;
+    public bool initiallyVisible;
+}
+
+/// <summary>Editor-generated terrain, wall and marker geometry for an unloaded scene.</summary>
 public sealed class RuntimeMiniMapSceneData : ScriptableObject
 {
-    private const int CurrentSchemaVersion = 4;
+    // Version 6 also captures Visible Non Blocking walls in unloaded-scene maps.
+    private const int CurrentSchemaVersion = 6;
 
     [SerializeField] private int schemaVersion;
+    [SerializeField] private string sourceRevision;
+    public string SourceRevision => sourceRevision;
+#if UNITY_EDITOR
+    public void SetSourceRevision(string value) { sourceRevision = value; }
+#endif
     [SerializeField] private string sceneName;
     [SerializeField] private string displayName;
     [SerializeField] private RuntimeMiniMapPathData[] blockPaths;
     [SerializeField] private RuntimeMiniMapTransitionData[] transitions;
     [SerializeField] private RuntimeMiniMapQuestTargetData[] questTargets;
     [SerializeField] private RuntimeMiniMapBridgeData[] bridges;
+    [SerializeField] private RuntimeMiniMapSurfaceData[] surfaces;
 
     public string SceneName => sceneName;
     public bool HasExplicitDisplayName =>
@@ -58,6 +70,7 @@ public sealed class RuntimeMiniMapSceneData : ScriptableObject
     public RuntimeMiniMapTransitionData[] Transitions => transitions;
     public RuntimeMiniMapQuestTargetData[] QuestTargets => questTargets;
     public RuntimeMiniMapBridgeData[] Bridges => bridges;
+    public RuntimeMiniMapSurfaceData[] Surfaces => surfaces;
     public bool UsesCurrentSchema => schemaVersion >= CurrentSchemaVersion;
 
     public void Configure(
@@ -66,7 +79,8 @@ public sealed class RuntimeMiniMapSceneData : ScriptableObject
         IList<Vector2[]> configuredPaths,
         IList<RuntimeMiniMapTransitionData> configuredTransitions,
         IList<RuntimeMiniMapQuestTargetData> configuredQuestTargets,
-        IList<RuntimeMiniMapBridgeData> configuredBridges = null)
+        IList<RuntimeMiniMapBridgeData> configuredBridges = null,
+        IList<RuntimeMiniMapSurfaceData> configuredSurfaces = null)
     {
         schemaVersion = CurrentSchemaVersion;
         sceneName = configuredSceneName;
@@ -99,6 +113,9 @@ public sealed class RuntimeMiniMapSceneData : ScriptableObject
         bridges = configuredBridges != null
             ? new List<RuntimeMiniMapBridgeData>(configuredBridges).ToArray()
             : new RuntimeMiniMapBridgeData[0];
+        surfaces = configuredSurfaces != null
+            ? new List<RuntimeMiniMapSurfaceData>(configuredSurfaces).ToArray()
+            : new RuntimeMiniMapSurfaceData[0];
     }
 
     public static Vector2[] CreateBoxPath(Matrix4x4 matrix, Vector2 center, Vector2 size)

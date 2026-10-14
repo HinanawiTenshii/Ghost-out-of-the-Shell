@@ -19,7 +19,9 @@ public sealed class BombPickupItemVisual : PickupItemVisualBase
     protected override string[] GetPixelRows()
     {
         var item = GetComponent<PickupItemBase>();
-        return GetBombRows(item != null && item.ItemId == "purple_bomb");
+        return GetBombRows(item != null && item.ItemId == "purple_bomb",
+            item is BombPickupItem bomb && bomb.IsDecoy,
+            item is BombPickupItem sensorBomb && sensorBomb.IsProximity);
     }
 
     // Shared by inventory, world pickups and armed bombs: a single silhouette
@@ -33,11 +35,52 @@ public sealed class BombPickupItemVisual : PickupItemVisualBase
             case 'H': return useHighlight ? highlight : body;
             case 'K': return new Color(0.46f, 0.49f, 0.50f, 1f);
             case 'F': return fuse;
+            case 'R': return new Color(1f, .12f, .12f, 1f);
+            case 'L': return new Color(1f, .77f, .72f, 1f);
             default: return Color.clear;
         }
     }
 
-    public static string[] GetBombRows(bool reinforced) => reinforced ? SuperRows : BombRows;
+    public static string[] GetBombRows(bool reinforced, bool decoy = false, bool proximity = false)
+        => proximity ? ProximityRows : decoy ? DecoyRows : reinforced ? SuperRows : BombRows;
+
+    private static readonly string[] ProximityRows = {
+        "................",
+        "................",
+        ".......KK.......",
+        "......KLLK......",
+        "......KRRK......",
+        "....DDDDDDDD....",
+        "...HHHBBBBBDD...",
+        "..HHBBBBBBBBBD..",
+        ".BHBBBBBBBBBBDD.",
+        ".BBBBBRRRRBBBDD.",
+        ".BBBBBRLLRBBBDD.",
+        ".BBBBBRRRRBBBDD.",
+        "..DDDDDDDDDDDD..",
+        "...KK......KK...",
+        "................",
+        "................"
+    };
+
+    private static readonly string[] DecoyRows = {
+        "................",
+        "......KKKK......",
+        "......RLLR......",
+        "......RRRR......",
+        ".....KKKKKK.....",
+        ".....DDDDDD.....",
+        "....HHBBBBBD....",
+        "...HHHBBBBBDD...",
+        "..BHHBBBBBBBDD..",
+        "..BBBBBBBBBBDD..",
+        "..BBBBBBBBBBDD..",
+        "..BBBBBBBBBBDD..",
+        "...BBBBBBBBDD...",
+        "....DDDDDDDD....",
+        "......DDDD......",
+        "................"
+    };
 
     private static readonly string[] BombRows = {
         "................",

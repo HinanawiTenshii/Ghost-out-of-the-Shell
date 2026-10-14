@@ -4,7 +4,7 @@
 
 头盔正面使用深色 T 形开口（横向目镜与向下延伸的中央竖缝）。四向增加颈甲阴影带，胸甲使用短高光与接缝，避免从头盔到身体贯通的亮色长条；保持原有 16×16 像素色块风格。
 
-预制体 `Assets/Prefabs/Level2NPCS/Paladin.prefab`，角色专属数据脚本 `PaladinZeldaCharacterData` 继承现有 `ZeldaCharacterData`，通用属性仍由 `ZeldaCharacterCommonData` 管理。不修改 SwordGuy 或现有关卡。
+预制体 `Assets/Prefabs/Level2NPCS/Idle/Paladin.prefab`，角色专属数据脚本 `PaladinZeldaCharacterData` 继承现有 `ZeldaCharacterData`，通用属性仍由 `ZeldaCharacterCommonData` 管理。不修改 SwordGuy 或现有关卡。
 
 配色已降低亮度：铠甲主色与披肩约降低 20%，高光约降低 28%，保持天蓝色倾向、T 形目镜和颈甲分界。脚本默认颜色与预制体序列化颜色同步更新，不改变角色数值。
 

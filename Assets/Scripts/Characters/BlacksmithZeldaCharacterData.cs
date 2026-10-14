@@ -38,6 +38,7 @@ public class BlacksmithZeldaCharacterData : ZeldaCharacterData
     private readonly Sprite[] attackSprites = new Sprite[4];
     private readonly Texture2D[] idleTextures = new Texture2D[4];
     private readonly Texture2D[] attackTextures = new Texture2D[4];
+    private readonly Sprite[] itemAttackSprites = new Sprite[4];
 
     public override bool CanAttack => !IsGhostForm;
     public override Color GhostFormEyeColor => new Color(0.04f, 0.1f, 0.16f, 1f);
@@ -63,8 +64,13 @@ public class BlacksmithZeldaCharacterData : ZeldaCharacterData
 
         EnsureSprites();
         int directionIndex = DirectionIndex(facingDirection);
+        var mover = GetComponent<ZeldaFourWayMover>();
+        bool itemAttack = isAttacking && mover != null && mover.IsUsingItemAttack;
+        if (itemAttack && itemAttackSprites[directionIndex] == null)
+            itemAttackSprites[directionIndex] = CreateSprite(
+                CreateTexture(facingDirection, true, false), "Blacksmith Item Attack " + directionIndex);
         spriteRenderer.sprite = isAttacking
-            ? attackSprites[directionIndex]
+            ? (itemAttack ? itemAttackSprites[directionIndex] : attackSprites[directionIndex])
             : idleSprites[directionIndex];
         Color movementTint = isMoving
             ? Color.white
@@ -201,7 +207,7 @@ public class BlacksmithZeldaCharacterData : ZeldaCharacterData
             facing == Vector2.left ? LeftBody : facing == Vector2.right ? RightBody : FrontBody;
     }
 
-    private Texture2D CreateTexture(Vector2 facing, bool attacking)
+    private Texture2D CreateTexture(Vector2 facing, bool attacking, bool drawHammer = true)
     {
         const int size = 16;
         string[] rows = GetBodyRows(facing);
@@ -220,7 +226,7 @@ public class BlacksmithZeldaCharacterData : ZeldaCharacterData
             int handY = facing == Vector2.up ? startY + 1 : startY;
             Paint(pixels, handX, handY, 2, 2, 'G');
         }
-        DrawHammer(pixels, facing, attacking);
+        if (drawHammer) DrawHeldTool(pixels, facing, attacking);
 
         var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
         {
@@ -284,6 +290,12 @@ public class BlacksmithZeldaCharacterData : ZeldaCharacterData
         }
     }
 
+    // Derived craft workers may change the tool without changing the shared arm rig.
+    protected virtual void DrawHeldTool(Color[] pixels, Vector2 facing, bool attacking)
+    {
+        DrawHammer(pixels, facing, attacking);
+    }
+
     private void DrawHammer(Color[] pixels, Vector2 facing, bool attacking)
     {
         if (attacking)
@@ -331,6 +343,8 @@ public class BlacksmithZeldaCharacterData : ZeldaCharacterData
         {
             ReleaseGenerated(idleSprites[i]); ReleaseGenerated(idleTextures[i]);
             ReleaseGenerated(attackSprites[i]); ReleaseGenerated(attackTextures[i]);
+            if (itemAttackSprites[i] != null) ReleaseGenerated(itemAttackSprites[i].texture);
+            ReleaseGenerated(itemAttackSprites[i]); itemAttackSprites[i] = null;
             idleSprites[i] = null; idleTextures[i] = null;
             attackSprites[i] = null; attackTextures[i] = null;
         }

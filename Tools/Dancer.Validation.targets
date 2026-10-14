@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="Cannon.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Characters\DancerZeldaCharacterData.cs" />
+    <Compile Include="Assets\Scripts\Characters\DancerZeldaCharacterData.cs" />
+  </ItemGroup>
+</Project>

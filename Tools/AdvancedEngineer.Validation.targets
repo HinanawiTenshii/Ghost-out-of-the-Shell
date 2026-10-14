@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="Dancer.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Characters\AdvancedEngineerZeldaCharacterData.cs" />
+    <Compile Include="Assets\Scripts\Characters\AdvancedEngineerZeldaCharacterData.cs" />
+  </ItemGroup>
+</Project>

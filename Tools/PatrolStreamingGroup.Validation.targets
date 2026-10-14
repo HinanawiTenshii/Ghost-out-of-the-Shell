@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="SandwormPrototype.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\AI\PatrolStreamingGroup.cs;Assets\Scripts\Camera\CameraVisionObjectStreaming.PatrolGroups.cs" />
+    <Compile Include="Assets\Scripts\AI\PatrolStreamingGroup.cs;Assets\Scripts\Camera\CameraVisionObjectStreaming.PatrolGroups.cs" />
+  </ItemGroup>
+</Project>

@@ -103,3 +103,5 @@ MonoBehaviour:
   glowPulseSpeed: 2.2
   glowPulseAmount: 0.08
   useGoldMount: 1
+  glowIntensity: 1.35
+  flameGlowWidth: 0.045

@@ -1,0 +1,37 @@
+{
+  "scene": "Assets/Scenes/Level2/Level2-Floor-1.unity",
+  "group": "Ossuary Maze",
+  "origin": [39.1670301, 43.79673885],
+  "size": [27.63881, 23.74970315],
+  "wallThickness": 0.5,
+  "entrance": [27.63881, 4.77244],
+  "exit": [2.11869, 0],
+  "reward": [14.6, 21.7],
+  "polylines": [
+    {"name": "Entry Island", "points": [[25,2.3],[25,6.6]]},
+    {"name": "Entry West Turn", "points": [[22.3,0],[22.3,8.4],[16,8.4]]},
+    {"name": "Lower West Gallery", "points": [[5.5,5.8],[13,5.8]]},
+    {"name": "Lower East Gallery", "points": [[16,5.8],[22.3,5.8]]},
+    {"name": "Exit Switchback", "points": [[0,4.5],[2.8,4.5],[2.8,7.4]]},
+    {"name": "West Court Bend", "points": [[5.5,5.8],[5.5,8.4],[8.4,8.4],[8.4,11.2]]},
+    {"name": "Northwest Entry", "points": [[0,14.8],[5.4,14.8]]},
+    {"name": "Northwest Return", "points": [[8.4,14.8],[11.4,14.8]]},
+    {"name": "Northwest Alcove", "points": [[5.6,17.7],[2.8,17.7],[2.8,21],[8.4,21],[8.4,14]]},
+    {"name": "Reward Approach", "points": [[14.6,14.8],[14.6,17.6],[11.4,17.6],[11.4,23.74970315]]},
+    {"name": "Reward Left Lintel", "points": [[11.4,20.2],[13.2,20.2]]},
+    {"name": "Reward Right Lintel", "points": [[16,20.2],[17.8,20.2],[17.8,23.74970315]]},
+    {"name": "Northeast Switchback", "points": [[24.5,17.7],[20.8,17.7],[20.8,21],[27.63881,21]]},
+    {"name": "East Court North", "points": [[19,11.1],[19,14.8],[23.2,14.8]]},
+    {"name": "East Return Opening", "points": [[25.8,14.8],[27.63881,14.8]]}
+  ],
+  "blocks": [
+    {"name": "Lower Rock Mass", "rect": [5.5,0,19.8,3.2]},
+    {"name": "West Pillar 1", "rect": [1.9,10.5,2.9,11.5]},
+    {"name": "West Pillar 2", "rect": [5.4,10.5,6.4,11.5]},
+    {"name": "Central Pillar 1", "rect": [10.9,9.7,11.9,11.7]},
+    {"name": "Central Pillar 2", "rect": [15.5,10.6,16.5,13]},
+    {"name": "East Pillar 1", "rect": [21.55,11,22.55,12.4]},
+    {"name": "East Pillar 2", "rect": [24.7,9.9,25.7,10.9]},
+    {"name": "Reward Plinth", "rect": [13.9,22.5,15.3,23.3]}
+  ]
+}

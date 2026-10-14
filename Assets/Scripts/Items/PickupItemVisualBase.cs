@@ -22,6 +22,8 @@ public class PickupItemVisualBase : MonoBehaviour
     public Color DisplayColor => itemColor;
     public Color InventoryTint => UsesEmbeddedColors ? Color.white : itemColor;
     public float WorldScale => worldScale;
+    // Instance-dependent icons must not mutate the shared item prefab.
+    public virtual Sprite GetInventoryIcon(PersistentInventory.Slot slot) => InventoryIcon;
 
     /// <summary>
     /// Converts a saved instance tint into the correct UI tint. Multi-colour

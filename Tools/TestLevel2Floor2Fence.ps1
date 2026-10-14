@@ -81,7 +81,7 @@ $mask=[int][regex]::Match($camera,'blockLayers:\s+serializedVersion: 2\s+m_Bits:
 if(($mask -band 1) -ne 0){throw 'Camera vision unexpectedly blocks Default layer'}
 $vision=Get-Content -Raw "$root/Assets/Scripts/Camera/CameraCircularVision.cs"
 if(!$vision.Contains('LayerMask.NameToLayer("Hidden Blocks")')){throw 'Recheck runtime block layer configuration'}
-$civilian=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Civilian-level2.prefab"
+$civilian=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Patrol/Civilian-level2.prefab"
 $solid=[uint32][regex]::Match($civilian,'solidCollisionLayers:\s+serializedVersion: 2\s+m_Bits: (\d+)').Groups[1].Value
 if(($solid -band 1) -eq 0){throw 'Player movement ignores fence collision layer'}
 Write-Output 'PASS: 5 single-layer walls, 14 pillars, 19 Square sprites, 19 solid colliders; matched wall collision bounds; 3 clear gates; no white-wall/river overlap; continuous collision; layer excluded from player vision.'

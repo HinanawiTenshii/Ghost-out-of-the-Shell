@@ -29,6 +29,9 @@ public sealed class ActiveZeldaCharacterDataSource : MonoBehaviour
     public int CurrentHealth { get; private set; }
     public int MaxHealth { get; private set; }
     public bool IsGhostLike { get; private set; }
+    public int HolyShieldCharges { get; private set; }
+    public int HolyShieldCapacity { get; private set; }
+    public int HolyShieldBlockVersion { get; private set; }
 
     /// <summary>
     /// Raised when the controlled character changes or any exposed value changes.
@@ -106,6 +109,9 @@ public sealed class ActiveZeldaCharacterDataSource : MonoBehaviour
         int nextCurrentHealth = nextData != null ? nextData.CurrentHealth : 0;
         int nextMaxHealth = nextData != null ? nextData.Health : 0;
         bool nextIsGhostLike = nextData != null && nextData.IsGhostLike;
+        int nextShieldCharges = nextData != null ? nextData.HolyShieldCharges : 0;
+        int nextShieldCapacity = nextData != null ? nextData.HolyShieldCapacity : 0;
+        int nextShieldVersion = nextData != null ? nextData.HolyShieldBlockVersion : 0;
 
         bool changed = activeMover != nextMover ||
             activeCharacterData != nextData ||
@@ -120,7 +126,8 @@ public sealed class ActiveZeldaCharacterDataSource : MonoBehaviour
             cachedEnergyMax != nextEnergyMax ||
             CurrentHealth != nextCurrentHealth ||
             MaxHealth != nextMaxHealth ||
-            IsGhostLike != nextIsGhostLike;
+            IsGhostLike != nextIsGhostLike || HolyShieldCharges != nextShieldCharges ||
+            HolyShieldCapacity != nextShieldCapacity || HolyShieldBlockVersion != nextShieldVersion;
 
         if (activeMover != nextMover || activeCharacterData != nextData)
         {
@@ -141,6 +148,9 @@ public sealed class ActiveZeldaCharacterDataSource : MonoBehaviour
         CurrentHealth = nextCurrentHealth;
         MaxHealth = nextMaxHealth;
         IsGhostLike = nextIsGhostLike;
+        HolyShieldCharges = nextShieldCharges;
+        HolyShieldCapacity = nextShieldCapacity;
+        HolyShieldBlockVersion = nextShieldVersion;
 
         if (changed)
         {

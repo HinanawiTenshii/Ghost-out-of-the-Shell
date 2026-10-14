@@ -11,7 +11,8 @@ public enum MapPointIconShape
     Square,
     Star,
     Exclamation,
-    Lever
+    Lever,
+    LockedDoor
 }
 
 [Serializable]
@@ -27,6 +28,8 @@ public sealed class MapPointOfInterestRecord
     [SerializeField] private bool visibleOnMap;
     [SerializeField] private bool discovered;
     [SerializeField] private bool marked;
+    [SerializeField] private Vector2 lineStart;
+    [SerializeField] private Vector2 lineEnd;
 
     public string Id => id;
     public string SceneName => sceneName;
@@ -37,11 +40,28 @@ public sealed class MapPointOfInterestRecord
     public Color IconColor => iconColor;
     public bool VisibleOnMap => visibleOnMap;
     public bool Discovered => discovered;
-    public bool CanBeMarked => iconShape != MapPointIconShape.Lever;
+    public bool CanBeMarked => iconShape != MapPointIconShape.Lever && iconShape != MapPointIconShape.LockedDoor;
+    public Vector2 LineStart => lineStart;
+    public Vector2 LineEnd => lineEnd;
+
+    internal bool ApplyLockedDoor(string pointId, string scene, Vector2 start, Vector2 end,
+        Color tint, bool lockedAndIntact, bool seen)
+    {
+        bool nextDiscovered = discovered || seen;
+        bool changed = id != pointId || sceneName != scene || iconShape != MapPointIconShape.LockedDoor ||
+            lineStart != start || lineEnd != end || iconColor != tint ||
+            visibleOnMap != lockedAndIntact || discovered != nextDiscovered;
+        id = pointId; sceneName = scene; title = "锁住的门"; description = "";
+        iconShape = MapPointIconShape.LockedDoor; iconColor = tint;
+        lineStart = start; lineEnd = end; worldPosition = (start + end) * .5f;
+        visibleOnMap = lockedAndIntact; discovered = nextDiscovered; marked = false;
+        return changed;
+    }
     // Ignore legacy lever marks from saves made before levers became hover-only.
     public bool Marked => CanBeMarked && marked;
     public string TooltipText => iconShape == MapPointIconShape.Lever
         ? "拉杆"
+        : iconShape == MapPointIconShape.LockedDoor ? "锁住的门"
         : string.IsNullOrWhiteSpace(description) ? title : title + "\n" + description;
 
     internal void Apply(MapPointOfInterest source)
@@ -148,6 +168,28 @@ public sealed class MapPointOfInterestManager : MonoBehaviour
         return !string.IsNullOrWhiteSpace(pointId) &&
                points.TryGetValue(pointId, out MapPointOfInterestRecord record) &&
                record.Discovered;
+    }
+
+    // Shares the normal POI save payload. Do not create records for unseen doors.
+    public void UpdateLockedDoor(string pointId, string scene, Vector2 start, Vector2 end,
+        Color tint, bool lockedAndIntact, bool seen)
+    {
+        if (string.IsNullOrEmpty(pointId)) return;
+        if (!points.TryGetValue(pointId, out MapPointOfInterestRecord record))
+        {
+            if (!lockedAndIntact || !seen) return;
+            record = GetOrCreateRecord(pointId);
+        }
+        if (record.ApplyLockedDoor(pointId, scene, start, end, tint, lockedAndIntact, seen))
+            PointsChanged?.Invoke();
+    }
+
+    public void CopyVisibleLockedDoors(string scene, List<MapPointOfInterestRecord> destination)
+    {
+        destination.Clear();
+        foreach (var record in points.Values)
+            if (record.IconShape == MapPointIconShape.LockedDoor && record.Discovered &&
+                record.VisibleOnMap && record.SceneName == scene) destination.Add(record);
     }
 
     public void Discover(MapPointOfInterest source)

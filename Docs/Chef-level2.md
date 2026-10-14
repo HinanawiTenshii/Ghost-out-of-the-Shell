@@ -1,6 +1,6 @@
 # Level2 厨师
 
-预制体：`Assets/Prefabs/Level2NPCS/Chef-level2.prefab`。
+预制体：`Assets/Prefabs/Level2NPCS/Patrol/Chef-level2.prefab`。
 
 - 白色高顶厨师帽、灰白短外套、浅色围裙、红领巾，暖棕肤色与深褐色短靴。
 - 保留普通平民体型、碰撞尺寸与脚底基准；仅为厨师帽增加画布高度。

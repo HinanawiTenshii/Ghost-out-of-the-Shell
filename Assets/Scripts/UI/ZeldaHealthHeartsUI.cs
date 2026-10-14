@@ -121,6 +121,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         new Dictionary<string, SceneTaskState>();
 
     private readonly Image[] hearts = new Image[MaximumHeartCount];
+    private readonly Color[] heartBaseColors = new Color[MaximumHeartCount];
     private readonly List<Image> swords = new List<Image>();
     private readonly List<Image> wrenches = new List<Image>();
     private readonly List<Image> possessionEnergyBars = new List<Image>();
@@ -130,13 +131,13 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
     {
         if (solidEnergySprite == null)
             solidEnergySprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, Texture2D.whiteTexture.width, Texture2D.whiteTexture.height), new Vector2(0.5f, 0.5f));
-        bool extra = data != null && index >= data.BaseMaxPossessionEnergy && data.CrystalEnergyThirds > 0;
-        int normalCurrent = data != null ? data.FinalPossessionEnergy - data.CrystalEnergyThirds / 3 : 0;
-        icon.sprite = extra || index < normalCurrent ? solidEnergySprite : GetSpentPossessionEnergyIcon();
+        bool extra = data != null && data.IsCrystalPossessionEnergyDisplaySlot(index);
+        float fill = data != null ? data.GetPossessionEnergyDisplayFill(index) : 0f;
+        icon.sprite = extra || fill > 0f ? solidEnergySprite : GetSpentPossessionEnergyIcon();
         icon.type = extra ? Image.Type.Filled : Image.Type.Simple;
         icon.fillMethod = Image.FillMethod.Horizontal;
         icon.fillOrigin = 0;
-        icon.fillAmount = extra ? data.CrystalEnergyThirds / 3f : 1f;
+        icon.fillAmount = extra ? fill : 1f;
         var particles = icon.GetComponent<TemporaryEnergyParticles>();
         if (extra && particles == null) particles = icon.gameObject.AddComponent<TemporaryEnergyParticles>();
         if (particles != null) particles.SetVisible(extra, icon.color);
@@ -226,25 +227,28 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
     private Texture2D heartTexture;
     private Texture2D swordTexture;
     private Texture2D wrenchTexture;
-    private bool overHealthDisplay;
     private Vector2 heartContainerBasePosition;
     private int lastObservedHealth;
     private float healthShakeTimer;
     private float healthFlashTimer;
+    private readonly Image[] holyShields = new Image[4];
+    private RectTransform holyShieldContainer;
+    private int lastObservedShieldCharges, lastObservedShieldVersion, shieldDisplayCapacity, flashingShieldCount;
     private float newTaskPopupTimer;
     private bool hasSavedTaskPointerTarget;
     private Vector2 savedTaskPointerWorldPosition;
     private string savedTaskPointerLabel;
-    private Color currentHeartColor;
     private Canvas hudCanvas;
     private string currentTaskSceneKey;
-    private string taskMiniMapSceneName;
+    private Scene taskMiniMapScene;
     private string taskMiniMapAreaDisplayName;
     private GameObject trackedQuestWorldMarker;
     private Texture2D trackedQuestWorldMarkerTexture;
     private Sprite trackedQuestWorldMarkerSprite;
     private bool trackedQuestTargetInCurrentScene;
     private Vector2 trackedQuestTargetWorldPosition;
+    private readonly List<Vector2> trackedQuestTargetPositions = new List<Vector2>();
+    private readonly List<GameObject> additionalQuestWorldMarkers = new List<GameObject>();
 
     public Font PermissionLabelFont => permissionLabelFont;
     public static ZeldaHealthHeartsUI Instance => instance;
@@ -282,6 +286,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         CreateWrenchSprite();
         CreatePermissionSprites();
         CreateHeartObjects();
+        CreateHolyShieldObjects();
         CreateSwordContainer();
         CreateWrenchContainer();
         CreatePossessionEnergyContainer();
@@ -289,8 +294,16 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         skillSlots.transform.SetParent(transform, false);
         skillSlots.GetComponent<RuntimeSkillSlots>().Build(permissionLabelFont,
             wrenchContainer.anchoredPosition.x);
+        var buffBar = new GameObject("Buff Durations", typeof(RectTransform), typeof(RuntimeBuffDurationBar));
+        buffBar.layer = gameObject.layer;
+        buffBar.transform.SetParent(transform, false);
+        buffBar.GetComponent<RuntimeBuffDurationBar>().Build(wrenchContainer, skillSlots.GetComponent<RuntimeSkillSlots>());
         CreatePermissionObject();
         CreateAreaPermissionObject();
+        var bossBar = new GameObject("Sandworm Boss Health", typeof(RectTransform), typeof(RuntimeSandwormBossBar));
+        bossBar.layer = gameObject.layer;
+        bossBar.transform.SetParent(transform, false);
+        bossBar.GetComponent<RuntimeSandwormBossBar>().Build(areaPermissionStatusText.rectTransform, permissionLabelFont);
         CreateInventoryPlaceholder();
         CreateTaskPlaceholder();
         CreateQuestObjectivePanel();
@@ -401,6 +414,9 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         {
             Destroy(trackedQuestWorldMarker);
         }
+        foreach (var marker in additionalQuestWorldMarkers)
+            if (marker != null) Destroy(marker);
+        additionalQuestWorldMarkers.Clear();
 
         if (trackedQuestWorldMarkerSprite != null)
         {
@@ -872,7 +888,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
                 ? itemPrefab.ItemVisual
                 : null;
             inventoryItemIcons[i].sprite = itemVisual != null
-                ? itemVisual.InventoryIcon
+                ? itemVisual.GetInventoryIcon(slot)
                 : null;
             inventoryItemIcons[i].color = itemVisual == null
                 ? Color.white
@@ -961,7 +977,6 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         if (characterChanged)
         {
             displayedCharacter = currentCharacter;
-            overHealthDisplay = currentHealth > MaximumHeartCount;
             lastObservedHealth = currentHealth;
         }
         else
@@ -971,27 +986,22 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
                 healthShakeTimer = healthShakeDuration;
                 healthFlashTimer = healthFlashDuration;
             }
+            else if (currentCharacter != null && currentHealth > lastObservedHealth)
+            {
+                // Recovery shares the heart highlight, but not the damage shake.
+                healthFlashTimer = healthFlashDuration;
+            }
 
             lastObservedHealth = currentHealth;
-            if (currentHealth > MaximumHeartCount)
-            {
-                overHealthDisplay = true;
-            }
-            else if (currentHealth < MaximumHeartCount)
-            {
-                overHealthDisplay = false;
-            }
         }
 
-        int visibleHeartCount = overHealthDisplay
-            ? MaximumHeartCount
-            : Mathf.Clamp(currentHealth, 0, MaximumHeartCount);
+        RefreshHolyShieldDisplay(currentCharacter, characterChanged);
+        int visibleHeartCount = Mathf.Clamp(currentHealth, 0, MaximumHeartCount);
+        // Ten slots: each point above ten upgrades one red heart to yellow,
+        // starting at the left. Health above twenty has no extra visual tier.
+        int yellowHeartCount = Mathf.Clamp(currentHealth - MaximumHeartCount, 0, MaximumHeartCount);
         bool isActualGhost = displayedCharacter is GhostZeldaCharacterData;
         bool isGhostCharacter = displayedCharacter != null && displayedCharacter.IsGhostLike;
-        Color heartColor = isGhostCharacter
-            ? ghostHeartColor
-            : overHealthDisplay ? overHealthColor : normalHeartColor;
-        currentHeartColor = heartColor;
 
         for (int i = 0; i < hearts.Length; i++)
         {
@@ -1001,7 +1011,10 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
                 hearts[i].gameObject.SetActive(visible);
             }
 
-            hearts[i].color = heartColor;
+            heartBaseColors[i] = isGhostCharacter
+                ? ghostHeartColor
+                : i < yellowHeartCount ? overHealthColor : normalHeartColor;
+            hearts[i].color = heartBaseColors[i];
         }
 
         int visibleSwordCount = displayedCharacter == null
@@ -1131,7 +1144,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         RefreshInventoryQuantityColors(inventoryColor);
 
         int visibleEnergyCount = displayedCharacter != null
-            ? Mathf.Max(0, displayedCharacter.BaseMaxPossessionEnergy + (displayedCharacter.CrystalEnergyThirds > 0 ? 1 : 0))
+            ? displayedCharacter.PossessionEnergyDisplaySlotCount
             : 0;
         EnsurePossessionEnergyCount(visibleEnergyCount);
         for (int i = 0; i < possessionEnergyBars.Count; i++)
@@ -1194,6 +1207,77 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         }
     }
 
+    private void CreateHolyShieldObjects()
+    {
+        holyShieldContainer = new GameObject("Holy Shield Charges", typeof(RectTransform)).GetComponent<RectTransform>();
+        holyShieldContainer.SetParent(transform, false);
+        holyShieldContainer.anchorMin = holyShieldContainer.anchorMax = holyShieldContainer.pivot = new Vector2(0f, 1f);
+        holyShieldContainer.anchoredPosition = new Vector2(screenOffset.x, -screenOffset.y);
+        float height = HeartPixelHeight * pixelScale, width = height * .9f;
+        for (int i = 0; i < holyShields.Length; i++)
+        {
+            var image = new GameObject("Shield " + (i + 1), typeof(RectTransform), typeof(Image)).GetComponent<Image>();
+            image.transform.SetParent(holyShieldContainer, false);
+            var rect = image.rectTransform;
+            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0f, 1f);
+            rect.sizeDelta = new Vector2(width, height);
+            rect.anchoredPosition = new Vector2(i * (width + heartSpacing), 0f);
+            image.sprite = HolyShieldCharacterSkillData.HudIcon;
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+            image.color = ghostHeartColor;
+            holyShields[i] = image;
+            image.gameObject.SetActive(false);
+        }
+    }
+
+    private void RefreshHolyShieldDisplay(ZeldaCharacterData character, bool characterChanged)
+    {
+        int charges = character != null ? character.HolyShieldCharges : 0;
+        int version = character != null ? character.HolyShieldBlockVersion : 0;
+        if (characterChanged || version < lastObservedShieldVersion)
+            flashingShieldCount = charges;
+        else if (version > lastObservedShieldVersion && charges < lastObservedShieldCharges)
+        {
+            healthFlashTimer = healthFlashDuration;
+            flashingShieldCount = Mathf.Max(flashingShieldCount, lastObservedShieldCharges);
+        }
+        else if (charges > lastObservedShieldCharges) flashingShieldCount = charges;
+        if (characterChanged || charges > 0)
+            shieldDisplayCapacity = character != null ? character.HolyShieldCapacity : 0;
+        lastObservedShieldCharges = charges;
+        lastObservedShieldVersion = version;
+        SetHolyShieldColors(false);
+    }
+
+    private void RefreshHolyShieldLayout()
+    {
+        if (holyShieldContainer == null) return;
+        if (healthFlashTimer <= 0f) flashingShieldCount = lastObservedShieldCharges;
+        int visible = Mathf.Max(lastObservedShieldCharges, flashingShieldCount);
+        for (int i = 0; i < holyShields.Length; i++)
+            if (holyShields[i].gameObject.activeSelf != (i < visible)) holyShields[i].gameObject.SetActive(i < visible);
+        float width = HeartPixelHeight * pixelScale * .9f;
+        float reserve = visible > 0 ? shieldDisplayCapacity * (width + heartSpacing) + heartSpacing : 0f;
+        Vector2 next = new Vector2(screenOffset.x + reserve, -screenOffset.y);
+        // Preserve an ongoing health shake when the shield row changes its width.
+        if (next != heartContainerBasePosition)
+        {
+            heartContainer.anchoredPosition += next - heartContainerBasePosition;
+            heartContainerBasePosition = next;
+        }
+        holyShieldContainer.sizeDelta = new Vector2(reserve, HeartPixelHeight * pixelScale);
+    }
+
+    private void SetHolyShieldColors(bool highlight)
+    {
+        RefreshHolyShieldLayout();
+        for (int i = 0; i < holyShields.Length; i++)
+            if (holyShields[i] != null) holyShields[i].color = i < lastObservedShieldCharges
+                ? (highlight ? healthFlashColor : ghostHeartColor)
+                : (highlight && healthFlashTimer > 0f ? healthFlashColor : Color.clear);
+    }
+
     private void UpdateHealthShake(float deltaTime)
     {
         if (healthShakeTimer <= 0f)
@@ -1221,7 +1305,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
     {
         if (healthFlashTimer <= 0f)
         {
-            SetHeartColor(currentHeartColor);
+            SetHeartColors(false);
             return;
         }
 
@@ -1230,19 +1314,20 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         {
             // The event-driven HUD disables Update as soon as no animation is
             // active, so restore the base color on this final animation frame.
-            SetHeartColor(currentHeartColor);
+            SetHeartColors(false);
             return;
         }
 
         bool showHighlight = Mathf.Sin(Time.unscaledTime * healthFlashSpeed) >= 0f;
-        SetHeartColor(showHighlight ? healthFlashColor : currentHeartColor);
+        SetHeartColors(showHighlight);
     }
 
-    private void SetHeartColor(Color color)
+    private void SetHeartColors(bool highlight)
     {
+        SetHolyShieldColors(highlight);
         for (int i = 0; i < hearts.Length; i++)
         {
-            hearts[i].color = color;
+            hearts[i].color = highlight ? healthFlashColor : heartBaseColors[i];
         }
     }
 
@@ -1658,6 +1743,12 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
             quantityText.raycastTarget = false;
             inventoryQuantityTexts[i] = quantityText;
             quantityObject.SetActive(false);
+            var cooldownObject = new GameObject("Item Cooldown", typeof(RectTransform), typeof(InventoryItemCooldownOverlay));
+            cooldownObject.transform.SetParent(slotObject.transform, false);
+            var cooldownRect = cooldownObject.GetComponent<RectTransform>();
+            cooldownRect.anchorMin = Vector2.zero; cooldownRect.anchorMax = Vector2.one;
+            cooldownRect.offsetMin = Vector2.one * 2f; cooldownRect.offsetMax = Vector2.one * -2f;
+            cooldownObject.GetComponent<InventoryItemCooldownOverlay>().Configure(i, permissionLabelFont);
         }
 
         GameObject selectedNameObject = new GameObject(
@@ -1786,6 +1877,19 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         taskMiniMapGraphic.raycastTarget = false;
         taskMiniMapGraphic.SetIconScale(0.45f);
         taskMiniMapGraphic.SetZoomToMaximum();
+
+        // Keep the permanent cyan frame and map clipping untouched. This last
+        // sibling draws one thin, separate timer ring over the inside map edge.
+        GameObject incidentTimerObject = new GameObject("Mini Map Incident Timer",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(MiniMapIncidentTimerGraphic));
+        incidentTimerObject.layer = gameObject.layer;
+        incidentTimerObject.transform.SetParent(taskIndicatorRect, false);
+        RectTransform incidentTimerRect = incidentTimerObject.GetComponent<RectTransform>();
+        incidentTimerRect.anchorMin = Vector2.zero;
+        incidentTimerRect.anchorMax = Vector2.one;
+        incidentTimerRect.offsetMin = new Vector2(6f, 6f);
+        incidentTimerRect.offsetMax = new Vector2(-6f, -6f);
+        incidentTimerObject.GetComponent<MiniMapIncidentTimerGraphic>().Bind(taskMiniMapGraphic);
 
         GameObject labelFrameObject = new GameObject(
             "Task Pointer Label Frame",
@@ -1995,6 +2099,47 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
                 break;
             case "level1.escape_castle":
                 AddObjective(texts, completion, "设法逃出城堡", questComplete);
+                break;
+            case QuestJournalManager.Level2HeroProofId:
+                AddObjective(texts, completion, "到达边境城市", journal.Level2HeroProofStage >= 2);
+                if (journal.Level2HeroProofStage >= 2)
+                    AddObjective(texts, completion, "打开试炼大门，进入试炼之地", questComplete);
+                break;
+            case QuestJournalManager.Level2SandwormQuestId:
+                AddObjective(texts, completion, "击杀沙虫并取得试炼证明", questComplete);
+                break;
+            case QuestJournalManager.CounterfeitQuestId:
+                bool gemAcquired = questComplete || journal.EntryDetailsContain(questId, QuestJournalManager.CounterfeitGemAcquired);
+                bool priceKnown = gemAcquired || journal.EntryDetailsContain(questId, QuestJournalManager.CounterfeitPriceKnown);
+                AddObjective(texts, completion, "向行商市场二层的宝石商人打听金色宝石", priceKnown);
+                if (priceKnown) AddObjective(texts, completion, "筹集30金币，向宝石商人购买金色宝石", gemAcquired);
+                AddObjective(texts, completion, "将金色宝石交给赝品工匠，取得赝品试炼证明", questComplete);
+                break;
+            case QuestJournalManager.SummoningQuestId:
+                AddObjective(texts, completion, "在法阵内献上指定灵魂，点亮水晶（" + journal.SummoningLitCrystals + "/6）",
+                    questComplete || journal.SummoningLitCrystals >= SummoningCircle.CrystalCount);
+                AddObjective(texts, completion, "完成仪式，召唤域外来客", questComplete);
+                break;
+            case QuestJournalManager.SandwormBaitQuestId:
+                AddObjective(texts, completion, "前往要塞取得合成工具", questComplete ||
+                    journal.EntryDetailsContain(questId, QuestJournalManager.SandwormToolsFound));
+                AddObjective(texts, completion, "将合成工具交给诡异商人", questComplete);
+                break;
+            case QuestJournalManager.ArenaInjectionQuestId:
+                AddObjective(texts, completion, QuestJournalManager.ArenaInjectionObjective, questComplete);
+                break;
+            case QuestJournalManager.ArenaQuestId:
+                if (!questComplete && !journal.ArenaChallengeWon)
+                    AddObjective(texts, completion, journal.ArenaCurrentObjective, false);
+                if (journal.ArenaRounds > 0)
+                    AddObjective(texts, completion, "击败全部守护者（" + journal.ArenaWins + "/" + journal.ArenaRounds + "）",
+                        questComplete || journal.ArenaChallengeWon);
+                AddObjective(texts, completion, "由获胜角色向报名官领取试炼证明", questComplete);
+                break;
+            case QuestJournalManager.SandwormMortarQuestId:
+                AddObjective(texts, completion, "取得远程控制装置（密码：1551）", questComplete ||
+                    journal.EntryDetailsContain(questId, QuestJournalManager.SandwormDeviceFound));
+                AddObjective(texts, completion, "将装置安装在城墙西南角的臼炮上", questComplete);
                 break;
             case "level1.craft_super_bomb":
                 AddObjective(texts, completion, "找到炸弹引信",
@@ -2526,7 +2671,13 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         ZeldaCharacterData character = dataSource != null
             ? dataSource.ActiveCharacterData
             : displayedCharacter;
-        bool visible = showTaskPointer && character != null && !character.IsDead;
+        Scene activeScene = SceneManager.GetActiveScene();
+        // Awake/data-source events can arrive before sceneLoaded. At that point
+        // quest-target queries deliberately reject the not-yet-loaded scene;
+        // caching it here would permanently retain an empty objective list.
+        // OnSceneLoaded (or Start for a newly created HUD) performs the refresh.
+        bool visible = showTaskPointer && character != null && !character.IsDead &&
+            activeScene.IsValid() && activeScene.isLoaded;
         taskMiniMapGraphic.gameObject.SetActive(visible);
         if (taskPointerLabelRect != null)
         {
@@ -2535,11 +2686,11 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         if (!visible)
             return;
 
-        Scene activeScene = SceneManager.GetActiveScene();
-        if (taskMiniMapSceneName != activeScene.name)
+        // Compare instances, not names: reloading a scene invalidates its map too.
+        if (taskMiniMapScene != activeScene)
         {
             taskMiniMapGraphic.RebuildFromScene(activeScene);
-            taskMiniMapSceneName = activeScene.name;
+            taskMiniMapScene = activeScene;
             taskMiniMapAreaDisplayName =
                 ResolveSceneAreaDisplayName(activeScene);
         }
@@ -2575,17 +2726,14 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
             questJournal = QuestJournalManager.GetOrCreate();
         }
 
-        Vector2 targetPosition = Vector2.zero;
-        bool targetInScene = questJournal != null &&
+        trackedQuestTargetPositions.Clear();
+        if (questJournal != null &&
             !string.IsNullOrWhiteSpace(questJournal.TrackedEntryId) &&
-            !questJournal.IsEntryCompleted(questJournal.TrackedEntryId) &&
-            taskMiniMapGraphic.TryGetQuestTarget(
-                questJournal.TrackedEntryId,
-                out targetPosition);
-        taskMiniMapGraphic.SetTrackedQuestTarget(
-            targetInScene,
-            targetInScene ? targetPosition : Vector2.zero,
-            true);
+            !questJournal.IsEntryCompleted(questJournal.TrackedEntryId))
+            taskMiniMapGraphic.GetQuestTargets(questJournal.TrackedEntryId, trackedQuestTargetPositions);
+        bool targetInScene = trackedQuestTargetPositions.Count > 0;
+        Vector2 targetPosition = targetInScene ? trackedQuestTargetPositions[0] : Vector2.zero;
+        taskMiniMapGraphic.SetTrackedQuestTargets(trackedQuestTargetPositions, true);
         trackedQuestTargetInCurrentScene = targetInScene;
         trackedQuestTargetWorldPosition = targetPosition;
         UpdateTrackedQuestWorldMarker(targetInScene, targetPosition);
@@ -2594,27 +2742,31 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
     private void UpdateTrackedQuestWorldMarker(bool hasTarget, Vector2 targetPosition)
     {
         Camera camera = Camera.main;
-        bool visible = false;
-        if (hasTarget && camera != null)
-        {
-            Vector3 viewport = camera.WorldToViewportPoint(targetPosition);
-            visible = viewport.z > 0f && viewport.x >= 0f && viewport.x <= 1f &&
-                viewport.y >= 0f && viewport.y <= 1f;
-        }
-
         EnsureTrackedQuestWorldMarker();
         if (trackedQuestWorldMarker == null)
             return;
-
-        trackedQuestWorldMarker.SetActive(visible);
-        if (visible)
+        PlaceQuestWorldMarker(trackedQuestWorldMarker, camera, hasTarget, targetPosition);
+        int extraCount = hasTarget ? Mathf.Max(0, trackedQuestTargetPositions.Count - 1) : 0;
+        while (additionalQuestWorldMarkers.Count < extraCount)
         {
-            // This marker belongs to the scene, not the HUD canvas. Keeping it
-            // at the target's fixed world position also prevents camera follow
-            // smoothing from dragging the marker after movement input ends.
-            trackedQuestWorldMarker.transform.position =
-                new Vector3(targetPosition.x, targetPosition.y, 0f);
+            // Share the existing glyph, materials and visibility-mask ordering.
+            var marker = Instantiate(trackedQuestWorldMarker);
+            marker.name = "Additional Tracked Quest World Marker";
+            DontDestroyOnLoad(marker);
+            additionalQuestWorldMarkers.Add(marker);
         }
+        for (int i = 0; i < additionalQuestWorldMarkers.Count; i++)
+            PlaceQuestWorldMarker(additionalQuestWorldMarkers[i], camera, i < extraCount,
+                i < extraCount ? trackedQuestTargetPositions[i + 1] : Vector2.zero);
+    }
+
+    private static void PlaceQuestWorldMarker(GameObject marker, Camera camera, bool hasTarget, Vector2 targetPosition)
+    {
+        if (marker == null) return;
+        Vector3 viewport = hasTarget && camera != null ? camera.WorldToViewportPoint(targetPosition) : Vector3.back;
+        bool visible = viewport.z > 0f && viewport.x >= 0f && viewport.x <= 1f && viewport.y >= 0f && viewport.y <= 1f;
+        marker.SetActive(visible);
+        if (visible) marker.transform.position = new Vector3(targetPosition.x, targetPosition.y, 0f);
     }
 
     private void EnsureTrackedQuestWorldMarker()
@@ -3266,6 +3418,17 @@ public sealed class RuntimeSkillSlots : MonoBehaviour
     private const float Pitch = 48f;
     private static float SlotY(int index) => index == CharacterSlotIndex ? Pitch + 16f : -index * Pitch;
 
+    public void SetTopClearance(float clearance)
+    {
+        var root = (RectTransform)transform;
+        var parent = root.parent as RectTransform;
+        float y = Pitch * 2f + SlotSize * .5f;
+        if (clearance > 0f && parent != null)
+            y = Mathf.Min(y, parent.rect.height * .5f - clearance - SlotY(CharacterSlotIndex) - SlotSize * .09f);
+        if (!Mathf.Approximately(root.anchoredPosition.y, y))
+            root.anchoredPosition = new Vector2(root.anchoredPosition.x, y);
+    }
+
     public void Build(Font font, float leftOffset)
     {
         var root = (RectTransform)transform;
@@ -3335,6 +3498,18 @@ public sealed class RuntimeSkillSlots : MonoBehaviour
                 Input.GetKeyDown((KeyCode)((int)KeyCode.Keypad1 + i))) { SelectSlot(i); break; }
         if (Input.GetKeyDown(KeyCode.LeftControl) && SelectedIndex == CharacterSlotIndex && character != null)
             character.TryUseCharacterSkill();
+        if (Input.GetKeyDown(KeyCode.LeftControl) && observedEquipment != null && character != null &&
+            PlayerGrowthAttributes.IsBuilderSkill(observedEquipment.GetEquippedSkill(SelectedIndex)))
+            BuilderSkillRuntime.TryUse(character);
+        if (Input.GetKeyDown(KeyCode.LeftControl) && observedEquipment != null && character != null &&
+            PlayerGrowthAttributes.IsHolyLightSkill(observedEquipment.GetEquippedSkill(SelectedIndex)))
+            HolyLightSkillRuntime.TryUse(character);
+        if (Input.GetKeyDown(KeyCode.LeftControl) && observedEquipment != null && character != null &&
+            PlayerGrowthAttributes.IsHolyShieldSkill(observedEquipment.GetEquippedSkill(SelectedIndex)))
+            HolyShieldRuntime.TryUse(character);
+        if (Input.GetKeyDown(KeyCode.LeftControl) && observedEquipment != null && character != null &&
+            PlayerGrowthAttributes.IsMeteorShowerSkill(observedEquipment.GetEquippedSkill(SelectedIndex)))
+            MeteorShowerSkillRuntime.TryUse(character);
         if (Input.GetKeyDown(KeyCode.LeftControl) && observedEquipment != null && character != null &&
             PlayerGrowthAttributes.IsCombatExpertiseSkill(observedEquipment.GetEquippedSkill(SelectedIndex)) && observedEquipment.HasSkill("combat_expertise"))
             character.TryUseCombatExpertise();

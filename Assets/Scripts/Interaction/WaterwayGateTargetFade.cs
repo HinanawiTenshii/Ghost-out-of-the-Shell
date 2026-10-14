@@ -4,7 +4,7 @@ using UnityEngine;
 /// <summary>Reversible fade for a gate-linked sprite object, including its child sprites.</summary>
 [DisallowMultipleComponent, RequireComponent(typeof(CameraVisionStreamingExempt))]
 [AddComponentMenu("Interaction/Waterway Gate Target Fade")]
-public sealed class WaterwayGateTargetFade : MonoBehaviour
+public class WaterwayGateTargetFade : MonoBehaviour
 {
     private static readonly HashSet<WaterwayGateTargetFade> ActiveFaders = new HashSet<WaterwayGateTargetFade>();
     [SerializeField] private WaterwayGate sourceGate;
@@ -20,6 +20,9 @@ public sealed class WaterwayGateTargetFade : MonoBehaviour
     public bool VisibleRequested => visibleRequested;
     public bool IsFading => initialized && visibility != (visibleRequested ? 1f : 0f);
 
+    protected WaterwayGate SourceGate => sourceGate;
+    protected virtual bool IsControlledBy(WaterwayGate gate) => sourceGate == gate;
+
     // Shared by every controller of the same gate; independent gates remain usable.
     public static bool IsGateTransitioning(WaterwayGate gate)
     {
@@ -27,7 +30,7 @@ public sealed class WaterwayGateTargetFade : MonoBehaviour
         if (gate.IsMoving) return true;
         foreach (var fader in ActiveFaders)
         {
-            if (fader != null && fader.sourceGate == gate && fader.IsFading) return true;
+            if (fader != null && fader.IsControlledBy(gate) && fader.IsFading) return true;
         }
         return false;
     }
@@ -37,7 +40,7 @@ public sealed class WaterwayGateTargetFade : MonoBehaviour
 
     private void Awake() => EnsureInitialized();
 
-    private void Start()
+    protected virtual void Start()
     {
         // Initial closed gates must not leave their water visible until first use.
         if (sourceGate != null) SetVisibleImmediately(sourceGate.IsOpenRequested);
@@ -53,7 +56,7 @@ public sealed class WaterwayGateTargetFade : MonoBehaviour
     }
 
     // UnityEvents can call this component even when its GameObject is inactive.
-    public void FadeIn()
+    public virtual void FadeIn()
     {
         EnsureInitialized();
         visibleRequested = true;
@@ -66,7 +69,7 @@ public sealed class WaterwayGateTargetFade : MonoBehaviour
         // An in-progress fade reverses from the current opacity; never restarts.
     }
 
-    public void FadeOut()
+    public virtual void FadeOut()
     {
         EnsureInitialized();
         visibleRequested = false;

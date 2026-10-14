@@ -1,6 +1,6 @@
 # Level2 沙漠商人
 
-预制体：`Assets/Prefabs/Level2NPCS/Merchant-level2.prefab`
+预制体：`Assets/Prefabs/Level2NPCS/Patrol/Merchant-level2.prefab`
 
 使用与当前平民相同的 16×16 四向像素规格、短腿、无脖子连接及侧面居中的手部。浅色包裹头巾、金色衣襟、褐色腰包用于区分商人和普通居民。默认服装为青绿色。
 

@@ -51,6 +51,7 @@ public class DoorHingeInteraction : MonoBehaviour
     [SerializeField] private bool addJournalEntryWhenLockedInteractionFails;
     [SerializeField] private bool addLockedJournalEntryOnlyOnce = true;
     [SerializeField] private string lockedJournalEntryId = string.Empty;
+    [SerializeField, Tooltip("父任务 ID（可选）")] private string lockedJournalParentEntryId = string.Empty;
     [SerializeField] private string lockedJournalEntryTitle = string.Empty;
     [SerializeField, TextArea(4, 12)] private string lockedJournalEntryDetails = string.Empty;
 
@@ -100,6 +101,8 @@ public class DoorHingeInteraction : MonoBehaviour
     public bool AllowPlayerInteraction => allowPlayerInteraction;
     public bool CanBeLockpicked => canBeLockpicked;
     public bool PasswordLockEnabled => passwordLockEnabled;
+    public int RequiredUnlockSkill => isLocked && (passwordLockEnabled || HasConfiguredUnlockItem())
+        ? CharacterSkillRequirements.DoorUnlock : 0;
     public PickupItemBase RequiredUnlockItem => requiredUnlockItem;
     public string RequiredUnlockItemId => requiredUnlockItemId;
     public string RequiredUnlockItemInstanceId => requiredUnlockItemInstanceId;
@@ -174,6 +177,9 @@ public class DoorHingeInteraction : MonoBehaviour
 
     private void Awake()
     {
+        // Real doors have a destructible leaf; bridge pivots using this script do not get icons.
+        if (GetComponentInChildren<DoorData>(true) != null && GetComponent<LockedDoorMapMarker>() == null)
+            gameObject.AddComponent<LockedDoorMapMarker>();
         doorPassword = DoorPasswordPanel.NormalizePassword(doorPassword);
         CacheRequiredUnlockItemIdentity(false);
         CacheDoorColliders();
@@ -188,7 +194,8 @@ public class DoorHingeInteraction : MonoBehaviour
             gameObject,
             addJournalEntryWhenLockedInteractionFails,
             lockedJournalEntryId,
-            null);
+            null,
+            lockedJournalParentEntryId);
     }
 
     private void Start()
@@ -207,6 +214,7 @@ public class DoorHingeInteraction : MonoBehaviour
 
     private void Update()
     {
+        if (ArenaChallengeController.BlocksDoor(this)) { SetInteractionPromptVisible(false); return; }
         if (DocumentReader.IsInputBlocked)
         {
             return;
@@ -309,6 +317,10 @@ public class DoorHingeInteraction : MonoBehaviour
             return;
         }
 
+        // Missing keys take priority over skill. Do not replace a skill failure with the key popup.
+        if (isLocked && HasRequiredUnlockItem() &&
+            !CharacterSkillRequirements.Require(CharacterSkillRequirements.ControlledActor, RequiredUnlockSkill)) return;
+
         bool wasLocked = isLocked;
         bool interactionSucceeded = TryInteract();
         if (wasLocked && !interactionSucceeded && isLocked)
@@ -343,7 +355,9 @@ public class DoorHingeInteraction : MonoBehaviour
         {
             lockedInteractionAcknowledged = false;
         }
-        string promptMessage = lockedInteractionAcknowledged && isLocked && !hasRequiredKey
+        bool lacksSkill = isLocked && (passwordLockEnabled || hasRequiredKey) &&
+            !CharacterSkillRequirements.Has(controlledCharacter.CharacterData, RequiredUnlockSkill);
+        string promptMessage = lacksSkill ? "能力值不足" : lockedInteractionAcknowledged && isLocked && !hasRequiredKey
             ? "锁住了"
             : "按[E]进行互动";
 
@@ -405,7 +419,8 @@ public class DoorHingeInteraction : MonoBehaviour
     private void AddLockedInteractionJournalEntry()
     {
         if (!addJournalEntryWhenLockedInteractionFails ||
-            (addLockedJournalEntryOnlyOnce && lockedJournalEntryWasAdded))
+            (addLockedJournalEntryOnlyOnce && lockedJournalEntryWasAdded) ||
+            !QuestJournalManager.GetOrCreate().CanTriggerEntry(lockedJournalEntryId, lockedJournalParentEntryId))
         {
             return;
         }
@@ -414,7 +429,8 @@ public class DoorHingeInteraction : MonoBehaviour
             lockedJournalEntryId,
             lockedJournalEntryTitle,
             lockedJournalEntryDetails,
-            gameObject.scene.name);
+            gameObject.scene.name,
+            lockedJournalParentEntryId);
         lockedJournalEntryWasAdded = true;
     }
 
@@ -493,6 +509,7 @@ public class DoorHingeInteraction : MonoBehaviour
 
     private void ToggleDoor()
     {
+        if (ArenaChallengeController.BlocksDoor(this)) return;
         // A normal player/script interaction only rotates the hinge. Collision is
         // suppressed exclusively while an AI passage is active, so recover the
         // authored collider state before applying a manual toggle. This also
@@ -512,6 +529,7 @@ public class DoorHingeInteraction : MonoBehaviour
 
     public bool TryInteract()
     {
+        if (ArenaChallengeController.BlocksDoor(this)) return false;
         if (aiPassageActive)
         {
             return false;
@@ -538,6 +556,7 @@ public class DoorHingeInteraction : MonoBehaviour
     /// </summary>
     public bool TryInteractFromClockworkPuppet()
     {
+        if (ArenaChallengeController.BlocksDoor(this)) return false;
         if (!allowPlayerInteraction || aiPassageActive || isLocked)
         {
             return false;
@@ -550,6 +569,7 @@ public class DoorHingeInteraction : MonoBehaviour
     public void SetLocked(bool locked)
     {
         isLocked = locked;
+        GetComponent<LockedDoorMapMarker>()?.RefreshLockState();
         if (isLocked && aiPassageActive)
         {
             EndAiPassage();
@@ -578,6 +598,7 @@ public class DoorHingeInteraction : MonoBehaviour
         // temporary AI passage state. Keeping collision disabled here made a door
         // restored as open impossible for attack hitboxes to detect or destroy.
         SetDoorCollisionEnabled(true);
+        GetComponent<LockedDoorMapMarker>()?.RefreshLockState();
         if (!isLocked)
         {
             QuestJournalManager.GetOrCreate().EvaluateKnownCompletionConditions();
@@ -594,13 +615,15 @@ public class DoorHingeInteraction : MonoBehaviour
 
         string matchedInstanceId =
             FindMatchingUnlockItemInstanceId(inventory);
-        if (string.IsNullOrEmpty(matchedInstanceId) ||
-            !inventory.TryRemoveItemInstance(matchedInstanceId))
+        if (string.IsNullOrEmpty(matchedInstanceId)) return false;
+        if (!CharacterSkillRequirements.Require(CharacterSkillRequirements.ControlledActor, CharacterSkillRequirements.DoorUnlock)) return false;
+        if (!inventory.TryRemoveItemInstance(matchedInstanceId))
         {
             return false;
         }
 
         isLocked = false;
+        GetComponent<LockedDoorMapMarker>()?.RefreshLockState();
         QuestJournalManager.GetOrCreate().EvaluateKnownCompletionConditions();
         return true;
     }
@@ -976,6 +999,7 @@ public class DoorHingeInteraction : MonoBehaviour
             return;
         }
 
+        if (!CharacterSkillRequirements.Require(CharacterSkillRequirements.ControlledActor, CharacterSkillRequirements.DoorUnlock)) return;
         if (passwordPanel == null)
         {
             passwordPanel = GetComponent<DoorPasswordPanel>();
@@ -1000,6 +1024,7 @@ public class DoorHingeInteraction : MonoBehaviour
 
     private void HandlePasswordResult(bool passwordCorrect)
     {
+        if (!CharacterSkillRequirements.Require(CharacterSkillRequirements.ControlledActor, CharacterSkillRequirements.DoorUnlock)) return;
         ZeldaHealthHeartsUI ui = ZeldaHealthHeartsUI.Instance;
         if (!passwordCorrect)
         {
@@ -1013,6 +1038,7 @@ public class DoorHingeInteraction : MonoBehaviour
         if (isLocked)
         {
             isLocked = false;
+            GetComponent<LockedDoorMapMarker>()?.RefreshLockState();
             lockedInteractionAcknowledged = false;
             ToggleDoor();
             QuestJournalManager.GetOrCreate().EvaluateKnownCompletionConditions();
@@ -1035,6 +1061,7 @@ public class DoorHingeInteraction : MonoBehaviour
 
     private ZeldaFourWayMover GetActiveControlledCharacterNearby()
     {
+        if (ArenaChallengeController.BlocksDoor(this)) return null;
         ZeldaFourWayMover mover = ZeldaRuntimeRegistry.GetControlledMover();
         if (mover == null)
             return null;

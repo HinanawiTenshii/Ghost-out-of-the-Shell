@@ -177,3 +177,8 @@ MonoBehaviour:
   bottomLeadLength: 0.28
   deviceClearance: 0.12
   sortingOrder: 0
+  showCurrentFlow: 1
+  currentFlowSpeed: 2.4
+  currentFlowInterval: 2
+  currentFlowLength: 0.75
+  currentFlowIntensity: 1.2

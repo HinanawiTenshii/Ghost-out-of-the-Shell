@@ -1,0 +1,11 @@
+<Project>
+  <Import Project="LiquidInjector.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Characters\CharacterSkillBuffs.cs" />
+    <Compile Include="Assets\Scripts\Characters\CharacterSkillBuffs.cs" />
+    <Compile Remove="Assets\Scripts\UI\BuffDurationIconGraphic.cs;Assets\Scripts\UI\RuntimeBuffDurationBar.cs" />
+    <Compile Include="Assets\Scripts\UI\BuffDurationIconGraphic.cs;Assets\Scripts\UI\RuntimeBuffDurationBar.cs" />
+    <Compile Remove="Assets\Scripts\Items\Alchemy*.cs;Assets\Scripts\Items\Potion*.cs;Assets\Scripts\Characters\CharacterPotionBuffs.cs;Assets\Scripts\Characters\Potion*.cs;Assets\Scripts\Camera\Potion*.cs;Assets\Scripts\Rendering\Potion*.cs;Assets\Scripts\Interaction\AlchemyCauldron.cs" />
+    <Compile Include="Assets\Scripts\Items\Alchemy*.cs;Assets\Scripts\Items\Potion*.cs;Assets\Scripts\Characters\CharacterPotionBuffs.cs;Assets\Scripts\Characters\Potion*.cs;Assets\Scripts\Camera\Potion*.cs;Assets\Scripts\Rendering\Potion*.cs;Assets\Scripts\Interaction\AlchemyCauldron.cs" />
+  </ItemGroup>
+</Project>

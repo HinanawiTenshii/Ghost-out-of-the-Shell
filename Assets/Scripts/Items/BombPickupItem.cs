@@ -1,9 +1,22 @@
 using UnityEngine;
 
-/// <summary>A stackable pickup that places a timed bomb when used.</summary>
-public sealed class BombPickupItem : PickupItemBase
+/// <summary>A stackable pickup that places a timed, decoy or proximity bomb.</summary>
+public sealed class BombPickupItem : PickupItemBase, IConsumableExplosive
 {
+    protected override int DefaultRequiredUseSkill => CharacterSkillRequirements.Bomb;
     private bool detonationStarted;
+
+    [SerializeField, Tooltip("诱饵使用后启动信标，只在受击时爆炸，不使用定时引信。")]
+    private bool isDecoy;
+    public bool IsDecoy => isDecoy;
+    [SerializeField, Tooltip("感应炸弹使用后不计时，其他有实体的存活角色进入爆炸区域时引爆；放置者不会触发。")]
+    private bool isProximity;
+    public bool IsProximity => isProximity;
+    public Vector2 ExplosionSize => new Vector2(Mathf.Max(.05f, explosionSize.x), Mathf.Max(.05f, explosionSize.y));
+
+    public float FuseDuration => Mathf.Max(0.05f, fuseDuration);
+    public int ExplosionAttackPower => Mathf.Max(0, explosionAttackPower);
+    public float StreamingRetentionRadius => Mathf.Max(investigationRadius, explosionSize.magnitude * 0.5f);
 
     [Header("Bomb Fuse")]
     [SerializeField, Min(0.05f)] private float fuseDuration = 2f;
@@ -35,6 +48,9 @@ public sealed class BombPickupItem : PickupItemBase
     [SerializeField, Min(0.05f)] private float investigationPulseDuration = 0.7f;
     [SerializeField] private Color investigationPulseColor = Color.white;
     [SerializeField] private int effectSortingOrder = 10;
+    public float InvestigationRadius => investigationRadius;
+    public float InvestigationPulseDuration => investigationPulseDuration;
+    public Color InvestigationPulseColor => investigationPulseColor;
 
     [Header("Placed Bomb Aura")]
     [SerializeField] private bool emitPlacedBombParticles;
@@ -68,7 +84,21 @@ public sealed class BombPickupItem : PickupItemBase
 
     protected override bool ApplyUseEffect(ZeldaCharacterData user)
     {
-        CreateConfiguredPlacedBomb(transform.position, user);
+        Vector3 position = ResolvePlacementPosition(user, transform.position,
+            Vector2.one * placedBombSize, Vector2.zero, gameObject);
+        CreateConfiguredPlacedBomb(position, user);
+        return true;
+    }
+
+    /// <summary>Removes the explosive without a ground blast or a pickup reward.</summary>
+    public bool TryConsumeExplosive(out int attackPower)
+    {
+        attackPower = 0;
+        if (detonationStarted || !isActiveAndEnabled) return false;
+        detonationStarted = true;
+        attackPower = ExplosionAttackPower;
+        gameObject.SetActive(false);
+        Destroy(gameObject);
         return true;
     }
 
@@ -99,9 +129,10 @@ public sealed class BombPickupItem : PickupItemBase
 
     public PlacedBomb CreateConfiguredPlacedBomb(
         Vector3 worldPosition,
-        ZeldaCharacterData user)
+        ZeldaCharacterData user,
+        int? attackPowerOverride = null)
     {
-        GameObject placedObject = new GameObject("Placed Bomb");
+        GameObject placedObject = new GameObject(isProximity ? "Placed Proximity Bomb" : isDecoy ? "Placed Decoy Bomb" : "Placed Bomb");
         placedObject.transform.position = worldPosition;
         var placementScene = ZeldaRuntimeRegistry.GetGameplayScene(user != null ? user.gameObject : gameObject);
         // Save restoration may invoke this method on a prefab asset: in that
@@ -118,7 +149,7 @@ public sealed class BombPickupItem : PickupItemBase
             placedBombHighlightColor,
             flashColor,
             placedBombSize,
-            explosionAttackPower,
+            attackPowerOverride ?? explosionAttackPower,
             explosionSize,
             explosionHitboxDuration,
             explosionHitboxColor,
@@ -138,7 +169,9 @@ public sealed class BombPickupItem : PickupItemBase
             placedBombParticleLifetime,
             placedBombParticleRadius,
             placedBombParticleSpeed,
-            placedBombParticleSize);
+            placedBombParticleSize,
+            isDecoy,
+            isProximity);
         return placedBomb;
     }
 
@@ -146,6 +179,7 @@ public sealed class BombPickupItem : PickupItemBase
     protected override void OnValidate()
     {
         base.OnValidate();
+        if (isProximity) isDecoy = false;
         fuseDuration = Mathf.Max(0.05f, fuseDuration);
         flashInterval = Mathf.Max(0.02f, flashInterval);
         placedBombSize = Mathf.Max(0.05f, placedBombSize);

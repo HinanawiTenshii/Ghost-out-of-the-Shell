@@ -10,7 +10,7 @@ $stubs = $stubs.Replace('void Apply(bool mip, bool discard)', 'void Apply(bool m
 $fields = ([regex]::Matches($source,'private Color \w+\s*=\s*new Color\([^;]+;') | ForEach-Object {$_.Value}) -join [Environment]::NewLine
 $mapsStart = $source.IndexOf('    private static readonly string[] Front')
 $mapsEnd = $source.IndexOf('    private readonly Sprite[,] frames')
-$methodsStart = $source.IndexOf('    private Sprite CreateSprite')
+$methodsStart = $source.IndexOf('    protected virtual Sprite CreateSprite')
 $methodsEnd = $source.IndexOf('    protected override void OnValidate')
 $production = $source.Substring($mapsStart,$mapsEnd-$mapsStart) + $source.Substring($methodsStart,$methodsEnd-$methodsStart)
 $utility = Get-Content -Raw (Join-Path $root 'Assets/Scripts/Characters/PixelWalkFrameUtility.cs')

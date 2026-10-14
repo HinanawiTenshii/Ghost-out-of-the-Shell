@@ -12,7 +12,7 @@ $end=$src.IndexOf('    private Color PixelColor', $start)
 $method=$src.Substring($start,$end-$start).Replace('private static char','public static char')
 Add-Type -TypeDefinition ('public static class AutomatonPixels {'+($maps.Value -join [Environment]::NewLine)+$method+'}')
 $prefab=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Automaton-level2.prefab"
-$paladin=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Paladin.prefab"
+$paladin=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Idle/Paladin.prefab"
 $automatonScale=[double][regex]::Match($prefab,'m_LocalScale: \{x: ([^,]+)').Groups[1].Value
 $paladinScale=[double][regex]::Match($paladin,'m_LocalScale: \{x: ([^,]+)').Groups[1].Value
 if([Math]::Abs($automatonScale-.85) -gt .0001){throw 'Unexpected automaton scale'}

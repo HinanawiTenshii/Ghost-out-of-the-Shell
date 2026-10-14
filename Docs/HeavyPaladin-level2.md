@@ -1,6 +1,6 @@
 # Level 2 重装圣骑士
 
-预制体：`Assets/Prefabs/Level2NPCS/HeavyPaladin-level2.prefab`。
+预制体：`Assets/Prefabs/Level2NPCS/Idle/HeavyPaladin-level2.prefab`。
 只新增普通版，不修改现有 Paladin、AdvancedPaladin 或 Strongman。
 
 ## 体型与外观

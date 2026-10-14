@@ -1,6 +1,6 @@
 # Level2 巫师
 
-- 预制体：`Assets/Prefabs/Level2NPCS/Wizard-level2.prefab`
+- 预制体：`Assets/Prefabs/Level2NPCS/Patrol/Wizard-level2.prefab`
 - 角色数据：`Assets/Scripts/Characters/WizardZeldaCharacterData.cs`
 
 延续现有 16 PPU 像素规格，画布向上扩为 16×20：尖帽由 4 行加高至 8 行，帽檐由 8 像素加宽至 12 像素。保持原身体大小、脚底基准、手部位置与碰撞箱不变；蓝色编辑器边框同步扩高。紫靛色长袍延伸为连续宽下摆，遮住腿和靴子；行走改为褶皱交替及下摆边角轻微起伏，不再露出独立腿部。头部直接衔接衣领，不额外画裸露脖颈。配色可在 Inspector 的 Wizard Appearance 中调整。

@@ -43,9 +43,14 @@ public sealed class WaterwayGate : MonoBehaviour
     private float progress;
     private bool initialized;
     private bool dirty = true;
+    private bool initialOpenCaptured;
+    private bool initialOpen;
 
     public string Identifier => FormatIdentifier(number, letter);
     public bool IsOpenRequested => open;
+    // Keep the authored rest position, not the most recent requested/restored state.
+    // Capture before mutation too: an inactive gate may be controlled before OnEnable.
+    public bool InitialOpen { get { CaptureInitialOpen(); return Application.isPlaying ? initialOpen : open; } }
     public bool IsFullyOpen => progress >= 1f;
     public bool IsFullyClosed => progress <= 0f;
     public bool IsMoving => !Mathf.Approximately(progress, open ? 1f : 0f);
@@ -65,6 +70,7 @@ public sealed class WaterwayGate : MonoBehaviour
 
     public void SetOpen(bool value)
     {
+        CaptureInitialOpen();
         open = value;
         // Close the physical passage before the first frame of closing animation.
         // Opening only releases it once the shutter has completely lifted.
@@ -75,6 +81,7 @@ public sealed class WaterwayGate : MonoBehaviour
     /// <summary>Initialization/restore hook; does not fire completion events.</summary>
     public void SetOpenImmediately(bool value)
     {
+        CaptureInitialOpen();
         open = value;
         progress = value ? 1f : 0f;
         initialized = true;
@@ -84,6 +91,7 @@ public sealed class WaterwayGate : MonoBehaviour
 
     private void OnEnable()
     {
+        CaptureInitialOpen();
         barrier = GetComponent<BoxCollider2D>();
         if (!initialized || !Application.isPlaying)
         {
@@ -92,6 +100,13 @@ public sealed class WaterwayGate : MonoBehaviour
         }
         dirty = true;
         ApplyCollision();
+    }
+
+    private void CaptureInitialOpen()
+    {
+        if (!Application.isPlaying || initialOpenCaptured) return;
+        initialOpen = open;
+        initialOpenCaptured = true;
     }
 
     private void OnValidate()

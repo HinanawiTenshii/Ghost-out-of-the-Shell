@@ -442,15 +442,19 @@ public sealed class CRTScreenEffect : MonoBehaviour
         return cachedActiveUiCamera;
     }
 
-    public static void RegisterCanvas(Canvas canvas)
+    public static void RegisterCanvas(Canvas canvas, bool enableGlow = false)
     {
         if (canvas == null)
             return;
 
         RegisteredCanvases.Add(canvas);
+        RuntimeUiVisibility.Register(canvas);
+        // CRT composition applies to all UI; extra phosphor halos are opt-in for menus/windows.
+        if (enableGlow) RuntimeUiGlowScope.Attach(canvas);
+        else RuntimeUiGlowScope.Detach(canvas);
         LayerConfiguredCanvases.Remove(canvas);
         Camera uiCamera = FindActiveUiCamera();
-        if (uiCamera != null)
+        if (uiCamera != null && canvas.isActiveAndEnabled)
         {
             ConfigureCanvas(canvas, uiCamera);
         }
@@ -472,6 +476,8 @@ public sealed class CRTScreenEffect : MonoBehaviour
             if (canvases[i] != null)
             {
                 RegisteredCanvases.Add(canvases[i]);
+                RuntimeUiVisibility.Register(canvases[i]);
+                // Discovery must not enable glow on HUD/world prompts or override popup opt-ins.
             }
         }
         canvasRegistrySeeded = true;
@@ -494,6 +500,17 @@ public sealed class CRTScreenEffect : MonoBehaviour
                 continue;
             }
 
+            // Inactive world prompts/attribute windows dominate large scenes.
+            // Leave their camera/property setup until the first visible frame.
+            // This cheap enabled check also handles Canvas.enabled toggles (not
+            // only GameObject activation), without adding Update to each canvas.
+            if (!canvas.isActiveAndEnabled)
+            {
+                // Children may have been rebuilt while hidden. Re-layer once on
+                // activation, before rendering, including after scene travel.
+                LayerConfiguredCanvases.Remove(canvas);
+                continue;
+            }
             ConfigureCanvas(canvas, finalCamera);
         }
         for (int index = 0; index < DeadCanvases.Count; index++)
@@ -505,7 +522,6 @@ public sealed class CRTScreenEffect : MonoBehaviour
 
     private static void ConfigureCanvas(Canvas canvas, Camera finalCamera)
     {
-        RuntimeUiVisibility.Register(canvas);
         int uiLayer = LayerMask.NameToLayer("UI");
         if (canvas.GetComponent<CRTCanvasBypass>() != null)
         {
@@ -516,18 +532,17 @@ public sealed class CRTScreenEffect : MonoBehaviour
             return;
         }
 
-        if (canvas.renderMode == RenderMode.ScreenSpaceOverlay)
-        {
-            canvas.renderMode = RenderMode.ScreenSpaceCamera;
-        }
-
-        if (canvas.renderMode == RenderMode.ScreenSpaceCamera)
+        if (canvas.renderMode != RenderMode.WorldSpace)
         {
             // Persistent canvases may still reference a camera destroyed
             // during scene travel. Always attach them to the current final
             // Blocks/UI camera, not only when converting a new overlay.
             if (canvas.worldCamera != finalCamera)
                 canvas.worldCamera = finalCamera;
+            // Assign the camera before switching modes: a newly activated
+            // canvas without a camera can still report Overlay in this frame.
+            if (canvas.renderMode != RenderMode.ScreenSpaceCamera)
+                canvas.renderMode = RenderMode.ScreenSpaceCamera;
             float planeDistance =
                 Mathf.Max(finalCamera.nearClipPlane + 0.1f, 1f);
             if (!Mathf.Approximately(canvas.planeDistance, planeDistance))
@@ -680,7 +695,10 @@ public sealed class RuntimeUiVisibility : MonoBehaviour
         // on a controlled mover: it can temporarily disappear during possession.
         string sceneName = SceneManager.GetActiveScene().name;
         bool titleScene = sceneName.Replace(" ", "").Equals("TitleScreen", System.StringComparison.OrdinalIgnoreCase);
-        bool show = titleScene || PauseMenuController.IsPaused || TabJournalMenuController.IsOpen || SaveSlotPanel.IsOpen;
+        // Interactive world panels also own the pointer while open. Without
+        // these checks this LateUpdate overrides their Open() cursor request.
+        bool show = titleScene || PauseMenuController.IsPaused || TabJournalMenuController.IsOpen || SaveSlotPanel.IsOpen ||
+            DoorPasswordPanel.IsOpen || ElectricGatePanel.IsOpen || CharacterDialogueWindow.BlocksInput || TurretZeldaCharacterData.PlayerNeedsCursor;
         if (Cursor.visible != show) Cursor.visible = show;
         // Hide only the visual cursor; mouse aiming and right-click inspection
         // still need the pointer position instead of locking it to screen centre.

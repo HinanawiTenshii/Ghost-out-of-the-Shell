@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="Skeleton.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Decorations\GeometricAlchemyDecoration.cs" />
+    <Compile Include="Assets\Scripts\Decorations\GeometricAlchemyDecoration.cs" />
+  </ItemGroup>
+</Project>

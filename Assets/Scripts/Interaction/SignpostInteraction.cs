@@ -6,6 +6,11 @@ using UnityEngine.UI;
 [AddComponentMenu("Interaction/Signpost Interaction")]
 public sealed class SignpostInteraction : MonoBehaviour
 {
+    [Header("Notice / 告示牌")]
+    [SerializeField, InspectorName("告示牌模式"), Tooltip("启用时显示单个文字窗口，不使用下方四方向文字。")]
+    private bool singleNotice;
+    [SerializeField, InspectorName("告示文字"), TextArea(3, 10), Tooltip("告示牌阅读窗口显示的内容，可换行。")]
+    private string noticeText = "";
     [Header("Directions / 指路文字（留空不显示）")]
     [SerializeField, TextArea(2, 5), Tooltip("上方的说明。空白或仅空格时隐藏该方向。")]
     private string upText = "";
@@ -18,6 +23,8 @@ public sealed class SignpostInteraction : MonoBehaviour
     [Header("Interaction / 交互")]
     [SerializeField, Min(0.1f)] private float interactionDistance = 1.5f;
     [SerializeField] private Font displayFont;
+    [SerializeField, Range(0f, 1f), InspectorName("阅读背景压暗程度")]
+    private float backgroundDimOpacity = .6f;
 
     private static SignpostInteraction activeSignpost;
     private static int inputBlockedThroughFrame = -1;
@@ -38,7 +45,7 @@ public sealed class SignpostInteraction : MonoBehaviour
     private readonly RectTransform[] directionPanels = new RectTransform[4];
     private readonly Text[] directionLabels = new Text[4];
     private readonly Text[] directionContents = new Text[4];
-    private Text emptyLabel, closeHint;
+    private Text emptyLabel, closeHint, noticeContent;
     private GameObject promptObject;
     private TextMesh promptText;
     private Material promptMaterial;
@@ -153,9 +160,11 @@ public sealed class SignpostInteraction : MonoBehaviour
         if (promptObject == null)
         {
             promptObject = new GameObject("Signpost Read Prompt");
-            promptObject.transform.SetParent(transform, false);
+            // A scene-root prompt cannot inherit scale, mirroring or rotation from the sign
+            // (including non-uniformly scaled ancestors). It is positioned over the reader.
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(promptObject, gameObject.scene);
             promptText = promptObject.AddComponent<TextMesh>();
-            promptText.text = "按[E]查看路牌";
+            promptText.text = singleNotice ? "按[E]阅读告示牌" : "按[E]查看路牌";
             promptText.fontSize = 72;
             promptText.characterSize = 0.035f;
             promptText.anchor = TextAnchor.MiddleCenter;
@@ -170,6 +179,7 @@ public sealed class SignpostInteraction : MonoBehaviour
         promptText.font = font;
         font.RequestCharactersInTexture(promptText.text, 72, FontStyle.Normal);
         promptMaterial.mainTexture = font.material.mainTexture;
+        promptObject.transform.localScale = Vector3.one;
         promptObject.transform.position = mover.GetOverheadWorldPosition(new Vector2(0f, 0.9f));
         promptObject.transform.rotation = Quaternion.identity;
         promptObject.SetActive(true);
@@ -215,6 +225,12 @@ public sealed class SignpostInteraction : MonoBehaviour
         scaler.referenceResolution = new Vector2(1280f, 720f);
         // Keep the whole compass and close hint visible on narrow/ultrawide screens.
         scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
+        BuildReadingBackdrop();
+        if (singleNotice)
+        {
+            BuildNoticeWindow();
+            return;
+        }
         // Transparent layout root, not a shared background/window. Each card
         // owns its background, border, arrow and description independently.
         RectTransform layoutRoot = MakeRect("Directions Layout", windowObject.transform,
@@ -256,6 +272,12 @@ public sealed class SignpostInteraction : MonoBehaviour
 
     private void RefreshDirections()
     {
+        if (singleNotice)
+        {
+            noticeContent.text = string.IsNullOrWhiteSpace(noticeText)
+                ? "暂无告示内容" : noticeText.Trim();
+            return;
+        }
         int count = CountVisibleDirections();
         for (int i = 0; i < 4; i++)
         {
@@ -265,6 +287,47 @@ public sealed class SignpostInteraction : MonoBehaviour
             directionContents[i].text = visible ? content.Trim() : string.Empty;
         }
         emptyLabel.gameObject.SetActive(count == 0);
+    }
+
+    private void BuildNoticeWindow()
+    {
+        RectTransform card = MakeRect("Notice Window", windowObject.transform,
+            Vector2.zero, new Vector2(420f, 220f));
+        Image background = card.gameObject.AddComponent<Image>();
+        background.color = new Color(.025f, .07f, .12f, .97f);
+        background.raycastTarget = false;
+        // Separate thin borders participate in the same popup glow as other menu edges.
+        MakeNoticeEdge(card, new Vector2(0f, 110f), new Vector2(424f, 2f));
+        MakeNoticeEdge(card, new Vector2(0f, -110f), new Vector2(424f, 2f));
+        MakeNoticeEdge(card, new Vector2(-211f, 0f), new Vector2(2f, 220f));
+        MakeNoticeEdge(card, new Vector2(211f, 0f), new Vector2(2f, 220f));
+        noticeContent = MakeText("Notice Content", card, Vector2.zero, new Vector2(376f, 180f), 24);
+        noticeContent.alignment = TextAnchor.MiddleCenter;
+        noticeContent.resizeTextForBestFit = true;
+        noticeContent.resizeTextMinSize = 12;
+        noticeContent.resizeTextMaxSize = 24;
+        closeHint = MakeText("Close Hint", card, new Vector2(0f, -140f), new Vector2(420f, 32f), 18);
+        closeHint.text = "[E] / [Esc] 关闭";
+        closeHint.alignment = TextAnchor.MiddleCenter;
+    }
+
+    private void MakeNoticeEdge(Transform parent, Vector2 position, Vector2 size)
+    {
+        var edge = MakeRect("Notice Border", parent, position, size).gameObject.AddComponent<Image>();
+        edge.color = ZeldaUiPalette.Ghost;
+        edge.raycastTarget = false;
+    }
+
+    private void BuildReadingBackdrop()
+    {
+        var rect = MakeRect("Reading Backdrop", windowObject.transform, Vector2.zero, Vector2.zero);
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = rect.offsetMax = Vector2.zero;
+        rect.SetAsFirstSibling();
+        var image = rect.gameObject.AddComponent<Image>();
+        image.color = new Color(0f, 0f, 0f, Mathf.Clamp01(backgroundDimOpacity));
+        image.raycastTarget = false;
     }
 
     private void EnsureWindowOnTop()
@@ -281,7 +344,7 @@ public sealed class SignpostInteraction : MonoBehaviour
             windowCanvas.worldCamera = uiCamera;
             windowCanvas.planeDistance = uiCamera.nearClipPlane + 0.01f;
         }
-        CRTScreenEffect.RegisterCanvas(windowCanvas);
+        CRTScreenEffect.RegisterCanvas(windowCanvas, enableGlow: true);
     }
 
     private void OnDisable()
@@ -294,8 +357,13 @@ public sealed class SignpostInteraction : MonoBehaviour
     {
         CloseWindow();
         if (windowObject != null) Destroy(windowObject);
+        if (promptObject != null) Destroy(promptObject);
         if (promptMaterial != null) Destroy(promptMaterial);
     }
 
-    private void OnValidate() { interactionDistance = Mathf.Max(0.1f, interactionDistance); }
+    private void OnValidate()
+    {
+        interactionDistance = Mathf.Max(0.1f, interactionDistance);
+        backgroundDimOpacity = Mathf.Clamp01(backgroundDimOpacity);
+    }
 }

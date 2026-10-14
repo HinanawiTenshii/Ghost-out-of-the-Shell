@@ -3,6 +3,30 @@ using UnityEngine;
 /// <summary>A fixed, one-second pulse field; it never refreshes an existing stun.</summary>
 public sealed class FearRoarArea : MonoBehaviour
 {
+    private static readonly System.Collections.Generic.HashSet<FearRoarArea> activeAreas = new System.Collections.Generic.HashSet<FearRoarArea>();
+    private readonly System.Collections.Generic.HashSet<SandwormEruptionAttack> affectedSandworms = new System.Collections.Generic.HashSet<SandwormEruptionAttack>();
+    private bool initialized;
+    public static System.Collections.Generic.IReadOnlyCollection<FearRoarArea> ActiveAreas => activeAreas;
+    public bool IsOngoing => initialized && isActiveAndEnabled && elapsed < Duration;
+    public float Radius => radius;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetAreas() { activeAreas.Clear(); roarClip = null; }
+    private void OnEnable()
+    {
+        activeAreas.Add(this);
+        if (initialized && elapsed < Duration) PlayRoarAudio();
+    }
+    private void OnDisable()
+    {
+        activeAreas.Remove(this);
+        if (roarSource != null) roarSource.Stop();
+        audioPaused = false;
+    }
+
+    // One ongoing roar may interrupt each worm only once, just like ordinary AI.
+    public bool TryAffectSandworm(SandwormEruptionAttack worm) => IsOngoing &&
+        worm != null && worm.gameObject.scene == gameObject.scene && affectedSandworms.Add(worm);
     private float radius = 3f;
     private float stunDuration = 3f;
     private const float Duration = 1f;
@@ -10,6 +34,9 @@ public sealed class FearRoarArea : MonoBehaviour
     private readonly System.Collections.Generic.HashSet<ZeldaCharacterAiBase> affected = new System.Collections.Generic.HashSet<ZeldaCharacterAiBase>();
     private Material ringMaterial;
     private float elapsed;
+    private static AudioClip roarClip;
+    private AudioSource roarSource;
+    private bool audioPaused;
     private static Sprite icon;
     private static readonly Sprite[] rankedIcons = new Sprite[3];
     public static Sprite GetRankedIcon(int rank)
@@ -58,6 +85,10 @@ public sealed class FearRoarArea : MonoBehaviour
 
     public void Initialize(ZeldaCharacterData user, int level)
     {
+        initialized = true;
+        elapsed = 0f;
+        affectedSandworms.Clear();
+        activeAreas.Add(this);
         radius = level >= 2 ? 3.5f : 3f;
         stunDuration = level >= 3 ? 5f : 3f;
         transform.position = user.transform.position;
@@ -83,7 +114,45 @@ public sealed class FearRoarArea : MonoBehaviour
             ring.enabled = false;
             rings[i] = ring;
         }
+        PlayRoarAudio();
         AffectCharacters();
+    }
+
+    private void PlayRoarAudio()
+    {
+        if (roarClip == null) roarClip = Resources.Load<AudioClip>("Audio/FearRoar");
+        if (roarClip == null || !isActiveAndEnabled || elapsed >= Duration) return;
+        if (roarSource == null)
+        {
+            // The scene-owned field owns its voice: never leave a detached roar
+            // after unloading the scene or interrupting the effect.
+            roarSource = gameObject.AddComponent<AudioSource>();
+            roarSource.playOnAwake = false;
+            roarSource.loop = false;
+            roarSource.spatialBlend = 0f;
+            roarSource.dopplerLevel = 0f;
+            roarSource.volume = .65f;
+            roarSource.priority = 90;
+            roarSource.ignoreListenerPause = false;
+        }
+        roarSource.Stop();
+        roarSource.clip = roarClip;
+        roarSource.timeSamples = Mathf.Clamp(Mathf.FloorToInt(elapsed / Duration * roarClip.samples), 0, roarClip.samples - 1);
+        roarSource.pitch = roarClip.length / Duration * Mathf.Max(.01f, Time.timeScale);
+        audioPaused = false;
+        roarSource.Play();
+        SyncRoarAudio();
+    }
+
+    private void SyncRoarAudio()
+    {
+        if (roarSource == null) return;
+        if (elapsed >= Duration) { roarSource.Stop(); return; }
+        bool pause = Time.timeScale <= 0f || GameSaveSystem.IsLoading;
+        if (!pause) roarSource.pitch = roarClip.length / Duration * Time.timeScale;
+        if (pause == audioPaused) return;
+        audioPaused = pause;
+        if (pause) roarSource.Pause(); else roarSource.UnPause();
     }
 
     private void AffectCharacters()
@@ -94,7 +163,8 @@ public sealed class FearRoarArea : MonoBehaviour
                 affected.Contains(ai) || ((Vector2)(ai.transform.position - transform.position)).sqrMagnitude > radius * radius) continue;
             var mover = ai.GetComponent<ZeldaFourWayMover>();
             var data = ai.GetComponent<ZeldaCharacterData>();
-            if (data == null || data.IsDead || (mover != null && mover.isActiveAndEnabled)) continue;
+            if (data == null || data.IsDead || (mover != null && mover.isActiveAndEnabled) ||
+                CharacterPotionBuffs.Has(data, AlchemyPotionKind.Might)) continue;
             affected.Add(ai);
             if (!ai.IsStunned) ai.StunForDuration(stunDuration);
         }
@@ -102,9 +172,12 @@ public sealed class FearRoarArea : MonoBehaviour
 
     private void Update()
     {
+        SyncRoarAudio();
         if (elapsed >= Duration) { Destroy(gameObject); return; }
+        if (GameSaveSystem.IsLoading) return;
         AffectCharacters();
         elapsed = Mathf.Min(Duration, elapsed + Time.deltaTime);
+        if (elapsed >= Duration && roarSource != null) roarSource.Stop();
         for (int i = 0; i < rings.Length; i++)
         {
             float age = elapsed - i * 0.16f;

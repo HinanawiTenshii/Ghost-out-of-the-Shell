@@ -141,6 +141,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: "\u672A\u547D\u540D\u7269\u54C1"
   itemId: unknown_item
+  requiredUseSkill: 0
+  useSkillRequirementInitialized: 1
   uniqueInstanceId: 
   pickupQuantity: 1
   maxStackSize: 1

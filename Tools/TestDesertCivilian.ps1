@@ -26,7 +26,7 @@ $fields
 $derived
 "@
 Add-Type -TypeDefinition $code -CompilerOptions '/nowarn:0414,0649'
-$prefab=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Civilian-level2.prefab"
+$prefab=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Patrol/Civilian-level2.prefab"
 $actor=[DesertCivilianHarness]::new()
 foreach($type in @([CivilianHarness],[DesertCivilianHarness])){
     foreach($field in $type.GetFields([Reflection.BindingFlags]'NonPublic,Instance,DeclaredOnly')){

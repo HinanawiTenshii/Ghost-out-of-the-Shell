@@ -86,6 +86,7 @@ public sealed class PersistentSceneTransitionPoint : MonoBehaviour
 
     private ZeldaFourWayMover GetNearbyControlledMover()
     {
+        if (ArenaChallengeController.BlocksTransition(this)) return null;
         ZeldaFourWayMover mover = ZeldaRuntimeRegistry.GetControlledMover();
         if (mover == null || !OverlapsInteractionArea(mover))
         {

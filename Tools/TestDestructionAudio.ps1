@@ -23,11 +23,12 @@ public class SpriteRenderer {public object sprite=new object();public bool force
 public class Collider2D {public bool enabled=true;public Bounds bounds;}
 public class CameraVisionStreamingExempt {}
 public class ZeldaCharacterData {}
+public class LockedDoorMapMarker {public void NotifyLeafDestroyed(){}}
 public static class CameraCircularVision {public static void NotifyBlockersChanged(){}public static void NotifyBlockersChanged(Bounds b){}}
 namespace UnityEngine.SceneManagement {public static class SceneManager {public static void MoveGameObjectToScene(GameObject o,string s){o.scene=s;}}}
 public class AudioClip {public float length;public AudioClip(float n){length=n;}}
 public static class Resources {
- public static int loads;public static bool missing;public static AudioClip wood=new AudioClip(1.334f),glass=new AudioClip(1.253f);
+ public static int loads;public static bool missing;public static AudioClip wood=new AudioClip(.52f),glass=new AudioClip(.64f);
  public static T Load<T>(string path) where T:class{loads++;if(missing)return null;if(path=="Audio/DoorBreak")return wood as T;if(path=="Audio/GlassBreak")return glass as T;throw new Exception(path);}
 }
 public enum AudioRolloffMode {Linear}
@@ -42,6 +43,7 @@ public class DoorData {
  public int durability=2,fragments,pulses,notifications;public float shakeTimer,shakeDuration=.28f,shakeElapsed;
  public Collider2D[] colliders={new Collider2D(),new Collider2D()};
  public T[] GetComponentsInChildren<T>(bool inactive)=>colliders as T[];
+ public T GetComponentInParent<T>() where T:class => null;
  void StopShake(){isShaking=false;}void NotifyNearbyAi(Vector3 p,ZeldaCharacterData s){notifications++;}void SpawnInvestigationPulse(Vector3 p){pulses++;}void SpawnFragments(){fragments++;}
  void Destroy(GameObject o){o.destroyed=true;}void Destroy(GameObject o,float delay){o.cleanup=delay;}
  public void Preload(){ResolveBreakSound();}public static void ResetCache(){defaultWoodBreakSound=defaultGlassBreakSound=null;}
@@ -67,13 +69,13 @@ public static class DestructionChecks {
   Check(voice.scene==door.gameObject.scene&&voice.exempt,"Scene-local, streaming exempt");
   Check(voice.transform.position.x==4&&voice.transform.position.y==5,"Sound at visible destruction center");
   Check(!voice.audio.playOnAwake&&!voice.audio.loop&&voice.audio.dopplerLevel==0,"No accidental repeats or Doppler");
-  Check(Math.Abs(voice.cleanup-1.434f)<.001,"Cleanup follows clip length");
+  Check(Math.Abs(voice.cleanup-.62f)<.001,"Cleanup follows clip length");
   Check(voice.audio.volume==.7f&&voice.audio.spatialBlend==.8f,"Configured mix retained");
   int voices=Voices();door.ReceiveAttack(100);Check(Voices()==voices&&door.fragments==1,"Deferred Destroy cannot replay");
   var another=new DoorData();another.Preload();Check(Resources.loads==1,"Shared wood cache");
   var glass=new DoorData{breakMaterial=DoorData.BreakMaterial.Glass,durability=0};glass.Preload();glass.ReceiveAttack(1);
   Check(Last().audio.clip==Resources.glass&&Resources.loads==2,"Glass material fallback");
-  Check(Math.Abs(Last().cleanup-1.353f)<.001,"Glass tail outlives head object");
+  Check(Math.Abs(Last().cleanup-.74f)<.001,"Glass tail outlives head object");
   var custom=new AudioClip(.2f);var configured=new DoorData{breakSound=custom};configured.Preload();configured.ReceiveAttack(3);
   Check(Last().audio.clip==custom&&Resources.loads==2,"Custom clip wins without extra loads");
   voices=Voices();var mute=new DoorData{breakSoundVolume=0};mute.ReceiveAttack(4);Check(Voices()==voices&&mute.isDestroyed,"Mute still destroys");
@@ -95,6 +97,7 @@ foreach($name in @('DoorBreak','GlassBreak')) {
  $info=(& ffprobe -v error -show_entries stream=codec_name,sample_rate,channels -of json $path | ConvertFrom-Json).streams[0]
  if($info.codec_name -ne 'pcm_s16le' -or $info.sample_rate -ne '44100' -or $info.channels -ne 1){throw "Invalid PCM: $name"}
  $duration=[double]::Parse((& ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 $path),[Globalization.CultureInfo]::InvariantCulture)
- if($duration -lt 1.2 -or $duration -gt 1.5){throw "Destruction tail should remain audible, without a long trailing wait: $name ($duration seconds)"}
+ $expectedDuration = if($name -eq 'DoorBreak'){0.52}else{0.64}
+ if([Math]::Abs($duration - $expectedDuration) -gt 0.001){throw "Unexpected synthesized destruction duration: $name ($duration seconds)"}
 }
 Write-Output 'PASS: prefab, sample-scene overrides and mono PCM assets.'

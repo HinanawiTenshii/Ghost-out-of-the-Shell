@@ -124,7 +124,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45a54a2446b64fa98583ad82d23a6ac4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  durability: 0
+  durability: 2
   fragmentCount: 18
   fragmentLifetime: 0.85
   fragmentSpeed: 4.2
@@ -135,3 +135,9 @@ MonoBehaviour:
   breakMaterial: 1
   breakSound: {fileID: 8300000, guid: e29d6d35122645fdaca034b6e11b8966, type: 3}
   breakSoundVolume: 0.65
+  breakSoundSpatialBlend: 0.8
+  breakSoundMaxDistance: 22
+  investigationRadius: 8
+  investigationPulseDuration: 0.7
+  investigationPulseColor: {r: 1, g: 1, b: 1, a: 1}
+  attachedVisuals: []

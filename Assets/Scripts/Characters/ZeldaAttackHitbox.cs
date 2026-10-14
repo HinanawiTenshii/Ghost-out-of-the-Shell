@@ -10,7 +10,10 @@ public enum ZeldaAttackVisualShape
     Shockwave,
     Book,
     TwinBlades,
-    BattleAxe
+    BattleAxe,
+    BoneFist,
+    Wrench,
+    DirectionalWave
 }
 
 [RequireComponent(typeof(SpriteRenderer))]
@@ -26,6 +29,7 @@ public class ZeldaAttackHitbox : MonoBehaviour
     private static Sprite boxSprite;
     private static Sprite swordSprite;
     private static Sprite hammerSprite;
+    private static Sprite wrenchSprite;
     private static Sprite rockSprite;
     private static Sprite shockwaveSprite;
     private static Sprite bookSprite;
@@ -120,13 +124,23 @@ public class ZeldaAttackHitbox : MonoBehaviour
         new HashSet<BombPickupItem>();
     private readonly HashSet<PlacedBomb> detonatedPlacedBombs =
         new HashSet<PlacedBomb>();
+    private List<Collider2D> circularOverlaps;
 
     private SpriteRenderer spriteRenderer;
     private BoxCollider2D triggerCollider;
     private Rigidbody2D physicsBody;
+    private bool initialized;
     private ZeldaCharacterData owner;
+    private ZeldaFourWayMover ownerMover;
+    private int ownerEchoAttackVersion;
     private bool canDamageOwner;
     private bool isDirectCharacterAttack;
+    private bool potionMeleeSweep;
+    private Transform potionSweepScaleRoot;
+    private Transform potionSweepPivot;
+    private SpriteRenderer potionSweepRenderer;
+    private bool potionSweepVisualActive;
+    private bool potionSweepSourceWasForcedOff;
     private Vector3 configuredMaximumScale = Vector3.one;
     private Color configuredTint;
     private float elapsedLifetime;
@@ -160,6 +174,7 @@ public class ZeldaAttackHitbox : MonoBehaviour
 
     private void Awake()
     {
+        if (initialized) return;
         spriteRenderer = GetComponent<SpriteRenderer>();
         triggerCollider = GetComponent<BoxCollider2D>();
         physicsBody = GetComponent<Rigidbody2D>();
@@ -183,6 +198,7 @@ public class ZeldaAttackHitbox : MonoBehaviour
 
         triggerCollider.isTrigger = true;
         triggerCollider.size = Vector2.one;
+        initialized = true;
     }
 
     private void Start()
@@ -193,7 +209,7 @@ public class ZeldaAttackHitbox : MonoBehaviour
     private void Update()
     {
         if (CancelForStunnedOwner()) return;
-        if (visualShape != ZeldaAttackVisualShape.Shockwave)
+        if (!potionMeleeSweep && visualShape != ZeldaAttackVisualShape.Shockwave)
         {
             return;
         }
@@ -201,6 +217,12 @@ public class ZeldaAttackHitbox : MonoBehaviour
         elapsedLifetime += Time.deltaTime;
         float progress = Mathf.Clamp01(
             elapsedLifetime / Mathf.Max(0.01f, lifetime));
+        if (potionMeleeSweep)
+        {
+            UpdatePotionSweepVisual(progress);
+            return;
+        }
+
         float easedProgress = 1f - (1f - progress) * (1f - progress);
         transform.localScale = Vector3.Lerp(
             configuredMaximumScale * 0.08f,
@@ -225,13 +247,28 @@ public class ZeldaAttackHitbox : MonoBehaviour
         bool allowOwnerDamage = false,
         bool directCharacterAttack = false)
     {
+        // Configuration may precede Awake for an inactive prefab/template.
+        // The guard also prevents a later activation from resetting configured geometry.
+        if (!initialized) Awake();
+        ResetPotionSweepVisual();
         lifetime = attackLifetime;
         attackPower = inheritedAttackPower;
         visualTint = tint;
         owner = attackOwner;
+        ownerMover = owner != null ? owner.GetComponent<ZeldaFourWayMover>() : null;
+        ownerEchoAttackVersion = ownerMover != null ? ownerMover.EchoAttackInterruptionVersion : 0;
         canDamageOwner = allowOwnerDamage;
         isDirectCharacterAttack = directCharacterAttack;
         visualShape = inheritedVisualShape;
+        potionMeleeSweep = directCharacterAttack && inheritedVisualShape != ZeldaAttackVisualShape.Shockwave &&
+            inheritedVisualShape != ZeldaAttackVisualShape.DirectionalWave &&
+            CharacterPotionBuffs.Has(owner, AlchemyPotionKind.Berserk);
+        // Enlarge only the contact region, not the authored weapon sprite. The existing
+        // damagedTargets set already guarantees one hit per character for this swing.
+        triggerCollider.size = potionMeleeSweep
+            ? new Vector2(Mathf.Max(1f, 1.25f / Mathf.Max(.05f, Mathf.Abs(size.x))),
+                Mathf.Max(1f, .85f / Mathf.Max(.05f, Mathf.Abs(size.y))))
+            : Vector2.one;
 
         configuredMaximumScale = new Vector3(size.x, size.y, 1f);
         configuredTint = visualTint;
@@ -246,11 +283,155 @@ public class ZeldaAttackHitbox : MonoBehaviour
             ApplyVisual();
             spriteRenderer.color = visualTint;
         }
+        if (potionMeleeSweep) ConfigurePotionSweepVisual();
+        if (visualShape == ZeldaAttackVisualShape.DirectionalWave)
+        {
+            var wave = GetComponent<DirectionalPurpleWave>();
+            if (wave == null) wave = gameObject.AddComponent<DirectionalPurpleWave>();
+            wave.Configure(lifetime, visualTint, spriteRenderer, triggerCollider, owner);
+        }
+    }
+
+    private void ConfigurePotionSweepVisual()
+    {
+        if (spriteRenderer == null) return;
+        if (potionSweepPivot == null)
+        {
+            potionSweepScaleRoot = new GameObject("Berserk Sweep Visual").transform;
+            potionSweepScaleRoot.SetParent(transform, false);
+            potionSweepPivot = new GameObject("Berserk Sweep Pivot").transform;
+            potionSweepPivot.SetParent(potionSweepScaleRoot, false);
+            var visual = new GameObject("Berserk Sweep Weapon", typeof(SpriteRenderer));
+            visual.transform.SetParent(potionSweepPivot, false);
+            potionSweepRenderer = visual.GetComponent<SpriteRenderer>();
+        }
+
+        // Rotate only the picture, never the enlarged contact region. Undo the
+        // hitbox's non-uniform scale before rotating, then apply it to the sprite
+        // itself so thin weapons retain their authored proportions throughout.
+        // The inverse scale needs its own non-rotating node: putting it on the
+        // rotating pivot would apply rotation before compensation and shear it.
+        potionSweepScaleRoot.localScale = new Vector3(
+            Mathf.Abs(configuredMaximumScale.x) > .0001f ? 1f / configuredMaximumScale.x : 1f,
+            Mathf.Abs(configuredMaximumScale.y) > .0001f ? 1f / configuredMaximumScale.y : 1f,
+            1f);
+        potionSweepRenderer.transform.localScale = configuredMaximumScale;
+        potionSweepScaleRoot.gameObject.layer = gameObject.layer;
+        potionSweepPivot.gameObject.layer = gameObject.layer;
+        potionSweepRenderer.gameObject.layer = gameObject.layer;
+        potionSweepRenderer.sprite = spriteRenderer.sprite;
+        potionSweepRenderer.color = spriteRenderer.color;
+        potionSweepRenderer.flipX = spriteRenderer.flipX;
+        potionSweepRenderer.flipY = spriteRenderer.flipY;
+        potionSweepRenderer.sharedMaterials = spriteRenderer.sharedMaterials;
+        potionSweepRenderer.renderingLayerMask = spriteRenderer.renderingLayerMask;
+        potionSweepRenderer.sortingLayerID = spriteRenderer.sortingLayerID;
+        potionSweepRenderer.sortingOrder = spriteRenderer.sortingOrder;
+        potionSweepRenderer.maskInteraction = spriteRenderer.maskInteraction;
+        potionSweepRenderer.spriteSortPoint = spriteRenderer.spriteSortPoint;
+        potionSweepRenderer.drawMode = spriteRenderer.drawMode;
+        potionSweepRenderer.size = spriteRenderer.size;
+        potionSweepRenderer.tileMode = spriteRenderer.tileMode;
+        potionSweepRenderer.adaptiveModeThreshold = spriteRenderer.adaptiveModeThreshold;
+        var properties = new MaterialPropertyBlock();
+        spriteRenderer.GetPropertyBlock(properties);
+        potionSweepRenderer.SetPropertyBlock(properties);
+        potionSweepSourceWasForcedOff = spriteRenderer.forceRenderingOff;
+        spriteRenderer.forceRenderingOff = true;
+        potionSweepVisualActive = true;
+        potionSweepPivot.gameObject.SetActive(true);
+        UpdatePotionSweepVisual(0f);
+    }
+
+    private void UpdatePotionSweepVisual(float progress)
+    {
+        if (!potionSweepVisualActive || potionSweepRenderer == null) return;
+        // The initial facing still selects TwinBlades' profile sprite. The arc
+        // is local to that facing, so all four directions use the same motion.
+        float angle = Mathf.SmoothStep(-55f, 55f, Mathf.Clamp01(progress));
+        potionSweepPivot.localRotation = Quaternion.Euler(0f, 0f, angle);
+        // A short forward arc also reads as a sweep for round rocks/fists, whose
+        // silhouette barely changes when rotated. Keep the midpoint at the
+        // original attack position and the grip close to the character's front.
+        float radius = Mathf.Clamp(Mathf.Max(Mathf.Abs(configuredMaximumScale.x),
+            Mathf.Abs(configuredMaximumScale.y)) * .4f, .3f, .4f);
+        float radians = angle * Mathf.Deg2Rad;
+        potionSweepPivot.localPosition =
+            new Vector3(-Mathf.Sin(radians) * radius, (Mathf.Cos(radians) - 1f) * radius, 0f);
+        potionSweepRenderer.enabled = spriteRenderer.enabled;
+        potionSweepRenderer.forceRenderingOff = potionSweepSourceWasForcedOff;
+    }
+
+    private void ResetPotionSweepVisual()
+    {
+        if (!potionSweepVisualActive) return;
+        if (spriteRenderer != null) spriteRenderer.forceRenderingOff = potionSweepSourceWasForcedOff;
+        if (potionSweepPivot != null) potionSweepPivot.gameObject.SetActive(false);
+        potionSweepVisualActive = false;
     }
 
     private void OnTriggerEnter2D(Collider2D other)
     {
         TryDamage(other);
+    }
+
+    /// <summary>An instantaneous circular pulse using the same damage rules as weapons/bombs.
+    /// The resolver stays inactive: neither a physical collider nor a persistent hit trigger is enabled.</summary>
+    public static void ApplyCircularPulse(Vector2 center, float radius, int power, ZeldaCharacterData attacker)
+    {
+        if (attacker == null || attacker.IsDead || radius <= 0f || power <= 0) return;
+        var resolver = CreateCircularAreaResolver(power, attacker);
+        resolver.ResolveCircularArea(center, radius);
+        if (Application.isPlaying) Destroy(resolver.gameObject); else DestroyImmediate(resolver.gameObject);
+    }
+
+    /// <summary>Inactive query-only resolver. Reuse for a whole effect to preserve its per-target hit sets.
+    /// The caller owns its lifetime; parenting it to the effect also guarantees cleanup on scene unload.</summary>
+    public static ZeldaAttackHitbox CreateCircularAreaResolver(int power, ZeldaCharacterData attacker, Transform parent = null)
+    {
+        if (attacker == null || attacker.IsDead || power <= 0) return null;
+        var root = new GameObject("Circular Attack Resolver");
+        root.SetActive(false);
+        if (parent != null) root.transform.SetParent(parent, false);
+        else UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(root, attacker.gameObject.scene);
+        var resolver = root.AddComponent<ZeldaAttackHitbox>();
+        resolver.Configure(.01f, Vector2.one, Color.clear, power, attacker, ZeldaAttackVisualShape.Box);
+        resolver.triggerCollider.enabled = false;
+        resolver.physicsBody.simulated = false;
+        return resolver;
+    }
+
+    public void ResolveCircularArea(Vector2 center, float radius, bool syncTransforms = true)
+    {
+        if (owner == null || owner.IsDead || radius <= 0f) return;
+        ResolveCircularAreaInScene(center, radius, ZeldaRuntimeRegistry.GetGameplayScene(owner.gameObject), syncTransforms);
+    }
+
+    /// <summary>One instantaneous explosion, including its caller. Remains valid after the caller dies;
+    /// no live trigger persists to hit a buried boss a second time when it emerges.</summary>
+    public static void ApplyExplosionPulse(Vector2 center, float radius, int power, ZeldaCharacterData attacker,
+        UnityEngine.SceneManagement.Scene scene)
+    {
+        if (!scene.IsValid() || !scene.isLoaded || radius <= 0f || power <= 0) return;
+        var root = new GameObject("Explosion Pulse Resolver"); root.SetActive(false);
+        UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(root, scene);
+        var resolver = root.AddComponent<ZeldaAttackHitbox>();
+        resolver.Configure(.01f, Vector2.one, Color.clear, power, attacker, ZeldaAttackVisualShape.Box, true);
+        resolver.triggerCollider.enabled = false; resolver.physicsBody.simulated = false;
+        resolver.ResolveCircularAreaInScene(center, radius, scene, true);
+        if (Application.isPlaying) Destroy(root); else DestroyImmediate(root);
+    }
+
+    private void ResolveCircularAreaInScene(Vector2 center, float radius, UnityEngine.SceneManagement.Scene scene, bool syncTransforms)
+    {
+        transform.position = center;
+        if (circularOverlaps == null) circularOverlaps = new List<Collider2D>(16);
+        circularOverlaps.Clear();
+        if (syncTransforms) Physics2D.SyncTransforms();
+        Physics2D.OverlapCircle(center, radius, new ContactFilter2D { useTriggers = true }, circularOverlaps);
+        foreach (var collider in circularOverlaps)
+            if (collider != null && ZeldaRuntimeRegistry.GetGameplayScene(collider.gameObject) == scene)
+                TryDamage(collider);
     }
 
     private void OnTriggerStay2D(Collider2D other)
@@ -262,6 +443,10 @@ public class ZeldaAttackHitbox : MonoBehaviour
     {
         if (CancelForStunnedOwner()) return;
         ZeldaCharacterData target = other.GetComponentInParent<ZeldaCharacterData>();
+        if ((potionMeleeSweep || visualShape == ZeldaAttackVisualShape.DirectionalWave) &&
+            target != null && IsSweepBlocked(target)) return;
+        if (isDirectCharacterAttack && owner is SkeletonZeldaCharacterData &&
+            target is SkeletonZeldaCharacterData) return;
         bool isDamageableOwner = target == owner && canDamageOwner;
         if (target != null && (target != owner || isDamageableOwner) &&
             target.CanTakeAttackDamage &&
@@ -272,6 +457,12 @@ public class ZeldaAttackHitbox : MonoBehaviour
             // Self-inflicted bomb damage should not broadcast the character
             // as its own attacker to AI hostility logic.
             target.TakeDamage(attackPower, target == owner ? null : owner);
+            // A lethal contact can rewind the target and interrupt this very
+            // swing. Do not then knock the restored body away from its anchor.
+            if (CancelForStunnedOwner()) return;
+            if (isDirectCharacterAttack && visualShape != ZeldaAttackVisualShape.Shockwave &&
+                visualShape != ZeldaAttackVisualShape.DirectionalWave && target != owner)
+                CharacterPotionBuffs.TryMeleeKnockback(owner, target);
         }
 
         DollAttackShake doll = other.GetComponentInParent<DollAttackShake>();
@@ -292,6 +483,15 @@ public class ZeldaAttackHitbox : MonoBehaviour
         }
 
         BombPickupItem bombPickup = other.GetComponentInParent<BombPickupItem>();
+        // Shared by melee, ranged/shockwave hitboxes and bomb chain reactions.
+        BatteryPickupItem battery = other.GetComponentInParent<BatteryPickupItem>();
+        if (battery != null) battery.ReceiveAttack(attackPower, owner);
+        BatterySocket batterySocket = other.GetComponentInParent<BatterySocket>();
+        if (batterySocket != null) batterySocket.ReceiveAttack(attackPower, owner);
+        var energyCrystal = other.GetComponentInParent<EnergyCrystal>();
+        if (energyCrystal != null) energyCrystal.ReceiveAttack(attackPower, owner);
+        var potion = other.GetComponentInParent<PotionPickupItem>();
+        if (potion != null) potion.ReceiveAttack(attackPower, owner);
         var crystal = other.GetComponentInParent<StabilityCrystalPickupItem>();
         if (crystal != null) crystal.BurstFromAttack();
         if (bombPickup != null && detonatedBombPickups.Add(bombPickup))
@@ -302,6 +502,7 @@ public class ZeldaAttackHitbox : MonoBehaviour
         PlacedBomb placedBomb = other.GetComponentInParent<PlacedBomb>();
         if (placedBomb != null && detonatedPlacedBombs.Add(placedBomb))
         {
+            RecordTargetContact(placedBomb);
             placedBomb.DetonateImmediately();
         }
 
@@ -326,17 +527,44 @@ public class ZeldaAttackHitbox : MonoBehaviour
         var automaton = ai as AutomatonCharacterAi;
         bool dormantAutomaton = automaton != null && automaton.isActiveAndEnabled &&
             !automaton.HostilityActivated;
-        if (!owner.IsGhostForm && !dormantAutomaton &&
+        bool echoInterrupted = isDirectCharacterAttack && ownerMover != null &&
+            ownerMover.EchoAttackInterruptionVersion != ownerEchoAttackVersion;
+        if (!owner.IsDead && !owner.IsGhostForm && !dormantAutomaton && !echoInterrupted &&
             (ai == null || !ai.isActiveAndEnabled || !ai.IsStunned)) return false;
         triggerCollider.enabled = false;
         if (spriteRenderer != null) spriteRenderer.enabled = false;
+        if (potionSweepRenderer != null) potionSweepRenderer.enabled = false;
         Destroy(gameObject);
         return true;
     }
 
+    private bool IsSweepBlocked(ZeldaCharacterData target)
+    {
+        if (owner == null || target == owner) return false;
+        var results = new RaycastHit2D[32];
+        var filter = new ContactFilter2D { useTriggers = true };
+        int count = Physics2D.Linecast(owner.transform.position, target.transform.position, filter, results);
+        if (count == results.Length) return true;
+        for (int i = 0; i < count; i++)
+        {
+            var collider = results[i].collider;
+            if (collider == null || collider.transform.IsChildOf(owner.transform) ||
+                collider.transform.IsChildOf(target.transform) ||
+                ZeldaRuntimeRegistry.GetGameplayScene(collider.gameObject) != ZeldaRuntimeRegistry.GetGameplayScene(owner.gameObject)) continue;
+            if (collider.gameObject.layer == LayerMask.NameToLayer("Blocks") ||
+                collider.gameObject.layer == LayerMask.NameToLayer("Hidden Blocks") ||
+                collider.GetComponentInParent<DoorData>() != null) return true;
+        }
+        return false;
+    }
+
     private void ApplyVisual()
     {
-        if (visualShape == ZeldaAttackVisualShape.BattleAxe)
+        if (visualShape == ZeldaAttackVisualShape.BoneFist)
+        {
+            spriteRenderer.sprite = SkeletonZeldaCharacterData.GetFistSprite();
+        }
+        else if (visualShape == ZeldaAttackVisualShape.BattleAxe)
         {
             if (battleAxeSprite == null) battleAxeSprite = CreateBattleAxeSprite();
             spriteRenderer.sprite = battleAxeSprite;
@@ -360,6 +588,11 @@ public class ZeldaAttackHitbox : MonoBehaviour
         else if (visualShape == ZeldaAttackVisualShape.Sword)
         {
             spriteRenderer.sprite = swordSprite;
+        }
+        else if (visualShape == ZeldaAttackVisualShape.Wrench)
+        {
+            if (wrenchSprite == null) wrenchSprite = CreateWrenchSprite();
+            spriteRenderer.sprite = wrenchSprite;
         }
         else if (visualShape == ZeldaAttackVisualShape.Hammer)
         {
@@ -461,6 +694,40 @@ public class ZeldaAttackHitbox : MonoBehaviour
             case 'P': return new Color(0.92f, 0.90f, 0.79f, 1f);
             default: return Color.clear;
         }
+    }
+
+    private static Sprite CreateWrenchSprite()
+    {
+        string[] rows = {
+            "...GM......MG...",
+            "..GMM......MHG..",
+            "..GMM......MHG..",
+            "..GMMM....MMHG..",
+            "...GMMMMMMMHG...",
+            "....GGMMMMGG....",
+            "......GMHG......",
+            "......GMHG......",
+            "......GMHG......",
+            "......GMHG......",
+            "......GMHG......",
+            "......GMHG......",
+            "......GMHG......",
+            "......GMHG......",
+            "......GGGG......",
+            "................"
+        };
+        var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false) {
+            name = "Coarse Engineer Wrench Attack", filterMode = FilterMode.Point,
+            wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave
+        };
+        for (int row = 0; row < 16; row++)
+        for (int x = 0; x < 16; x++)
+            texture.SetPixel(x, 15 - row, SwordPixelColor(rows[row][x]));
+        texture.Apply();
+        Sprite sprite = Sprite.Create(texture, new Rect(0, 0, 16, 16), new Vector2(0.5f, 0.2f), 16f);
+        sprite.name = texture.name;
+        sprite.hideFlags = HideFlags.HideAndDontSave;
+        return sprite;
     }
 
     private static Sprite CreateHammerSprite()

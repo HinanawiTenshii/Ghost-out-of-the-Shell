@@ -17,6 +17,6 @@ AudioImporter:
   loadInBackground: 0
   ambisonic: 0
   3D: 1
-  userData: CC0 - Independent.nu (via qubodup), impactwood24 and crack07, 35 wooden cracks hits destructions. See Docs/DestructionAudio.md.
+  userData: Original procedural synthesis S11 - Tools/GenerateDestructionAudio.py. No recorded samples. See Docs/DestructionAudio.md.
   assetBundleName:
   assetBundleVariant:

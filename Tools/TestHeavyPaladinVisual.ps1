@@ -50,7 +50,7 @@ function SilhouetteSize($r){
 }
 $heavySize=SilhouetteSize $rows.Front;$strongSize=SilhouetteSize $strongRows
 if(($heavySize -join ',') -ne ($strongSize -join ',')){throw 'Front silhouette must match Strongman footprint'}
-$prefab=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/HeavyPaladin-level2.prefab"
+$prefab=Get-Content -Raw "$root/Assets/Prefabs/Level2NPCS/Idle/HeavyPaladin-level2.prefab"
 if(!$prefab.Contains('m_LocalScale: {x: 1.1, y: 1.1, z: 1}')){throw 'Incorrect Strongman-matched overall scale'}
 $hitbox=Get-Content -Raw "$root/Assets/Scripts/Characters/ZeldaAttackHitbox.cs"
 $axe=@([regex]::Matches([regex]::Match($hitbox,'(?s)string\[\] BattleAxePixels = \{(.*?)\};').Groups[1].Value,'"([.A-Z]+)"')|ForEach-Object{$_.Groups[1].Value})

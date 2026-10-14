@@ -1,6 +1,6 @@
 # Level 2 炼金术士
 
-预制体：`Assets/Prefabs/Level2NPCS/Alchemist-level2.prefab`。
+预制体：`Assets/Prefabs/Level2NPCS/Patrol/Alchemist-level2.prefab`。
 角色脚本：`AlchemistZeldaCharacterData`，继承公共角色数据；外观和普通攻击参数可在 Inspector 编辑。
 
 16×16 像素外观采用深青绿色兜帽长袍、黄铜护目镜/腰饰、工作围裙、棕色靴子，腰间的紫色药瓶与皮包是装饰。包含四向待机、两帧步行动画、四向普通攻击、非运行状态的蓝色编辑器边框。出手前清除对应的待机手臂并补回衣物，避免出现重复手掌。

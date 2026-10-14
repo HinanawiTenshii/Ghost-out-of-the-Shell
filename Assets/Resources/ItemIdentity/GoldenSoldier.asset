@@ -1,0 +1,16 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 72fa0c74a977b0a4d92ac6d929b72397, type: 3}
+  m_Name: GoldenSoldier
+  m_EditorClassIdentifier: 
+  displayName: "\u58EB\u5B98"
+  stableId: 0b7de51951b63d24b8f0b10c8c1a4e02

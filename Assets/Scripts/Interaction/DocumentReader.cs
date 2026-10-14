@@ -1,11 +1,15 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-[RequireComponent(typeof(SpriteRenderer))]
+[DisallowMultipleComponent]
 [RequireComponent(typeof(BoxCollider2D))]
 public sealed class DocumentReader : MonoBehaviour
 {
-    [SerializeField, TextArea(6, 20)] private string documentText = "在此输入文档内容。";
+    [SerializeField, TextArea(6, 20), Tooltip("在游戏内阅读窗口中显示的文字，支持换行。可在预制体或场景实例上分别编辑。")]
+    private string documentText = "在此输入文档内容。";
+    [SerializeField, Tooltip("公告牌等现有物件启用此项：保留原有外观与碰撞，并从碰撞边缘计算阅读距离；关闭时生成纸张文档。")]
+    private bool preserveExistingAppearance;
+    [SerializeField] private string interactionPrompt = "按[E]阅读文件";
     [SerializeField, Min(0.1f)] private float interactionDistance = 1.2f;
     [SerializeField] private Font documentFont;
     [SerializeField] private Color paperColor = new Color(0.92f, 0.89f, 0.76f, 1f);
@@ -21,6 +25,8 @@ public sealed class DocumentReader : MonoBehaviour
     [SerializeField] private bool addJournalEntryOnOpen;
     [SerializeField] private bool addJournalEntryOnlyOnce = true;
     [SerializeField] private string journalEntryId = string.Empty;
+    [SerializeField, Tooltip("父任务 ID，留空为独立任务。父任务未接取时阅读不会接取此任务。")]
+    private string journalParentEntryId = string.Empty;
     [SerializeField] private string journalEntryTitle = string.Empty;
     [SerializeField, TextArea(4, 12)] private string journalEntryDetails = string.Empty;
     [Header("Journal Changes When Read")]
@@ -32,6 +38,7 @@ public sealed class DocumentReader : MonoBehaviour
     private static int inputBlockedThroughFrame = -1;
 
     private SpriteRenderer documentRenderer;
+    private BoxCollider2D interactionCollider;
     private Sprite documentSprite;
     private Texture2D documentTexture;
     private GameObject readingCanvasObject;
@@ -47,12 +54,14 @@ public sealed class DocumentReader : MonoBehaviour
 
     public static bool IsDocumentOpen => activeDocument != null;
     public static bool IsInputBlocked =>
+        ArenaChallengeController.BlocksPlayerInput ||
+        CharacterDialogueWindow.BlocksInput ||
         SignpostInteraction.BlocksInput ||
         SoulMarkRuntime.IsTransferring ||
         GameSaveSystem.IsLoading || SaveSlotPanel.IsOpen ||
         activeDocument != null ||
         ItemDescriptionWindow.BlocksInput ||
-        DoorPasswordPanel.IsOpen ||
+        DoorPasswordPanel.IsOpen || ElectricGatePanel.IsOpen ||
         PauseMenuController.IsPaused ||
         TabJournalMenuController.BlocksInput ||
         RetroSceneLoadReveal.IsBlockingInput ||
@@ -61,19 +70,25 @@ public sealed class DocumentReader : MonoBehaviour
 
     private void Awake()
     {
-        documentRenderer = GetComponent<SpriteRenderer>();
-        BoxCollider2D trigger = GetComponent<BoxCollider2D>();
-        trigger.isTrigger = true;
-        trigger.size = new Vector2(0.82f, 1.05f);
+        interactionCollider = GetComponent<BoxCollider2D>();
+        if (!preserveExistingAppearance)
+        {
+            documentRenderer = GetComponent<SpriteRenderer>();
+            if (documentRenderer == null)
+                documentRenderer = gameObject.AddComponent<SpriteRenderer>();
+            interactionCollider.isTrigger = true;
+            interactionCollider.size = new Vector2(0.82f, 1.05f);
+            CreateDocumentVisual();
+        }
 
-        CreateDocumentVisual();
         CreateReadingCanvas();
         CreateInteractionPrompt();
         QuestJournalInteractionMarker.Configure(
             gameObject,
             addJournalEntryOnOpen,
             journalEntryId,
-            journalChangesOnRead);
+            journalChangesOnRead,
+            journalParentEntryId);
     }
 
     private void Update()
@@ -93,14 +108,15 @@ public sealed class DocumentReader : MonoBehaviour
             return;
         }
 
-        ZeldaFourWayMover nearbyCharacter = GetControlledCharacterNearby();
+        ZeldaFourWayMover nearbyCharacter = IsInputBlocked || ClockworkPuppetRuntime.BlocksCharacterInput
+            ? null : GetControlledCharacterNearby();
         if (nearbyCharacter != null)
         {
             ZeldaInteractionArbiter.OfferInteraction(
                 this,
                 nearbyCharacter,
                 KeyCode.E,
-                transform.position,
+                GetInteractionPosition(nearbyCharacter),
                 SetPromptFromArbiter);
         }
         else
@@ -113,7 +129,7 @@ public sealed class DocumentReader : MonoBehaviour
                 this,
                 nearbyCharacter,
                 KeyCode.E,
-                transform.position,
+                GetInteractionPosition(nearbyCharacter),
                 OpenDocument);
         }
     }
@@ -128,6 +144,10 @@ public sealed class DocumentReader : MonoBehaviour
 
     private void OpenDocument()
     {
+        if (!isActiveAndEnabled || IsInputBlocked || ClockworkPuppetRuntime.BlocksCharacterInput ||
+            GetControlledCharacterNearby() == null)
+            return;
+
         activeDocument = this;
         inputBlockedThroughFrame = Time.frameCount;
         previousTimeScale = Time.timeScale;
@@ -149,13 +169,15 @@ public sealed class DocumentReader : MonoBehaviour
         }
 
         if (addJournalEntryOnOpen &&
-            (!addJournalEntryOnlyOnce || !journalEntryWasAdded))
+            (!addJournalEntryOnlyOnce || !journalEntryWasAdded) &&
+            QuestJournalManager.GetOrCreate().CanTriggerEntry(journalEntryId, journalParentEntryId))
         {
             QuestJournalManager.GetOrCreate().AddOrUpdateEntry(
                 journalEntryId,
                 journalEntryTitle,
                 journalEntryDetails,
-                gameObject.scene.name);
+                gameObject.scene.name,
+                journalParentEntryId);
             journalEntryWasAdded = true;
         }
 
@@ -166,7 +188,7 @@ public sealed class DocumentReader : MonoBehaviour
             QuestJournalManager.GetOrCreate().ApplyEventChanges(
                 journalChangesOnRead,
                 gameObject.scene.name);
-            journalChangesWereApplied = true;
+            journalChangesWereApplied = QuestJournalManager.GetOrCreate().CanApplyEventChanges(journalChangesOnRead);
         }
     }
 
@@ -186,14 +208,25 @@ public sealed class DocumentReader : MonoBehaviour
     private ZeldaFourWayMover GetControlledCharacterNearby()
     {
         ZeldaFourWayMover mover = ZeldaRuntimeRegistry.GetControlledMover();
-        if (mover == null)
+        if (mover == null || !mover.isActiveAndEnabled)
             return null;
 
         ZeldaCharacterData data = mover.GetComponent<ZeldaCharacterData>();
         return data != null && !data.IsDead &&
-               Vector2.Distance(transform.position, mover.transform.position) <= interactionDistance
+               ZeldaRuntimeRegistry.GetGameplayScene(mover.gameObject).handle == gameObject.scene.handle &&
+               (GetInteractionPosition(mover) - (Vector2)mover.transform.position).sqrMagnitude <=
+                   interactionDistance * interactionDistance
             ? mover
             : null;
+    }
+
+    private Vector2 GetInteractionPosition(ZeldaFourWayMover mover)
+    {
+        // A solid board cannot be approached at its centre. Using its actual collider
+        // also keeps the reach consistent when a scene instance is scaled or rotated.
+        return preserveExistingAppearance && interactionCollider != null && interactionCollider.enabled
+            ? interactionCollider.ClosestPoint(mover.transform.position)
+            : (Vector2)transform.position;
     }
 
     private void CreateInteractionPrompt()
@@ -203,11 +236,11 @@ public sealed class DocumentReader : MonoBehaviour
         if (documentFont != null)
         {
             documentFont.RequestCharactersInTexture(
-                "按[E]阅读文件",
+                interactionPrompt,
                 72,
                 FontStyle.Normal);
         }
-        interactionPromptText.text = "按[E]阅读文件";
+        interactionPromptText.text = interactionPrompt;
         interactionPromptText.font = documentFont;
         interactionPromptText.fontSize = 72;
         interactionPromptText.characterSize = 0.035f;
@@ -228,7 +261,6 @@ public sealed class DocumentReader : MonoBehaviour
         }
         promptRenderer.sortingLayerID = highestSortingLayerId;
         promptRenderer.sortingOrder = short.MaxValue - 2;
-        ZeldaPossessionProgressBar.ConfigureOverlayRenderer(promptRenderer);
         ZeldaPossessionProgressBar.ConfigureOverlayRenderer(promptRenderer);
         if (documentFont != null)
         {
@@ -263,7 +295,7 @@ public sealed class DocumentReader : MonoBehaviour
         if (documentFont != null)
         {
             documentFont.RequestCharactersInTexture(
-                "按[E]阅读文件",
+                interactionPrompt,
                 72,
                 FontStyle.Normal);
             if (interactionPromptMaterial != null)
@@ -369,7 +401,7 @@ public sealed class DocumentReader : MonoBehaviour
         hintRect.sizeDelta = new Vector2(300f, 32f);
         closeHint.text = "按[E]关闭";
 
-        CRTScreenEffect.RegisterCanvas(readingCanvas);
+        CRTScreenEffect.RegisterCanvas(readingCanvas, enableGlow: true);
         readingCanvasObject.SetActive(false);
     }
 

@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="SkillRequirements.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Interaction\FortressCannon.cs;Assets\Scripts\Items\FortressCannonball.cs" />
+    <Compile Include="Assets\Scripts\Interaction\FortressCannon.cs;Assets\Scripts\Items\FortressCannonball.cs" />
+  </ItemGroup>
+</Project>

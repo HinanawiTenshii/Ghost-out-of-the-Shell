@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="CharacterDialogue.Validation.targets" />
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'">
+    <Compile Remove="Assets\Scripts\Map\LockedDoorMapMarker.cs" />
+    <Compile Include="Assets\Scripts\Map\LockedDoorMapMarker.cs" />
+  </ItemGroup>
+</Project>

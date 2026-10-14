@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Collects E/F candidates and interaction requests, displays exactly one
-/// prompt, then allows only that candidate to consume input. Selection is
+/// Collects E/F candidates and interaction requests, selects one target,
+/// and allows dialogue E and possession F to coexist on the same NPC. Selection is
 /// deterministic: objects must be in front of the controlled character and
 /// the nearest qualifying E or F candidate wins.
 /// </summary>
@@ -36,6 +36,9 @@ public static class ZeldaInteractionArbiter
     private static Component selectedOwner;
     private static ZeldaFourWayMover selectedMover;
     private static KeyCode selectedKey;
+    private static Component companionOwner;
+    private static ZeldaFourWayMover companionMover;
+    private static KeyCode companionKey;
     private static bool IsGhostFormInteraction(ZeldaFourWayMover mover, KeyCode key)
     {
         return key != KeyCode.F && mover != null && mover.GetComponent<ZeldaCharacterData>() != null && mover.GetComponent<ZeldaCharacterData>().IsGhostForm;
@@ -49,6 +52,9 @@ public static class ZeldaInteractionArbiter
         runner = null;
         selectedOwner = null;
         selectedMover = null;
+        companionOwner = null;
+        companionMover = null;
+        companionKey = KeyCode.None;
     }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -120,14 +126,24 @@ public static class ZeldaInteractionArbiter
         KeyCode key)
     {
         return owner != null && mover != null &&
-               selectedOwner == owner && selectedMover == mover &&
-               selectedKey == key;
+               ((selectedOwner == owner && selectedMover == mover && selectedKey == key) ||
+                (companionOwner == owner && companionMover == mover && companionKey == key));
+    }
+
+    private static bool ShareDialogueTarget(Offer a, Offer b)
+    {
+        if (a.owner == null || b.owner == null || a.mover != b.mover ||
+            a.owner.gameObject != b.owner.gameObject) return false;
+        return (a.key == KeyCode.E && a.owner is CharacterDialogue &&
+                b.key == KeyCode.F && b.owner is ZeldaFourWayMover) ||
+               (b.key == KeyCode.E && b.owner is CharacterDialogue &&
+                a.key == KeyCode.F && a.owner is ZeldaFourWayMover);
     }
 
     internal static void ResolveCurrentFrame()
     {
         int frame = Time.frameCount;
-        if (ClockworkPuppetRuntime.BlocksCharacterInput || SignpostInteraction.BlocksInput)
+        if (ClockworkPuppetRuntime.BlocksCharacterInput || SignpostInteraction.BlocksInput || CharacterDialogueWindow.BlocksInput)
         {
             for (int i = 0; i < Offers.Count; i++)
             {
@@ -138,6 +154,9 @@ public static class ZeldaInteractionArbiter
             selectedOwner = null;
             selectedMover = null;
             selectedKey = KeyCode.None;
+            companionOwner = null;
+            companionMover = null;
+            companionKey = KeyCode.None;
             return;
         }
 
@@ -193,25 +212,37 @@ public static class ZeldaInteractionArbiter
         selectedMover = bestIndex >= 0 ? Offers[bestIndex].mover : null;
         selectedKey = bestIndex >= 0 ? Offers[bestIndex].key : KeyCode.None;
 
+        // Preserve nearest-target arbitration for every other interaction. Only the
+        // same NPC's dialogue/possession pair may share selection, regardless of component IDs.
+        int companionIndex = -1;
+        if (bestIndex >= 0)
+            for (int i = 0; i < Offers.Count; i++)
+                if (i != bestIndex && Offers[i].frame == frame &&
+                    !IsGhostFormInteraction(Offers[i].mover, Offers[i].key) &&
+                    ShareDialogueTarget(Offers[bestIndex], Offers[i]))
+                { companionIndex = i; break; }
+        companionOwner = companionIndex >= 0 ? Offers[companionIndex].owner : null;
+        companionMover = companionIndex >= 0 ? Offers[companionIndex].mover : null;
+        companionKey = companionIndex >= 0 ? Offers[companionIndex].key : KeyCode.None;
+
         for (int i = 0; i < Offers.Count; i++)
         {
             Offer offer = Offers[i];
             if (offer.frame == frame && offer.owner != null &&
                 offer.setPromptVisible != null)
             {
-                offer.setPromptVisible.Invoke(i == bestIndex);
+                offer.setPromptVisible.Invoke(i == bestIndex || i == companionIndex);
             }
         }
 
-        if (bestIndex >= 0 && Input.GetKeyDown(selectedKey))
+        if (bestIndex >= 0)
         {
             for (int i = 0; i < Requests.Count; i++)
             {
                 Request request = Requests[i];
                 if (request.frame == frame &&
-                    request.owner == selectedOwner &&
-                    request.mover == selectedMover &&
-                    request.key == selectedKey && request.action != null)
+                    IsSelected(request.owner, request.mover, request.key) &&
+                    Input.GetKeyDown(request.key) && request.action != null)
                 {
                     request.action.Invoke();
                     break;

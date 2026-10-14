@@ -206,12 +206,17 @@ public sealed class ItemDescriptionWindow : MonoBehaviour
         string details = !string.IsNullOrWhiteSpace(slot.ItemDescription)
             ? slot.ItemDescription
             : itemPrefab != null ? itemPrefab.ItemDescription : string.Empty;
+        if (itemPrefab is PotionPickupItem potion)
+            details = AlchemyRecipeCatalog.ResolveInventoryDescription(
+                potion.Kind, slot.ItemDescription, potion.ItemDescription);
 
+        // Old saves may contain a captured description from before requirements existed.
+        if (itemPrefab != null) details = itemPrefab.FormatDescriptionWithRequirements(details);
         nameText.text = displayName;
         descriptionText.text = string.IsNullOrWhiteSpace(details)
             ? "暂无物品说明"
             : details;
-        iconImage.sprite = visual != null ? visual.InventoryIcon : null;
+        iconImage.sprite = visual != null ? visual.GetInventoryIcon(slot) : null;
         iconImage.color = visual == null
             ? Color.white
             : slot.HasVisualColor
@@ -365,7 +370,7 @@ public sealed class ItemDescriptionWindow : MonoBehaviour
         closeRect.sizeDelta = new Vector2(300f, 32f);
         closeHintText.text = "按[E]关闭";
 
-        CRTScreenEffect.RegisterCanvas(windowCanvas);
+        CRTScreenEffect.RegisterCanvas(windowCanvas, enableGlow: true);
         windowRoot.SetActive(false);
     }
 
@@ -465,7 +470,7 @@ public sealed class ItemDescriptionWindow : MonoBehaviour
             windowCanvas.worldCamera = uiCamera;
             windowCanvas.planeDistance = uiCamera.nearClipPlane + 0.01f;
         }
-        CRTScreenEffect.RegisterCanvas(windowCanvas);
+        CRTScreenEffect.RegisterCanvas(windowCanvas, enableGlow: true);
     }
 
     private void OnDestroy()

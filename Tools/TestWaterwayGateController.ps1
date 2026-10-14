@@ -19,11 +19,12 @@ public class Transform {public Quaternion localRotation;public Vector2 position;
 public class TextMesh {public string text;public Color color;}
 public class Scene {public int handle=1;}
 public class GameObject {public Scene scene=new Scene();}
-public class WaterwayGate {public string Identifier="1A";public bool IsOpenRequested;public int calls;public void SetOpen(bool value){calls++;IsOpenRequested=value;}}
+public class WaterwayGate {public string Identifier="1A";public bool IsOpenRequested,InitialOpen;public int calls;public void SetOpen(bool value){calls++;IsOpenRequested=value;}}
 public static class WaterwayGateTargetFade {public static WaterwayGate busyGate;public static bool IsGateTransitioning(WaterwayGate gate)=>gate!=null && gate==busyGate;}
 public static class BatterySocket {public static object unpowered;public static bool IsPowered(object controller)=>controller!=unpowered;}
 public class ZeldaCharacterData {public bool IsDead,IsGhostForm;}
-public class ZeldaFourWayMover {public bool isActiveAndEnabled=true;public GameObject gameObject=new GameObject();public Transform transform=new Transform();public ZeldaCharacterData data=new ZeldaCharacterData();public T GetComponent<T>() where T:class=>data as T;}
+public static class CharacterSkillRequirements {public const int WaterwayGate=3;public static bool Require(ZeldaCharacterData data,int required)=>true;}
+public class ZeldaFourWayMover {public bool busy;public int gestures;public bool TryBeginItemAttack(float duration){if(busy)return false;gestures++;return true;}public bool isActiveAndEnabled=true;public GameObject gameObject=new GameObject();public Transform transform=new Transform();public ZeldaCharacterData data=new ZeldaCharacterData();public ZeldaCharacterData CharacterData=>data;public T GetComponent<T>() where T:class=>data as T;}
 public static class ZeldaRuntimeRegistry {public static ZeldaFourWayMover mover;public static ZeldaFourWayMover GetControlledMover()=>mover;public static Scene GetGameplayScene(GameObject g)=>g.scene;}
 public static class DocumentReader {public static bool IsInputBlocked;}
 public static class ClockworkPuppetRuntime {public static bool BlocksCharacterInput;}
@@ -52,14 +53,18 @@ foreach($property in @('DisplayedIdentifier','IsOpenRequested','IsTransitionLock
  $match=[regex]::Match($source,'(?s)(?:public|private)\s+(?:string|bool)\s+'+$property+'\s*=>.*?;')
  if(!$match.Success){throw "Missing production property $property"};$code+=$match.Value
 }
-foreach($method in @('public void BindGate(', 'public void SetOpen(', 'public void ToggleFromExternal(', 'private void RefreshState(', 'private ZeldaFourWayMover GetNearbyCharacter(', 'private void HandleInteraction(', 'private struct Panel', 'private static List<Panel> BuildCase(', 'private static List<Panel> BuildHandle(', 'private static Vector3 GetHandleTip(', 'private static void FillHandlePanels(')){$code+=Extract $method}
+foreach($method in @('internal void RefreshBatteryPowerState(', 'public void BindGate(', 'public void SetOpen(', 'public void ToggleFromExternal(', 'private void RefreshState(', 'private ZeldaFourWayMover GetNearbyCharacter(', 'private void HandleInteraction(', 'private struct Panel', 'private static List<Panel> BuildCase(', 'private static List<Panel> BuildHandle(', 'private static Vector3 GetHandleTip(', 'private static void FillHandlePanels(')){$code+=Extract $method}
 $code+='}'
 Add-Type -TypeDefinition $code
 $count=0
 function Check($ok,$label){if(!$ok){throw $label};$script:count++}
+function ColorMatches($actual,$r,$g,$b){
+ [Math]::Abs($actual.r-$r) -lt .00001 -and [Math]::Abs($actual.g-$g) -lt .00001 -and [Math]::Abs($actual.b-$b) -lt .00001 -and $actual.a -eq 1
+}
 $c=[ControllerHarness]::new()
 $c.Tick();$c.ToggleFromExternal();$c.SetOpen($true)
 Check ($c.DisplayedIdentifier -eq '--' -and !$c.IsOpenRequested) 'Unbound is safe and shows dashes'
+Check (ColorMatches $c.identifierText.color .50 .55 .57) 'Missing gate retains its original unbound label color'
 $g=[WaterwayGate]::new();$g.Identifier='2B';$c.BindGate($g)
 Check ($g.calls -eq 0 -and $c.identifierText.text -eq '2B') 'Binding never changes gate state'
 $c.ToggleFromExternal();Check ($g.IsOpenRequested -and $g.calls -eq 1) 'Opens linked gate once'
@@ -86,9 +91,23 @@ Check ($null -eq $c.Nearby()) 'Missing controlled mover is safe'
 $m=[ZeldaFourWayMover]::new();[ZeldaRuntimeRegistry]::mover=$m
 Check ($null -ne $c.Nearby()) 'Living nearby character can interact'
 $before=$g.calls;$c.Interact();Check ($g.calls -eq $before+1) 'Interaction sends a single gate command'
+Check ($m.gestures -eq 1) 'Successful player interaction extends hand once'
+$m.busy=$true;$before=$g.calls;$c.Interact();Check ($g.calls -eq $before -and $m.gestures -eq 1) 'Busy hand blocks repeat interaction';$m.busy=$false
 [BatterySocket]::unpowered=$c;$unpoweredCalls=$g.calls;$c.Interact();$c.ToggleFromExternal();$c.SetOpen($true)
 Check ($g.calls -eq $unpoweredCalls -and !$c.HasBatteryPower) 'Empty socket blocks player and scripted controller use'
+$powerTestOpenState=$g.IsOpenRequested
+foreach($open in @($false,$true)){
+ $g.IsOpenRequested=$open;$c.Tick()
+ Check (ColorMatches $c.identifierText.color .76 .78 .80) 'Power loss overrides both open and closed colors with light gray'
+ Check ($c.identifierText.text -eq $g.Identifier -and $g.calls -eq $unpoweredCalls) 'Power display preserves identifier and does not command gate'
+}
 [BatterySocket]::unpowered=$null
+foreach($open in @($false,$true)){
+ $g.IsOpenRequested=$open;$c.Tick()
+ $expected=if($open){@(.35,1,.70)}else{@(1,.67,.30)}
+ Check (ColorMatches $c.identifierText.color $expected[0] $expected[1] $expected[2]) 'Restoring power immediately restores original gate-state color'
+}
+$g.IsOpenRequested=$powerTestOpenState;$c.Tick()
 [WaterwayGateTargetFade]::busyGate=$g
 $lockedCalls=$g.calls;$c.Interact();$c.ToggleFromExternal();$c.SetOpen(!$g.IsOpenRequested);$other.ToggleFromExternal()
 Check ($g.calls -eq $lockedCalls -and $c.IsTransitionLocked -and $other.IsTransitionLocked) 'Busy gate rejects player, external controller and second controller requests'

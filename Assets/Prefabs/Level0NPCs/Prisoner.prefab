@@ -148,15 +148,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 35b73b9b715143788f2cda694c9f275a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  cameraOrthographicSize: 7
-  playerVisionRadius: 13
-  sceneCameraOverrides: []
   health: 3
-  skillValue: 0
+  skillValue: 2
   permissionLevel: 0
   possessionEnergy: 2
   possessionCost: 1
   moveSpeed: 3.5
+  cameraOrthographicSize: 7
+  playerVisionRadius: 13
+  sceneCameraOverrides: []
   deathExplosionDuration: 0.35
   deathExplosionScale: 5
   deathExplosionTint: {r: 1, g: 0.65, b: 0.12, a: 1}
@@ -164,6 +164,21 @@ MonoBehaviour:
   damageTint: {r: 1, g: 0.2, b: 0.2, a: 1}
   damageShakeAmount: 0.04
   damageShakeSpeed: 80
+  attackSound: {fileID: 0}
+  attackSoundVolume: 1
+  attackSoundPitch: 1
+  attackSoundSpatialBlend: 0.75
+  attackSoundMaxDistance: 16
+  damageSound: {fileID: 0}
+  damageSoundVolume: 1
+  damageSoundPitch: 1
+  damageSoundSpatialBlend: 0.75
+  damageSoundMaxDistance: 16
+  deathSound: {fileID: 0}
+  deathSoundVolume: 1
+  deathSoundPitch: 1
+  deathSoundSpatialBlend: 0.75
+  deathSoundMaxDistance: 16
   attributeWindowOffset: {x: 0, y: -0.25}
   attributeWindowScale: 2.2
   attackPower: 1
@@ -190,6 +205,7 @@ MonoBehaviour:
   controlSwitchDistance: 0.5
   controlSwitchRadius: 0.5
   controlSwitchHoldDuration: 3
+  nonGhostPossessionDurationBonus: 2
   controlSwitchProgressOffset: {x: 0, y: 1.1}
   controlSwitchProgressScale: 0.8
   controlSwitchFailureDuration: 0.9
@@ -234,19 +250,22 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   visionColor: {r: 0.50112724, g: 0.80612683, b: 0.9716981, a: 0.22}
+  visionVisualRefreshInterval: 0.08
   immediateResponseDistance: 1
   maximumSuspicion: 100
   suspicionIncreasePerSecond: 35
   suspicionDecreasePerSecond: 25
+  cardboardBoxApproachDistance: 1.05
+  cardboardBoxSightMemoryDuration: 1.5
   attackDistance: 1.1
   attackFacingTolerance: 20
   attackCooldown: 0.35
-  regularHostileLoseSightDelay: 7
+  hostileAttackStartRangeMultiplier: 1.4
+  missedAttackPursuitDuration: 0.22
   solidCollisionLayers:
     serializedVersion: 2
     m_Bits: 4294967295
   collisionSkinWidth: 0.01
-  searchDuration: 4
   searchRadius: 1.8
   searchWaypointTolerance: 0.15
   searchWaypointChangeInterval: 1.2
@@ -256,6 +275,9 @@ MonoBehaviour:
   investigationWaypointPauseDuration: 0.65
   investigationTargetRelocationRadius: 1.5
   investigationRelocationSamplesPerRing: 12
+  investigationApproachMinimumRadius: 0.75
+  investigationApproachMaximumRadius: 1.45
+  investigationApproachTargetSpacing: 0.45
   recoveryPositionTolerance: 0.15
   warningFollowDistance: 1.4
   warningEscalationTime: 4
@@ -263,6 +285,10 @@ MonoBehaviour:
   stateIndicatorOffset: {x: 0, y: 1.15}
   stateIndicatorScale: 0.65
   hostileIndicatorDuration: 0.7
+  enableAwarenessSound: 1
+  awarenessSound: {fileID: 0}
+  awarenessSoundVolume: 0.55
+  awarenessSoundMaxDistance: 18
   possessionShakeAmount: 0.025
   possessionShakeSpeed: 45
   obstacleProbeDistance: 0.75
@@ -282,19 +308,35 @@ MonoBehaviour:
   gridCellSize: 0.5
   gridSearchPadding: 5
   maximumGridDimension: 45
+  expandedGridDimension: 121
+  minimumGridCellSize: 0.25
   gridPathRefreshInterval: 0.35
   hostileGridPathRefreshInterval: 0.18
+  movingTargetGridRepathInterval: 0.3
+  gridPathMaintenanceInterval: 1.25
+  maximumAStarBuildsPerFrame: 1
+  globalAStarBuildInterval: 0.04
+  expensiveGridFallbackInterval: 0.5
+  gridPathValidationInterval: 0.12
   gridWaypointTolerance: 0.14
   gridWallClearance: 0.08
   maximumWallSeparationStep: 0.12
   preferredGridObstacleDistance: 0.45
   gridObstacleProximityCost: 2
+  gridTurnCost: 0.08
   characterSeparationDistance: 0.75
   characterSeparationStrength: 1.25
+  characterAvoidanceLookAheadDistance: 1.35
+  characterAvoidanceClearancePadding: 0.12
+  characterYieldSpeedMultiplier: 0.62
   characterSeparationRefreshInterval: 0.12
+  characterSeparationForcedRefreshInterval: 0.05
   showNavigationDebug: 0
   navigationPathColor: {r: 0.15, g: 0.85, b: 1, a: 0.9}
   navigationTargetColor: {r: 1, g: 0.25, b: 0.75, a: 1}
   navigationPathWidth: 0.035
   navigationTargetMarkerSize: 0.18
   navigationDebugSortingOrder: 200
+  pursuitSpacing: 0.16
+  pursuitLookAheadTime: 0.7
+  pursuitOvertakeSpeedAdvantage: 0.15
