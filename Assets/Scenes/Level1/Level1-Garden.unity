@@ -3948,7 +3948,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4657559875753840611, guid: d6d3e135316f0014fb9e1b4033dc6378, type: 3}
       propertyPath: investigationDuration
-      value: 6
+      value: 16
       objectReference: {fileID: 0}
     - target: {fileID: 4657559875753840611, guid: d6d3e135316f0014fb9e1b4033dc6378, type: 3}
       propertyPath: regularHostileLoseSightDelay
@@ -3956,7 +3956,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4657559875753840611, guid: d6d3e135316f0014fb9e1b4033dc6378, type: 3}
       propertyPath: investigationWaypointPauseDuration
-      value: 2
+      value: 3.5
       objectReference: {fileID: 0}
     - target: {fileID: 7832618691216883880, guid: d6d3e135316f0014fb9e1b4033dc6378, type: 3}
       propertyPath: m_Name

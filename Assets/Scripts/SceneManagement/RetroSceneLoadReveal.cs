@@ -104,12 +104,24 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         return true;
     }
 
-    private IEnumerator CoverBeforeLoad(System.Action loadScene)
+    /// <summary>Same-scene travel uses the same black bands without reloading or resetting gameplay.</summary>
+    public static bool BeginLocalTransition(System.Action moveUnderCover)
+    {
+        CreateBeforeFirstSceneLoad();
+        if (moveUnderCover == null || instance.transitionPending || IsBlockingInput) return false;
+        instance.transitionPending = true;
+        IsBlockingInput = true;
+        instance.BlockMenuNavigation();
+        instance.StartCoroutine(instance.CoverBeforeLoad(moveUnderCover, true));
+        return true;
+    }
+
+    private IEnumerator CoverBeforeLoad(System.Action loadScene, bool localOnly = false)
     {
         // Stop outgoing music as the first black band appears, rather than
         // waiting for scene unload. Include disabled components whose sources
         // may still be playing; new scene players retain their normal startup.
-        foreach (var music in FindObjectsOfType<LoopingBackgroundMusicPlayer>(true))
+        if (!localOnly) foreach (var music in FindObjectsOfType<LoopingBackgroundMusicPlayer>(true))
         {
             music.Stop();
         }
@@ -124,6 +136,13 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         }
         // Present a fully black frame before capture/reset and asynchronous loading.
         yield return null;
+        if (localOnly)
+        {
+            try { loadScene(); }
+            catch (System.Exception ex) { Debug.LogException(ex); }
+            revealRoutine = StartCoroutine(RevealAfterSceneLoad());
+            yield break;
+        }
         waitingForSceneLoaded = true;
         try { loadScene(); }
         catch (System.Exception ex)

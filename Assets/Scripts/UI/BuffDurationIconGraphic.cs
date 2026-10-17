@@ -19,7 +19,8 @@ public enum BuffDurationIcon
     RoyalCommand = 13,
     SoulMark = 14,
     Domino = 15,
-    HolyShield = 16
+    HolyShield = 16,
+    SilenceOath = 17
 }
 
 /// <summary>

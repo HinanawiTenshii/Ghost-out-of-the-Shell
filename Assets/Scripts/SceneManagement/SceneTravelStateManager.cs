@@ -31,6 +31,8 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
         public bool hasDoor;
         public bool doorLocked;
         public bool doorOpen;
+        public bool hasTrapdoor;
+        public bool trapdoorLocked;
         public bool hasLever;
         public bool leverIsOn;
         public bool hasBatterySocket;
@@ -52,6 +54,8 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
         public bool hasTrialProofAltar;
         public bool hasArenaChallenge;
         public ArenaChallengeController.RuntimeState arenaChallengeState;
+        public bool hasKnightAmbush;
+        public KnightCaptainAmbush.RuntimeState knightAmbushState;
         public TrialProofAltar.RuntimeState trialProofAltarState;
         public bool hasMortarInstallation;
         public FortressMortarRemoteInstallation.RuntimeState mortarInstallationState;
@@ -73,8 +77,31 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
     private sealed class SceneState
     {
         public string sceneName;
+        public bool knightMarkerIndexed, hasKnightMarker;
+        public Vector2 knightMarker;
         public readonly Dictionary<string, ObjectState> objects =
             new Dictionary<string, ObjectState>();
+    }
+
+    // Index once per immutable snapshot; unloaded-scene maps need the last
+    // sampled captain position, not the initial baked prefab position.
+    public bool TryGetSavedKnightMarker(string sceneName, out Vector2 position)
+    {
+        position = default;
+        if (string.IsNullOrEmpty(sceneName) || !sceneStates.TryGetValue(sceneName, out var scene)) return false;
+        if (!scene.knightMarkerIndexed)
+        {
+            scene.knightMarkerIndexed = true;
+            foreach (var record in scene.objects.Values)
+                if (record.hasKnightAmbush && record.knightAmbushState != null)
+                {
+                    scene.hasKnightMarker = true;
+                    scene.knightMarker = record.knightAmbushState.marker;
+                    break;
+                }
+        }
+        position = scene.knightMarker;
+        return scene.hasKnightMarker;
     }
 
     private readonly Dictionary<string, SceneState> sceneStates =
@@ -84,6 +111,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
     private GameObject travelingCharacterObject;
     private bool restorePending;
     private Vector2 pendingArrivalPosition;
+    private TrapdoorDestination pendingTrapdoorDestination;
     private CameraVisionObjectStreaming[] captureStreamingManagers;
     private SceneState quickRestartSceneState;
     private string quickRestartSceneName;
@@ -218,7 +246,14 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
             () => TravelToSceneCovered(targetSceneName, arrivalPosition));
     }
 
-    private void TravelToSceneCovered(string targetSceneName, Vector2 arrivalPosition)
+    public bool TravelToTrapdoor(TrapdoorDestination destination)
+    {
+        if (destination == null || string.IsNullOrWhiteSpace(destination.SceneName)) return false;
+        return RetroSceneLoadReveal.BeginTransition(destination.SceneName,
+            () => TravelToSceneCovered(destination.SceneName, destination.FallbackPosition, destination));
+    }
+
+    private void TravelToSceneCovered(string targetSceneName, Vector2 arrivalPosition, TrapdoorDestination trapdoorDestination = null)
     {
         Scene currentScene = SceneManager.GetActiveScene();
         if (!currentScene.IsValid() || string.IsNullOrWhiteSpace(targetSceneName))
@@ -246,6 +281,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
         }
 
         pendingArrivalPosition = arrivalPosition;
+        pendingTrapdoorDestination = trapdoorDestination;
         restorePending = true;
         sceneTravelRestoreInProgress = true;
         RetroSceneLoadReveal.LoadSceneAsync(targetSceneName.Trim());
@@ -253,6 +289,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
 
     internal void CancelPendingSceneLoad()
     {
+        pendingTrapdoorDestination = null;
         restorePending = false;
         sceneTravelRestoreInProgress = false;
         quickRestartPending = false;
@@ -281,6 +318,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
 
         restorePending = false;
         pendingArrivalPosition = Vector2.zero;
+        pendingTrapdoorDestination = null;
         sceneTravelRestoreInProgress = false;
 
         quickRestartPending = false;
@@ -361,6 +399,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
 
         if (mover == null)
         {
+            pendingTrapdoorDestination = null;
             Debug.LogWarning(
                 "Scene travel could not find a controlled character to place at the configured arrival position.",
                 this);
@@ -368,6 +407,13 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
         }
 
         ApplyTravelingCharacterState(mover);
+        if (pendingTrapdoorDestination != null)
+        {
+            Vector2 position = TrapdoorInteraction.ResolveArrival(SceneManager.GetActiveScene(), pendingTrapdoorDestination);
+            pendingTrapdoorDestination = null;
+            TrapdoorInteraction.PlaceTraveler(mover, position);
+            yield break;
+        }
         Rigidbody2D body = mover.GetComponent<Rigidbody2D>();
         if (body != null)
         {
@@ -516,6 +562,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
             ZeldaFourWayMover mover = StateComponent<ZeldaFourWayMover>(target);
             ZeldaCharacterAiBase ai = StateComponent<ZeldaCharacterAiBase>(target);
             DoorHingeInteraction door = StateComponent<DoorHingeInteraction>(target);
+            TrapdoorInteraction trapdoor = StateComponent<TrapdoorInteraction>(target);
             LeverData lever = StateComponent<LeverData>(target);
             BatterySocket batterySocket = StateComponent<BatterySocket>(target);
             EnergyCrystal energyCrystal = StateComponent<EnergyCrystal>(target);
@@ -526,6 +573,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
             AlchemyCauldron alchemyCauldron = StateComponent<AlchemyCauldron>(target);
             TrialProofAltar trialProofAltar = StateComponent<TrialProofAltar>(target);
             var arenaChallenge = StateComponent<ArenaChallengeController>(target);
+            var knightAmbush = StateComponent<KnightCaptainAmbush>(target);
             var mortarInstallation = StateComponent<FortressMortarRemoteInstallation>(target);
             SpecificItemSubmissionStation itemSubmissionStation =
                 StateComponent<SpecificItemSubmissionStation>(target);
@@ -551,6 +599,8 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
                 hasDoor = door != null,
                 doorLocked = door != null && door.IsLocked,
                 doorOpen = door != null && door.IsOpen,
+                hasTrapdoor = trapdoor != null,
+                trapdoorLocked = trapdoor != null && trapdoor.IsLocked,
                 hasLever = lever != null,
                 leverIsOn = lever != null && lever.IsOn,
                 hasBatterySocket = batterySocket != null,
@@ -571,6 +621,8 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
                 hasTrialProofAltar = trialProofAltar != null,
                 hasArenaChallenge = arenaChallenge != null,
                 arenaChallengeState = arenaChallenge != null ? arenaChallenge.CaptureRuntimeState() : null,
+                hasKnightAmbush = knightAmbush != null,
+                knightAmbushState = knightAmbush != null ? knightAmbush.CaptureRuntimeState() : null,
                 trialProofAltarState = trialProofAltar != null ? trialProofAltar.CaptureRuntimeState() : default,
                 hasMortarInstallation = mortarInstallation != null,
                 mortarInstallationState = mortarInstallation != null ? mortarInstallation.CaptureRuntimeState() : default,
@@ -815,7 +867,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
                 if (state.hasPickupColor && pickup.ItemVisual != null) pickup.ItemVisual.SetDisplayColor(state.pickupColor);
             }
             var document = target.GetComponent<DocumentReader>();
-            if (document != null) SavedScalarFields.Apply(document, state.documentFields);
+            if (document != null) document.RestoreSavedFields(state.documentFields);
             var doorData = target.GetComponent<DoorData>();
             if (doorData != null) SavedScalarFields.Apply(doorData, state.doorDataFields);
             target.localPosition = state.localPosition;
@@ -833,6 +885,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
             }
 
             DoorHingeInteraction door = target.GetComponent<DoorHingeInteraction>();
+            if (state.hasTrapdoor) target.GetComponent<TrapdoorInteraction>()?.ApplyPersistentState(state.trapdoorLocked);
             if (state.hasDoor && door != null)
             {
                 door.ApplyPersistentState(state.doorLocked, state.doorOpen);
@@ -870,6 +923,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
                 alchemyCauldron.ApplyRuntimeState(state.alchemyCauldronState);
             var trialProofAltar = target.GetComponent<TrialProofAltar>();
             if (state.hasArenaChallenge) target.GetComponent<ArenaChallengeController>()?.ApplyRuntimeState(state.arenaChallengeState);
+            if (state.hasKnightAmbush) target.GetComponent<KnightCaptainAmbush>()?.ApplyRuntimeState(state.knightAmbushState);
             if (state.hasTrialProofAltar && trialProofAltar != null)
                 trialProofAltar.ApplyRuntimeState(state.trialProofAltarState);
             var mortarInstallation = target.GetComponent<FortressMortarRemoteInstallation>();
@@ -900,6 +954,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
                 if (ai is AutomatonCharacterAi && state.savedAi != null)
                     ai.ApplySaveState(state.savedAi);
                 ai.RecoverAfterPersistentSceneReturn(state.aiState);
+                ai.RestoreSilenceOathAfterSceneReturn(state.savedAi);
             }
         }
 
@@ -910,6 +965,8 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
         bool migrateArena = !containsArenaState && ArenaChallengeController.HasControllerInScene(scene.handle);
         foreach (KeyValuePair<string, Transform> entry in currentObjects)
         {
+            // Director introduced after older saves; it is never a consumable scene object.
+            if (entry.Value.GetComponent<KnightCaptainAmbush>() != null) continue;
             // Saves made before the arena was installed have no scoreboard or
             // controller records. These nondestructible additions are not consumed objects.
             if (migrateArena && entry.Value.GetComponentInParent<ArenaChallengeController>() != null) continue;

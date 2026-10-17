@@ -24,6 +24,7 @@ foreach($token in @('m_Name: Trapdoor','shape: 5','size: {x: 1.8, y: 1.8}','soli
 }
 $colliderBlock=[regex]::Match($prefab,'(?s)BoxCollider2D:(.*?)---').Groups[1].Value
 Check ($colliderBlock.Contains('m_Enabled: 0')) 'No movement/vision obstruction on a flat ground decoration'
-Check (([regex]::Matches($prefab,'m_Script:')).Count -eq 1) 'Only the shared visual script, no interactions/teleports'
+Check (([regex]::Matches($prefab,'m_Script:')).Count -eq 2) 'Shared visual plus trapdoor interaction, no extra renderers'
+Check ($prefab.Contains('guid: 9205b5fa791343889ce934da4ab56290')) 'Password/transport interaction attached'
 Check ((Get-Content -Raw "$root/Assets/Prefabs/Decorations/Trapdoor.prefab.meta").Contains('guid: 7218725a5fb34a15a2f633795b5abf68')) 'Unique prefab asset metadata'
 Write-Output "PASS: $checks trapdoor geometry/prefab checks, $vertices vertices in one mesh."

@@ -4,7 +4,7 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public sealed class RuntimeBuffDurationBar : MonoBehaviour
 {
-    private const int IconCount = 17;
+    private const int IconCount = 18;
     private const float IconSize = 40f;
     private const float Gap = 6f;
     private readonly BuffDurationIconGraphic[] icons = new BuffDurationIconGraphic[IconCount];

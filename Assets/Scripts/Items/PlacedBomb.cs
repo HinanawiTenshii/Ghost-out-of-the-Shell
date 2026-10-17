@@ -27,6 +27,8 @@ public sealed class PlacedBomb : MonoBehaviour, IConsumableExplosive
     private void OnDisable() => activeBombs.Remove(this);
     public string SaveSourceItemId { get; set; }
     public ZeldaCharacterData SaveOwner => owner;
+    // Runtime-only container whose own casing must not contain its internal explosion.
+    internal Transform ExplosionSource { get; set; }
     // Transferring a lit bomb out of a container must not restart its fuse.
     public void RestoreRemainingFuse(float remainingSeconds)
     {
@@ -352,6 +354,7 @@ public sealed class PlacedBomb : MonoBehaviour, IConsumableExplosive
             owner,
             ZeldaAttackVisualShape.Box,
             true);
+        hitbox.CaptureBombBlastTargets(ExplosionSource != null ? ExplosionSource : transform);
 
         // The explosion visual communicates the blast area; keep the damage
         // trigger active while hiding the generic attack hitbox outline.

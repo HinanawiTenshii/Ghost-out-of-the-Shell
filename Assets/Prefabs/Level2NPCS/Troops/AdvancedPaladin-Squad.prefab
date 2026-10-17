@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 834927100000000009}
   - component: {fileID: -2349348389758385538}
   - component: {fileID: -5466045387799808836}
+  - component: {fileID: 599936559753813120}
   m_Layer: 0
   m_Name: AdvancedPaladin-Squad
   m_TagString: Untagged
@@ -290,8 +291,8 @@ MonoBehaviour:
   searchWaypointChangeInterval: 1.2
   searchWaypointObstacleClearance: 0.45
   searchWaypointSamplingAttempts: 12
-  investigationDuration: 3
-  investigationWaypointPauseDuration: 0.65
+  investigationDuration: 16
+  investigationWaypointPauseDuration: 3.5
   investigationTargetRelocationRadius: 1.5
   investigationRelocationSamplesPerRing: 12
   investigationApproachMinimumRadius: 0.75
@@ -389,3 +390,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 076bd33f4dd04d1188f3cf494d301c92, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &599936559753813120
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7832618691216883880}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b049fb4abb91ba7bc124837f1a35946, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  healInterval: 0.5
+  healthPerTick: 1

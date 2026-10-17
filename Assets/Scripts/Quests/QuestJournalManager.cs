@@ -92,8 +92,12 @@ public sealed partial class QuestJournalManager : MonoBehaviour
         public bool sandwormMortarInstalled;
         public int summoningLitCrystals;
         public bool summoningPerformed;
+        public List<string> summoningTargetIds, summoningConsumedIds;
         public ArenaQuestStage arenaQuestStage;
         public int arenaQuestWins, arenaQuestRounds;
+        public bool tavernRoomPasswordKnown, engineerSafePasswordKnown;
+        public bool entertainmentRoomPasswordKnown, warehouseGatePasswordKnown;
+        public bool churchRelicPasswordKnown, graveyardCrystalDestroyed;
     }
 
     public SaveState CaptureSaveState()
@@ -118,9 +122,17 @@ public sealed partial class QuestJournalManager : MonoBehaviour
         state.sandwormMortarInstalled = sandwormMortarInstalled;
         state.summoningLitCrystals = summoningLitCrystals;
         state.summoningPerformed = summoningPerformed;
+        state.summoningTargetIds = summoningTargetsConfigured ? new List<string>(summoningTargetIds) : null;
+        state.summoningConsumedIds = new List<string>(summoningConsumedIds);
         state.arenaQuestStage = arenaQuestStage;
         state.arenaQuestWins = arenaQuestWins;
         state.arenaQuestRounds = arenaQuestRounds;
+        state.tavernRoomPasswordKnown = tavernRoomPasswordKnown;
+        state.engineerSafePasswordKnown = engineerSafePasswordKnown;
+        state.entertainmentRoomPasswordKnown = entertainmentRoomPasswordKnown;
+        state.warehouseGatePasswordKnown = warehouseGatePasswordKnown;
+        state.churchRelicPasswordKnown = churchRelicPasswordKnown;
+        state.graveyardCrystalDestroyed = graveyardCrystalDestroyed;
         return state;
     }
 
@@ -130,10 +142,13 @@ public sealed partial class QuestJournalManager : MonoBehaviour
         entries.Clear(); initializedScenes.Clear(); completedEntryIds.Clear();
         pendingCompletionEvidence.Clear(); pendingDetailEvidence.Clear(); pendingUpdateEvidence.Clear();
         RestoreDialogueActors(state.dialogueActors);
+        RestoreKnownPasswords(state);
+        graveyardCrystalDestroyed = state.graveyardCrystalDestroyed;
         RestoreHierarchy(state);
         sandwormMortarInstalled = state.sandwormMortarInstalled;
         summoningLitCrystals = Mathf.Clamp(state.summoningLitCrystals, 0, SummoningCircle.CrystalCount);
         summoningPerformed = state.summoningPerformed;
+        RestoreSummoningMarkerState(state.summoningTargetIds, state.summoningConsumedIds);
         arenaQuestStage = (ArenaQuestStage)Mathf.Clamp((int)state.arenaQuestStage, 0, (int)ArenaQuestStage.Claimed);
         arenaQuestRounds = Mathf.Max(0, state.arenaQuestRounds);
         arenaQuestWins = Mathf.Clamp(state.arenaQuestWins, 0, arenaQuestRounds);
@@ -156,7 +171,9 @@ public sealed partial class QuestJournalManager : MonoBehaviour
         RefreshCounterfeitQuestInventory();
         RefreshSummoningQuest();
         RefreshArenaQuest();
-        if (!string.IsNullOrEmpty(TrackedEntryId) && !CanTriggerEntry(TrackedEntryId))
+        RefreshGravekeeperQuest();
+        if (!string.IsNullOrEmpty(TrackedEntryId) &&
+            (TrackedEntryId == KnownPasswordsEntryId || !CanTriggerEntry(TrackedEntryId)))
             TrackedEntryId = FindLatestIncompleteEntryId();
         JournalChanged?.Invoke(); TrackedQuestChanged?.Invoke();
     }
@@ -168,6 +185,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
         public string Details { get; private set; }
         public string SourceScene { get; private set; }
         public bool IsLevelObjective { get; internal set; }
+        public bool CanTrack => Id != KnownPasswordsEntryId;
 
         internal Entry(string id, string title, string details, string sourceScene, bool isLevelObjective = false)
         {
@@ -185,6 +203,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
                 id == CounterfeitQuestId ? CounterfeitQuestTitle :
                 id == SummoningQuestId ? SummoningQuestTitle :
                 id == ArenaQuestId ? ArenaQuestTitle :
+                id == GravekeeperQuestId ? GravekeeperQuestTitle :
                 id == ArenaInjectionQuestId ? ArenaInjectionQuestTitle : GetCanonicalQuestTitle(id, title);
             Details = UpgradeLegacyQuestDetails(id, details);
             SourceScene = sourceScene;
@@ -343,6 +362,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
         else if (normalizedId == SandwormBaitQuestId || normalizedId == SandwormMortarQuestId)
             RefreshSandwormSupportInventory();
         else if (normalizedId == CounterfeitQuestId) RefreshCounterfeitQuestInventory();
+        else if (normalizedId == GravekeeperQuestId) RefreshGravekeeperQuest();
         else if (normalizedId == SummoningQuestId)
         {
             SummoningCircle.ReportLoadedQuestProgress();
@@ -418,7 +438,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
     public bool TrackEntry(string entryId)
     {
         string normalizedId = NormalizeId(entryId);
-        if (!ContainsEntry(normalizedId) ||
+        if (normalizedId == KnownPasswordsEntryId || !ContainsEntry(normalizedId) ||
             !CanTriggerEntry(normalizedId) ||
             IsEntryCompleted(normalizedId) ||
             string.Equals(TrackedEntryId, normalizedId, StringComparison.Ordinal))
@@ -632,6 +652,13 @@ public sealed partial class QuestJournalManager : MonoBehaviour
 
     public void ResetAllEntries()
     {
+        tavernRoomPasswordKnown = false;
+        engineerSafePasswordKnown = false;
+        entertainmentRoomPasswordKnown = false;
+        warehouseGatePasswordKnown = false;
+        churchRelicPasswordKnown = false;
+        graveyardCrystalDestroyed = false;
+        knownPasswordsEntry = null;
         lastDialogueActors.Clear();
         level2HeroProofStage = 0;
         pendingLevel2TrialScene = null;
@@ -644,6 +671,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
         parentEntries.Clear(); collapsedEntries.Clear();
         sandwormMortarInstalled = false;
         summoningLitCrystals = 0; summoningPerformed = false;
+        RestoreSummoningMarkerState(null, null);
         arenaQuestStage = ArenaQuestStage.Register; arenaQuestWins = 0; arenaQuestRounds = 0;
         TrackedEntryId = string.Empty;
         InitialTrackedEntryId = string.Empty;
@@ -762,6 +790,10 @@ public sealed partial class QuestJournalManager : MonoBehaviour
     {
         switch (entryId)
         {
+            case KnightAmbushQuestId:
+                return KnightAmbushQuestTitle;
+            case FortressProofQuestId:
+                return FortressProofQuestTitle;
             case "level0.escape_prison":
                 return Level0EscapeTitle;
             case "level0.obtain_gate_key":

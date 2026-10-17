@@ -11594,11 +11594,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6046113066450170005, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
       propertyPath: itemColor.g
-      value: 0.007843138
+      value: 0.0156862754
       objectReference: {fileID: 0}
     - target: {fileID: 6046113066450170005, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
       propertyPath: itemColor.r
-      value: 0.5176471
+      value: 0.521568656
       objectReference: {fileID: 0}
     - target: {fileID: 6046113066450170006, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
       propertyPath: itemName
@@ -11607,6 +11607,26 @@ PrefabInstance:
     - target: {fileID: 6046113066450170006, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
       propertyPath: itemDescription
       value: "\u7528\u4E8E\u6253\u5F00\u4E1C\u4FA7\u5B88\u536B\u5BBF\u820D\u5927\u95E8\u7684\u94A5\u5319"
+      objectReference: {fileID: 0}
+    - target: {fileID: 6046113066450170005, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
+      propertyPath: itemColor.a
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6046113066450170003, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
+      propertyPath: m_Color.r
+      value: 0.521568656
+      objectReference: {fileID: 0}
+    - target: {fileID: 6046113066450170003, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
+      propertyPath: m_Color.g
+      value: 0.0156862754
+      objectReference: {fileID: 0}
+    - target: {fileID: 6046113066450170003, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
+      propertyPath: m_Color.b
+      value: 0.0196078438
+      objectReference: {fileID: 0}
+    - target: {fileID: 6046113066450170003, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
+      propertyPath: m_Color.a
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
@@ -13006,7 +13026,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 918620450781230005, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
       propertyPath: documentText
-      value: "\u524D\u60C5\u63D0\u8981\uFF1A\n\u672C\u5E94\u4F5C\u4E3A\u6545\u4E8B\u4E3B\u89D2\u64CD\u63A7\u52C7\u8005\u6253\u5012\u9B54\u738B\u7684\u4F60\u88AB\u67D0\u79CD\u795E\u79D8\u529B\u91CF\u62D6\u51FA\u4E86\u52C7\u8005\u7684\u8EAB\u4F53\uFF0C\u53D8\u6210\u4E86\u4E00\u53EA\u5931\u53BB\u4E86\u8EAB\u4F53\u7684\u201C\u5E7D\u7075\u201D\uFF0C\u8FD8\u88AB\u56F0\u5728\u4E86\u738B\u56FD\u57CE\u5821\u4E4B\u4E0B\u7684\u76D1\u7262\u4E4B\u4E2D\u3002\u6240\u5E78\uFF0C\u5931\u53BB\u4E86\u8EAB\u4F53\u7684\u4F60\u5374\u80FD\u591F\u5360\u636E\u6E38\u620F\u4E2D\u7684\u5176\u4ED6\u89D2\u8272\u7684\u8EAB\u4F53\u5E76\u63A7\u5236\u4ED6\u4EEC\uFF0C\u51ED\u501F\u7740\u8FD9\u9879\u610F\u5916\u7684\u80FD\u529B\uFF0C\u4F60\u5C06\u4F1A\u5F00\u59CB\u5C1D\u8BD5\u9003\u79BB\u57CE\u5821\u5E76\u91CD\u65B0\u53D6\u5F97\u5BF9\u52C7\u8005\u7684\u63A7\u5236\u3002"
+      value: "\u524D\u60C5\u63D0\u8981\n\n\u52C7\u8005\u672C\u8BE5\u5728\u4F60\u7684\u64CD\u63A7\u4E0B\u8E0F\u4E0A\u5F81\u9014\uFF0C\u51FB\u8D25\u9B54\u738B\u3002\u4F46\u4E00\u80A1\u6765\u5386\u4E0D\u660E\u7684\u529B\u91CF\u5C06\u4F60\u4ECE\u4ED6\u7684\u8EAB\u4F53\u91CC\u5265\u79BB\uFF1B\u90A3\u5177\u8089\u4F53\u6CA1\u6709\u6B7B\uFF0C\u53EA\u662F\u4E0D\u518D\u542C\u4ECE\u4F60\u7684\u610F\u5FD7\u3002\n\n\u5982\u4ECA\uFF0C\u4F60\u4EE5\u5E7D\u7075\u7684\u6A21\u6837\u56F0\u5728\u738B\u56FD\u57CE\u5821\u4E0B\u7684\u76D1\u7262\u91CC\u3002\u94C1\u95E8\u4ECD\u65E7\u7D27\u9501\uFF0C\u5B88\u536B\u7167\u5E38\u5DE1\u89C6\uFF0C\u4F3C\u4E4E\u6CA1\u4EBA\u77E5\u9053\u53D1\u751F\u4E86\u4EC0\u4E48\u3002\n\n\u4F60\u5F88\u5FEB\u53D1\u73B0\uFF0C\u522B\u4EBA\u7684\u8EAB\u4F53\u4ECD\u80FD\u6210\u4E3A\u4F60\u7684\u5BB9\u8EAB\u4E4B\u6240\u3002\u5148\u501F\u4E00\u526F\u8EAB\u8EAF\u79BB\u5F00\u8FD9\u91CC\uFF0C\u518D\u53BB\u627E\u56DE\u90A3\u4F4D\u5931\u63A7\u7684\u52C7\u8005\u3002"
+      objectReference: {fileID: 0}
+    - target: {fileID: 918620450781230005, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
+      propertyPath: keepAuthoredTextOnLoad
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 918620450781230005, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
       propertyPath: interactionDistance
@@ -21247,6 +21271,26 @@ PrefabInstance:
       propertyPath: restorePreviousTaskOnPickup
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 6046113066450170005, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
+      propertyPath: itemColor.a
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6046113066450170003, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
+      propertyPath: m_Color.r
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6046113066450170003, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
+      propertyPath: m_Color.g
+      value: 0.984313726
+      objectReference: {fileID: 0}
+    - target: {fileID: 6046113066450170003, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
+      propertyPath: m_Color.b
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6046113066450170003, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
+      propertyPath: m_Color.a
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
 --- !u!4 &955011549 stripped
@@ -23277,7 +23321,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 918620450781230005, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
       propertyPath: documentText
-      value: "\u6700\u8FD1\u8FD9\u60C5\u51B5\uFF0C\u5DE5\u4F5C\u5B8C\u5C31\u8BAD\u7EC3\uFF0C\u8BAD\u7EC3\u5B8C\u5C31\u5DE5\u4F5C\uFF0C\u8FD8\u7BA1\u7684\u8FD9\u4E48\u4E25\uFF0C\u8FD9\u65E5\u5B50\u4F55\u65F6\u662F\u4E2A\u5934\u554A\u3002"
+      value: "\u4E00\u5F20\u585E\u5728\u94FA\u677F\u4E0B\u7684\u7EB8\n\n\u5E72\u5B8C\u6D3B\u53BB\u64CD\u7EC3\uFF0C\u64CD\u7EC3\u5B8C\u63A5\u7740\u503C\u52E4\u3002\u957F\u5B98\u8BF4\uFF0C\u5FD9\u8D77\u6765\u5C31\u4E0D\u4F1A\u80E1\u601D\u4E71\u60F3\u3002\u6211\u5012\u60F3\u77E5\u9053\uFF0C\u4ED6\u591C\u91CC\u8EBA\u4E0B\u7684\u65F6\u5019\uFF0C\u4F1A\u4E0D\u4F1A\u68A6\u89C1\u81EA\u5DF1\u4E5F\u5728\u7AD9\u5C97\u3002\n\n\u6700\u8FD1\u8FDE\u8D70\u9519\u4E00\u6761\u8FC7\u9053\u90FD\u8981\u88AB\u76D8\u95EE\u3002\u4E1C\u897F\u4E22\u4E86\uFF0C\u67E5\u7684\u5374\u603B\u662F\u6211\u4EEC\u3002\u82E5\u771F\u6709\u4EBA\u80FD\u4ECE\u8FD9\u91CC\u5077\u51FA\u4EC0\u4E48\uFF0C\u6211\u53EA\u76FC\u4ED6\u987A\u624B\u628A\u6211\u7684\u4E0B\u4E00\u73ED\u5C97\u4E5F\u5077\u8D70\u3002"
+      objectReference: {fileID: 0}
+    - target: {fileID: 918620450781230005, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
+      propertyPath: keepAuthoredTextOnLoad
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
@@ -27943,7 +27991,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 918620450781230005, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
       propertyPath: documentText
-      value: "\u81F4\uFF08\u88AB\u5212\u6389\uFF09\uFF1A\n\u8FD1\u671F\u56E0\u4E3A\u98CE\u53E3\u6108\u53D1\u4E25\u683C\uFF0C\u4E0B\u4E00\u6279\u8D27\u7684\u4EA4\u8D27\u65E5\u671F\u53EF\u80FD\u9700\u8981\u5EF6\u540E\uFF0C\u5177\u4F53\u65E5\u671F\u9700\u8981\u6839\u636E\u5B9E\u9645\u60C5\u51B5\u800C\u5B9A\u3002\u4E0B\u4E00\u6279\u8D27\u5305\u542B\u7684\u5185\u5BB9\u6709\uFF1A\uFF08\u5C1A\u672A\u5B8C\u6210\uFF09"
+      value: "\u5178\u72F1\u957F\u7684\u79C1\u4FE1\n\n\u4E0A\u4E00\u6279\u6CA1\u6536\u7684\u9996\u9970\u5DF2\u7ECF\u9001\u51FA\uFF0C\u6211\u90A3\u4EFD\u91D1\u5E01\u4E0D\u8981\u5C11\u3002\u5165\u5E93\u8D26\u4E0A\u53EA\u8BB0\u4E86\u65E7\u8863\u6742\u7269\uFF0C\u4E0D\u4F1A\u6709\u4EBA\u8FFD\u95EE\u9996\u9970\u53BB\u4E86\u54EA\u91CC\u3002\n\n\u4E25\u67E5\u5931\u7A83\u7684\u901A\u544A\u662F\u6211\u4E0B\u7684\u3002\u5B88\u536B\u5FD9\u7740\u76D8\u95EE\u56DA\u72AF\uFF0C\u6B63\u597D\u987E\u4E0D\u4E0A\u5E93\u623F\u3002\u4E0B\u4E00\u6279\u7B49\u6211\u8C03\u5F00\u503C\u591C\u7684\u4EBA\u518D\u53D6\uFF0C\u51FA\u95E8\u7684\u6279\u6761\u4E5F\u7531\u6211\u7B7E\u3002\n\n\u522B\u518D\u6D3E\u4EBA\u6765\u6253\u542C\u3002\u8FD9\u91CC\u7684\u94A5\u5319\u3001\u8D26\u518C\u548C\u67E5\u6848\u7684\u4EBA\u90FD\u5F52\u6211\u7BA1\uFF0C\u4F60\u53EA\u987B\u628A\u8D27\u5356\u597D\uFF0C\u628A\u5634\u95ED\u7D27\u3002\n\n\u2014\u2014\u5178\u72F1\u957F"
+      objectReference: {fileID: 0}
+    - target: {fileID: 918620450781230005, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
+      propertyPath: keepAuthoredTextOnLoad
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
@@ -28868,7 +28920,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 918620450781230005, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
       propertyPath: documentText
-      value: "\u81F4\u5BB6\u4EBA\uFF1A\n\u6700\u8FD1\u5728\u5DE5\u4F5C\u4E0A\u6CA1\u6709\u9047\u5230\u4EC0\u4E48\u5371\u9669\u7684\u60C5\u51B5\uFF0C\u4E00\u5207\u90FD\u8FD8\u7B97\u5B89\u5B9A\u3002\u5E76\u4E14\u8FD8\u542C\u8BF4\u52C7\u8005\u4E5F\u8981\u6765\u5230\u6211\u4EEC\u8FD9\u91CC\u6765\u534F\u52A9\u6253\u8D25\u9B54\u738B\u4E86\uFF0C\u60C5\u51B5\u5927\u6982\u4F1A\u8D8A\u6765\u8D8A\u597D\u5427\u3002\u4E0D\u8FC7\u542C\u8BF4\u6700\u8FD1\u603B\u662F\u6709\u4E1C\u897F\u5931\u7A83\uFF0C\u5E76\u4E14\u7BA1\u7684\u4E5F\u8D8A\u6765\u8D8A\u4E25\u683C\u4E86\uFF0C\u53EF\u80FD\u6211\u5F88\u957F\u4E00\u6BB5\u65F6\u95F4\u90FD\u6CA1\u673A\u4F1A\u518D\u5199\u4FE1\u56DE\u6765\u4E86\u3002\n\uFF08\u4E66\u5199\u65F6\u95F4\u662F\u6570\u4E2A\u6708\u4E4B\u524D\uFF09"
+      value: "\u4E00\u5C01\u6CA1\u6709\u5BC4\u51FA\u7684\u5BB6\u4E66\n\n\u5BB6\u91CC\u4E00\u5207\u53EF\u597D\uFF1F\u6211\u8FD9\u8FB9\u8FD8\u7B97\u5E73\u5B89\uFF0C\u5403\u4F4F\u90FD\u4E0D\u7F3A\uFF0C\u4F60\u4EEC\u4E0D\u5FC5\u6302\u5FF5\u3002\u542C\u8BF4\u52C7\u8005\u5C31\u8981\u6765\u4E86\uFF0C\u5927\u5BB6\u90FD\u8BF4\uFF0C\u6709\u4ED6\u76F8\u52A9\uFF0C\u9B54\u738B\u7684\u4E8B\u603B\u8BE5\u6709\u4E2A\u4E86\u7ED3\u3002\n\n\u53EA\u662F\u8FD1\u6765\u5E38\u6709\u4E1C\u897F\u5931\u7A83\uFF0C\u4E0A\u5934\u67E5\u5F97\u7D27\uFF0C\u8FDE\u5BC4\u4FE1\u4E5F\u4E0D\u5982\u4ECE\u524D\u65B9\u4FBF\u3002\u82E5\u8BB8\u4E45\u6536\u4E0D\u5230\u6D88\u606F\uFF0C\u522B\u80E1\u4E71\u62C5\u5FC3\u3002\u6211\u4F1A\u7167\u987E\u597D\u81EA\u5DF1\uFF0C\u7B49\u51C6\u4E86\u5047\u5C31\u56DE\u5BB6\u3002\n\n\uFF08\u843D\u6B3E\u7684\u65E5\u671F\uFF0C\u8DDD\u4ECA\u5DF2\u6709\u6570\u6708\u3002\uFF09"
+      objectReference: {fileID: 0}
+    - target: {fileID: 918620450781230005, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
+      propertyPath: keepAuthoredTextOnLoad
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
@@ -36479,7 +36535,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 918620450781230005, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
       propertyPath: documentText
-      value: "\u91CD\u8981\u901A\u77E5\uFF1A\n\u8FD1\u671F\u76D1\u72F1\u5185\u76D7\u532A\u4E8B\u4EF6\u9891\u53D1\uFF0C\u5DF2\u6709\u5927\u91CF\u8D35\u91CD\u7269\u54C1\u906D\u5230\u76D7\u7A83\uFF0C\u6545\u800C\u4E0A\u7EA7\u4E0B\u4EE4\u5BF9\u76D1\u72F1\u5185\u4EBA\u5458\u7684\u884C\u4E3A\u8FDB\u884C\u4E25\u683C\u7BA1\u675F\u3002\u4EFB\u4F55\u6709\u9700\u6C42\u79BB\u5F00\u76D1\u72F1\u7684\u4EBA\u5458\u5FC5\u987B\u5411\u5178\u72F1\u957F\u62A5\u5907\u5E76\u901A\u8FC7\u624D\u80FD\u9886\u53D6\u5927\u95E8\u94A5\u5319\uFF0C\u5E76\u4E14\u4EFB\u4F55\u5B58\u5728\u504F\u79BB\u65E5\u5E38\u5DE5\u4F5C\u8303\u7574\u7684\u884C\u4E3A\u7684\u4EBA\u5458\u90FD\u4F1A\u88AB\u89C6\u4E3A\u5ACC\u7591\u4EBA\u52A0\u4EE5\u5BA1\u95EE\u3002"
+      value: "\u76D1\u72F1\u901A\u544A\u00B7\u5373\u65E5\u8D77\u65BD\u884C\n\n\u8FD1\u65E5\u5931\u7A83\u6848\u5C61\u53D1\uFF0C\u8D35\u91CD\u7269\u54C1\u63A5\u8FDE\u4E0D\u7FFC\u800C\u98DE\u3002\u6B64\u4E8B\u672A\u67E5\u6E05\u524D\uFF0C\u5168\u4F53\u4EBA\u5458\u987B\u4E25\u5B88\u5C97\u4F4D\uFF0C\u4E0D\u5F97\u64C5\u79BB\u804C\u5B88\u3002\n\n\u51E1\u9700\u79BB\u5F00\u76D1\u72F1\u8005\uFF0C\u5148\u5411\u5178\u72F1\u957F\u62A5\u5907\uFF1B\u83B7\u51C6\u540E\u65B9\u53EF\u9886\u53D6\u5927\u95E8\u94A5\u5319\u3002\u94A5\u5319\u7531\u5178\u72F1\u957F\u4FDD\u7BA1\uFF0C\u5207\u52FF\u4EE5\u201C\u5FD8\u4E86\u89C4\u77E9\u201D\u4E3A\u7531\u7EA0\u7F20\u5B88\u95E8\u4EBA\u3002\n\n\u51E1\u65E0\u6545\u7ED5\u884C\u3001\u51FA\u5165\u65E0\u5173\u533A\u57DF\u6216\u4E3E\u6B62\u53CD\u5E38\u8005\uFF0C\u4E00\u5F8B\u5148\u884C\u76D8\u95EE\u3002\u8BF8\u4F4D\u82E5\u60F3\u65E9\u4E9B\u6062\u590D\u5F80\u65E5\u7684\u6E05\u9759\uFF0C\u5C31\u8BF7\u5C11\u7ED9\u6211\u4EEC\u6DFB\u4E8B\u3002"
+      objectReference: {fileID: 0}
+    - target: {fileID: 918620450781230005, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
+      propertyPath: keepAuthoredTextOnLoad
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 918620450781230005, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
       propertyPath: journalEntryId

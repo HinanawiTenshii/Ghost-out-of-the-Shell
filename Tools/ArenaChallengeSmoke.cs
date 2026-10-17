@@ -86,6 +86,38 @@ public static class ArenaChallengeSmoke
     static void Move(ZeldaFourWayMover mover,Vector2 position)
     { mover.transform.position=position; mover.GetComponent<Rigidbody2D>().position=position; Physics2D.SyncTransforms(); }
     static void HealPlayer() { P.CharacterData.RestoreHealth(999); }
+    static void CheckRegistrarProtection(string stage)
+    {
+        var arena = A;
+        var data = arena.registrar.GetComponent<ZeldaCharacterData>();
+        Check(data != null && !data.IsDead && ArenaChallengeController.ProtectsRegistrar(data), "registrar protected " + stage);
+        int health = data.CurrentHealth, damageEvents = 0, attackEvents = 0;
+        int wins = arena.Wins; var phase = arena.CurrentPhase;
+        Action<ZeldaCharacterData, int, ZeldaCharacterData> damaged = (victim, amount, source) => damageEvents++;
+        Action<ZeldaCharacterData> attacked = source => attackEvents++;
+        data.HealthDamaged += damaged; data.AttackedBy += attacked;
+        try
+        {
+            data.TakeDamage(999, P.CharacterData); // Melee, bombs, cannon and skill AoE share this entry.
+            data.TakeHandgunDamage(999, P.transform.position, P.CharacterData);
+            typeof(ZeldaCharacterData).GetMethod("TakeDominoDamage", BindingFlags.Instance|BindingFlags.NonPublic)
+                .Invoke(data, new object[] { 999, P.CharacterData });
+            CharacterPotionBuffs.TryApplySplash(data, AlchemyPotionKind.Death);
+            data.DieFromSoulDetonation();
+            Check(!data.IsDead && data.CurrentHealth == health, "all damage and direct death preserve registrar HP " + stage);
+            Check(damageEvents == 0 && attackEvents == 0, "blocked hits have no damage or retaliation callbacks " + stage);
+            Check(arena.Wins == wins && arena.CurrentPhase == phase, "registrar hits never decide a round " + stage);
+            if (phase == ArenaChallengeController.Phase.Preparing)
+                Check(arena.registrar.GetStartNode(P).id == "arena_prepare", "withdrawal dialogue survives registrar attacks " + stage);
+        }
+        finally { data.HealthDamaged -= damaged; data.AttackedBy -= attacked; }
+    }
+    static void CheckRegistrarUnprotected(string stage)
+    {
+        var data = A.registrar.GetComponent<ZeldaCharacterData>();
+        Check(!ArenaChallengeController.ProtectsRegistrar(data) && ArenaChallengeController.LimitDamage(data, 2) == 2,
+            "registrar immunity ends outside challenge " + stage);
+    }
     static IEnumerator EnterFight()
     {
         Move(P,A.fightingArea.center);
@@ -98,6 +130,7 @@ public static class ArenaChallengeSmoke
     {
         yield return Ready();
         var arena=A;
+        CheckRegistrarUnprotected("initial layout");
         Check(!J.ContainsEntry(Quest), "fresh arena scene does not auto-accept quest");
         CameraVisionObjectStreaming.RestoreForGameplay(arena.registrar.gameObject);
         arena.registrar.gameObject.SetActive(true);
@@ -122,6 +155,7 @@ public static class ArenaChallengeSmoke
         var outside=UnityEngine.Object.FindObjectsOfType<DoorHingeInteraction>(true).First(d=>!arena.region.Contains(d.transform.position));
         outside.ApplyPersistentState(false,true); string outsideId=SceneTravelStateManager.GetMapObjectId(outside.transform);
         Check(arena.Register(mover),"register starts covered layout reload");
+        CheckRegistrarProtection("registration loading");
         Check(J.TrackedEntryId == Quest && J.TryGetEntry(Quest, out var entry) && entry.Title == "你们还不满意吗？", "registration starts and tracks named quest");
         yield return Ready(); arena=A;
         Check(P.CharacterData.IndividualAccessId==identity,"same participant identity after layout reload");
@@ -129,6 +163,7 @@ public static class ArenaChallengeSmoke
         Check(Vector2.Distance(P.transform.position,arena.playerPool.transform.position)<.2f,"player appears in left pool");
         Check(Vector2.Distance(arena.Opponent.transform.position,arena.guardianPosition)<.2f,"guardian placed on arena right");
         Check(arena.CurrentPhase==ArenaChallengeController.Phase.Preparing&&arena.Wins==0,"preparation score zero");
+        CheckRegistrarProtection("preparation");
         QuestStage(QuestJournalManager.ArenaQuestStage.Preparing, 0, 3, QuestJournalManager.ArenaEntranceTarget);
         Check(!(bool)typeof(CharacterDialogue).GetProperty("HasAvailableQuest", BindingFlags.Instance|BindingFlags.NonPublic).GetValue(arena.registrar), "accepted arena quest hides registrar offer");
         Check(arena.sealedDoors.All(d=>d.IsLocked&&!d.IsOpen&&!d.TryInteract()),"all other exits locked/noninteractive");
@@ -143,6 +178,7 @@ public static class ArenaChallengeSmoke
         Check(GameSaveSystem.Instance.Save(1,false),"save during preparation");
         Check(GameSaveSystem.Instance.Load(1),"load preparation save");yield return Ready();
         Check(A.CurrentPhase==ArenaChallengeController.Phase.Preparing&&A.RoundCount==3,"preparation resumes from disk");
+        CheckRegistrarProtection("preparation save restored");
         Check(J.ContainsEntry(QuestJournalManager.ArenaInjectionQuestId) && !J.IsEntryCompleted(QuestJournalManager.ArenaInjectionQuestId),
             "injection child remains pending through preparation reload");
         QuestStage(QuestJournalManager.ArenaQuestStage.Preparing, 0, 3, QuestJournalManager.ArenaEntranceTarget);
@@ -150,8 +186,9 @@ public static class ArenaChallengeSmoke
         PersistentInventory.Instance.TryRemoveItem("disposable_handgun",1);
         Move(P,new Vector2(70,-11));P.CharacterData.TakeDamage(2,null);int hp=P.CharacterData.CurrentHealth;
         J.CompleteEntry(QuestJournalManager.ArenaInjectionQuestId);
-        Check(A.Abandon(),"abandon accepted during preparation");yield return Ready();
+        Check(A.Abandon(),"abandon accepted during preparation");CheckRegistrarProtection("abandon loading");yield return Ready();
         Check(A.CurrentPhase==ArenaChallengeController.Phase.Idle&&string.IsNullOrEmpty(A.CaptureRuntimeState().layoutSnapshot),"abandon restores layout and deletes snapshot");
+        CheckRegistrarUnprotected("abandoned layout restored");
         QuestStage(QuestJournalManager.ArenaQuestStage.Register, 0, 3, QuestJournalManager.ArenaRegistrarTarget);
         Check(J.ContainsEntry("arena-smoke-unrelated") && !J.IsEntryCompleted(Quest), "abandon preserves other quests and keeps challenge unfinished");
         Check(J.IsEntryCompleted(QuestJournalManager.ArenaInjectionQuestId), "abandon layout restoration keeps completed injection child");
@@ -168,14 +205,17 @@ public static class ArenaChallengeSmoke
         Check(GameSaveSystem.Instance.Save(2,false),"save during fight");
         Check(GameSaveSystem.Instance.Load(2),"load fight save");yield return Ready();
         Check(A.CurrentPhase==ArenaChallengeController.Phase.Fighting&&A.entrance.IsLocked,"combat/closed gate resume");
+        CheckRegistrarProtection("fighting save restored");
         P.CharacterData.TakeDamage(999,A.Opponent);
         Check(P.CharacterData.CurrentHealth==1&&!P.CharacterData.IsDead,"lethal hit leaves player at one HP");
         Check(A.CurrentPhase==ArenaChallengeController.Phase.Result&&ArenaChallengeController.BlocksPlayerInput,"result freezes input");
+        CheckRegistrarProtection("defeat result pause");
         Check(A.scoreboard.display.text=="×"&&A.scoreboard.display.color.r>.9f,"failure red X");
         QuestStage(QuestJournalManager.ArenaQuestStage.Defeated, 0, 3, QuestJournalManager.ArenaRegistrarTarget);
         P.CharacterData.TakeDamage(999,A.Opponent);Check(P.CharacterData.CurrentHealth==1,"result blocks followup lethal hits");
         yield return Ready();
         Check(A.CurrentPhase==ArenaChallengeController.Phase.Idle&&P.CharacterData.CurrentHealth==1,"failure restores layout without healing");
+        CheckRegistrarUnprotected("defeat restored layout");
         QuestStage(QuestJournalManager.ArenaQuestStage.Register, 0, 3, QuestJournalManager.ArenaRegistrarTarget);
 
         HealPlayer();Check(A.Register(P),"register after failure");yield return Ready();
@@ -187,6 +227,7 @@ public static class ArenaChallengeSmoke
             guard.TakeDamage(999,P.CharacterData);
             Check(!guard.IsDead&&guard.CurrentHealth==1,"guardian lethal protection round "+round);
             Check(A.Wins==round+1,"score increments round "+round);
+            CheckRegistrarProtection("winning round " + round);
             QuestStage(QuestJournalManager.ArenaQuestStage.RoundWon, round + 1, 3, QuestJournalManager.ArenaCombatTarget);
             if(round==0)
             {
@@ -197,6 +238,7 @@ public static class ArenaChallengeSmoke
             if(round<2) Check(A.CurrentPhase==ArenaChallengeController.Phase.Preparing,"next round preparation");
         }
         Check(A.CurrentPhase==ArenaChallengeController.Phase.Completed,"all guardians produce completion");
+        CheckRegistrarUnprotected("victory restored layout");
         QuestStage(QuestJournalManager.ArenaQuestStage.AwaitingReward, 3, 3, QuestJournalManager.ArenaRegistrarTarget);
         Check(!J.IsEntryCompleted(Quest), "winning without claiming does not complete quest");
         Check(J.IsEntryCompleted(QuestJournalManager.ArenaInjectionQuestId), "round and victory layout reloads keep completed injection child");
@@ -240,6 +282,7 @@ public static class ArenaChallengeSmoke
         Check(GameSaveSystem.Instance.Save(4,false)&&GameSaveSystem.Instance.Load(4),"save/load claimed reward");yield return Ready();
         Check(!A.CanClaim(P,out _)&&PersistentInventory.Instance.GetQuantity(TrialProofPickupItem.DefaultItemId)==1,"reward flag and inventory persist together");
         Check(J.IsEntryCompleted(Quest) && J.ArenaStage == QuestJournalManager.ArenaQuestStage.Claimed, "completed task persists through disk load");
+        CheckRegistrarUnprotected("claimed reward save restored");
         string winningId=P.CharacterData.IndividualAccessId;
         SceneTravelStateManager.GetOrCreate().TravelToScene("Level2-Floor1",new Vector2(0,0));yield return Ready();
         Check(SceneManager.GetActiveScene().name=="Level2-Floor1","winner can leave arena scene");

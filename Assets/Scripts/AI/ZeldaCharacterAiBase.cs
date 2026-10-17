@@ -89,9 +89,9 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
 
     [Header("Investigation Behaviour")]
     [Tooltip("How long an AI remains in the investigation state after reaching a pulse source.")]
-    [SerializeField, Min(0f)] private float investigationDuration = 3f;
+    [SerializeField, Min(0f)] private float investigationDuration = 16f;
     [Tooltip("How long an AI pauses after each movement during a pulse investigation.")]
-    [SerializeField, Min(0f)] private float investigationWaypointPauseDuration = 0.65f;
+    [SerializeField, Min(0f)] private float investigationWaypointPauseDuration = 3.5f;
     [Tooltip("Maximum distance used to relocate an investigation target away from solid geometry.")]
     [SerializeField, Min(0.1f)] private float investigationTargetRelocationRadius = 1.5f;
     [Tooltip("Directions tested on each relocation ring around an unsafe investigation point.")]
@@ -291,6 +291,10 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
     private bool isDoorIncidentInvestigation;
     private bool isPausingDuringInvestigation;
     private float investigationPauseTimer;
+    private const float InvestigationReactionDuration = 1f;
+    private float investigationReactionRemaining;
+    // A Search subphase: perception still runs, but approach/navigation has not begun.
+    public bool IsReactingToAttraction => currentState == ZeldaAiState.Search && investigationReactionRemaining > 0f;
     private Vector2 investigationIncidentPosition;
     private Vector2 investigationApproachPosition;
     // Tracks incident details for save/restore only; never suppresses perception.
@@ -436,6 +440,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
     {
         if (duration <= 0f) return;
         if (!isActiveAndEnabled || characterData == null || characterData.IsDead || mover.isActiveAndEnabled) return;
+        investigationReactionRemaining = 0f;
         if (!IsStunned)
         {
             stateBeforeStun = currentState;
@@ -482,6 +487,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
     [System.Serializable]
     public sealed class SaveState
     {
+        public SilenceOathRuntime.State silenceOath;
         public ZeldaAiState state;
         public ZeldaAiState stateBeforeStun;
         public float stunRemaining;
@@ -493,6 +499,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         public bool handgunInvestigation, pendingHandgunInvestigation, handgunTraveling, handgunPausing;
         public Vector2 handgunIncident, handgunApproach, pendingHandgunPosition;
         public float handgunPause;
+        public float investigationReactionRemaining;
         public bool alarmResponse, pendingAlarmResponse, incidentInvestigation;
         public Vector2 alarmPosition;
         public int sharedPlayerPhase;
@@ -503,6 +510,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
     public virtual SaveState CaptureSaveState()
     {
         return new SaveState {
+            silenceOath = silenceOath,
             sharedPlayerPhase = sharedPlayerTimer != null ? (int)sharedPlayerTimer.Phase : 0,
             sharedPlayerRemaining = sharedPlayerTimer != null ? sharedPlayerTimer.Remaining : 0f,
             sharedPlayerLastSeen = sharedPlayerTimer != null ? sharedPlayerTimer.LastSeenPosition : lastKnownTargetPosition,
@@ -523,6 +531,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
             handgunIncident = investigationIncidentPosition, handgunApproach = investigationApproachPosition,
             handgunTraveling = isTravelingToInvestigation, handgunPausing = isPausingDuringInvestigation,
             handgunPause = investigationPauseTimer,
+            investigationReactionRemaining = IsReactingToAttraction ? investigationReactionRemaining : 0f,
             alarmResponse = alarmResponseActive, pendingAlarmResponse = pendingAlarmResponse,
             alarmPosition = alarmPosition, incidentInvestigation = isDoorIncidentInvestigation
         };
@@ -546,6 +555,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         regularHostile = state.regular; hostileUntilTargetDeath = state.untilDeath;
         retainLoadedUntilIdle = state.retained;
         targetMover = state.targetsPlayer ? ZeldaRuntimeRegistry.GetControlledMover() : null;
+        RestoreSilenceOath(state.silenceOath);
         RestoreSharedPlayerIncident(state);
         // Loading existing hostility is not a new incident.
         lastSharedHostilityTarget = currentState == ZeldaAiState.Hostile ? targetMover : null;
@@ -562,6 +572,9 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
             isPausingDuringInvestigation = state.handgunPausing;
             investigationPauseTimer = state.handgunPause;
         }
+        investigationReactionRemaining = currentState == ZeldaAiState.Search &&
+            state.incidentInvestigation && state.handgunTraveling
+                ? Mathf.Clamp(state.investigationReactionRemaining, 0f, InvestigationReactionDuration) : 0f;
         moveDirection = Vector2.zero;
         InvalidateNavigationPlan();
         UpdateStateIndicator();
@@ -570,13 +583,13 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
     // alerts, searches and recovery also finish while outside camera range.
     // Do not gate on isActiveAndEnabled: streaming may need to reactivate a
     // suspended/restored character that already has a non-idle state.
-    public virtual bool RequiresVisionStreamingRetention => ArenaChallengeController.ForAi(this) != null || currentState != ZeldaAiState.Idle || IsIgnoringPlayer || alarmResponseActive || HasDecoyBombTarget;
+    public virtual bool RequiresVisionStreamingRetention => HasSilenceOath || ArenaChallengeController.ForAi(this) != null || currentState != ZeldaAiState.Idle || IsIgnoringPlayer || alarmResponseActive || HasDecoyBombTarget;
     public Vector2 FacingDirection => facingDirection;
     public ZeldaFourWayMover CurrentTarget => targetMover;
     public float SuspicionValue => suspicionValue;
     public float SuspicionProgress => maximumSuspicion > 0f ? suspicionValue / maximumSuspicion : 0f;
     public bool IsPossessionLocked => possessionLocked;
-    public bool IsInPossessableState =>
+    public virtual bool IsInPossessableState =>
         currentState != ZeldaAiState.Suspicious &&
         currentState != ZeldaAiState.Alert &&
         currentState != ZeldaAiState.Hostile;
@@ -711,7 +724,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
     public int ResolveIncomingAttackDamage(int baseDamage)
     {
         ZeldaAiState awarenessState = IsStunned ? stateBeforeStun : currentState;
-        if (baseDamage <= 0 || !isActiveAndEnabled ||
+        if (this is SquadPatrolCharacterAi || baseDamage <= 0 || !isActiveAndEnabled ||
             mover == null || mover.isActiveAndEnabled ||
             hasConsumedUnawareFirstHit ||
             awarenessState == ZeldaAiState.Suspicious ||
@@ -819,6 +832,17 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
             return;
         }
 
+        // Test visibility before turning toward the incident. Repeated pulses may
+        // update the destination, but must never restart or stack this reaction.
+        if (currentState == ZeldaAiState.Idle && !HasDecoyBombTarget)
+        {
+            var player = ZeldaRuntimeRegistry.GetControlledMover();
+            bool seesPlayer = player != null &&
+                ZeldaRuntimeRegistry.GetGameplayScene(player.gameObject) == ZeldaRuntimeRegistry.GetGameplayScene(gameObject) &&
+                CanSeePlayer(player);
+            if (!seesPlayer) investigationReactionRemaining = InvestigationReactionDuration;
+        }
+
         anonymousHandgunInvestigation = false;
         targetMover = null;
         activePermissionArea = null;
@@ -858,6 +882,8 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         moveDirection = Vector2.zero;
         SetFacingDirection(investigationPosition - rb.position);
         ChangeState(ZeldaAiState.Search);
+        if (IsReactingToAttraction) { rb.velocity = Vector2.zero; rb.angularVelocity = 0f; }
+        UpdateStateIndicator();
     }
 
     private Vector2 ResolveInvestigationApproachPosition(
@@ -1152,6 +1178,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void OnEnable()
     {
+        investigationReactionRemaining = 0f;
         ZeldaRuntimeRegistry.InvalidateSpatialSnapshot();
         if (sharedPlayerTimer != null) sharedPlayerTimer.Leave(this);
         sharedReturnAfterStun = false;
@@ -1193,6 +1220,9 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void OnDisable()
     {
+        investigationReactionRemaining = 0f;
+        if (!enabled || (mover != null && mover.enabled)) ClearSilenceOath();
+        if (silenceOathVisual != null) silenceOathVisual.enabled = false;
         decoyBombTarget = null;
         // Possession takes ownership; never leave a stale alarm retention latch.
         if (!enabled || (mover != null && mover.enabled))
@@ -1211,6 +1241,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         if (FreezeForArena()) return;
         // Paused conversations must not trigger zero-delta perception/state transitions.
         if (CharacterDialogueWindow.BlocksInput) return;
+        AdvanceSilenceOath(Time.deltaTime);
         royalCommandRemaining = Mathf.Max(0f, royalCommandRemaining - Time.deltaTime);
         UpdateRoyalCommandBar();
         if (IsStunned)
@@ -1227,6 +1258,11 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         if (characterData.IsDead)
         {
             moveDirection = Vector2.zero;
+            if (investigationReactionRemaining > 0f)
+            {
+                investigationReactionRemaining = 0f;
+                UpdateStateIndicator();
+            }
             return;
         }
 
@@ -1257,8 +1293,9 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         // Other incidents can finish in Idle away from home. An outstanding
         // alarm still owes its original return journey before releasing retention.
         if (alarmResponseActive && currentState == ZeldaAiState.Idle) BeginRecovery();
+        if (HasDecoyBombTarget) investigationReactionRemaining = 0f;
         TickCurrentState(Time.deltaTime);
-        moveDirection = RemainsStationary ? Vector2.zero : ApplyCharacterSeparation(moveDirection);
+        moveDirection = RemainsStationary || IsReactingToAttraction ? Vector2.zero : ApplyCharacterSeparation(moveDirection);
         UpdateFacingFromMovement();
         UpdateCharacterVisual();
         UpdateStateIndicator();
@@ -1269,7 +1306,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
     {
         if (FreezeForArena()) return;
         if (CharacterDialogueWindow.BlocksInput) return;
-        if (RemainsStationary)
+        if (RemainsStationary || IsReactingToAttraction)
         {
             rb.velocity = Vector2.zero;
             rb.angularVelocity = 0f;
@@ -1660,6 +1697,12 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void TickSearch(float deltaTime)
     {
+        if (IsReactingToAttraction)
+        {
+            investigationReactionRemaining = Mathf.Max(0f, investigationReactionRemaining - Mathf.Max(0f, deltaTime));
+            moveDirection = Vector2.zero;
+            return;
+        }
         if (isTravelingToInvestigation)
         {
             Vector2 toInvestigation =
@@ -1688,8 +1731,6 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
             if (isPausingDuringInvestigation)
             {
                 moveDirection = Vector2.zero;
-                SetFacingDirection(
-                    investigationIncidentPosition - rb.position);
                 investigationPauseTimer += deltaTime;
                 if (investigationPauseTimer < investigationWaypointPauseDuration)
                 {
@@ -1711,7 +1752,11 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
                 return;
             }
 
-            moveDirection = PlanDirectionTo(searchWaypoint);
+            // Investigation waypoints have a clear direct body path. Following
+            // an older A* route here can turn away from the newly chosen heading.
+            // FixedUpdate still prevents collision; a new obstruction triggers
+            // the existing stalled-waypoint pause and retry above.
+            moveDirection = investigationWaypointOffset.normalized;
             return;
         }
 
@@ -2066,7 +2111,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
     public virtual void OnPlayerPlacedBomb(ZeldaCharacterData user)
     {
         // An already-hostile NPC keeps its target, pursuit memory and attack cycle.
-        if (currentState == ZeldaAiState.Hostile || !isActiveAndEnabled ||
+        if ((currentState == ZeldaAiState.Hostile && (HasSilenceOath || !IsSilenceOathIncidentPrivate)) || !isActiveAndEnabled ||
             IsIgnoringPlayer || IsStunned || possessionLocked ||
             characterData == null || characterData.IsDead || mover == null || mover.isActiveAndEnabled ||
             user == null || user == characterData || user.IsDead || user.IsGhostLike) return;
@@ -2094,6 +2139,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         if (player == null || ZeldaRuntimeRegistry.GetControlledMover() != player || !CanSeePlayer(player)) return;
 
         // Match existing hostility propagation's perception and pursuit rules.
+        ReportFreshSilenceOathEvidence();
         // Do not restart an already active attack cycle on every player hit.
         if (!IsActivelyHostileTo(player)) BeginTemporaryHostility(player, false);
     }
@@ -2130,6 +2176,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         }
 
         targetMover = attackerMover;
+        PrepareFreshSilenceOathIncident();
         activePermissionArea = FindHighestPermissionArea(attacker.transform.position);
         recognizedPermissionTarget = null;
         lastKnownTargetPosition = attacker.transform.position;
@@ -2262,6 +2309,8 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         if (IsEchoRecoveryFrame && newState != ZeldaAiState.Recovery) return;
         if (IsIgnoringPlayer && (newState == ZeldaAiState.Suspicious || newState == ZeldaAiState.Alert || newState == ZeldaAiState.Hostile)) return;
         if (IsStunned) return;
+        OnSilenceOathStateChanged(newState);
+        if (newState != ZeldaAiState.Search) investigationReactionRemaining = 0f;
         if (currentState == newState)
         {
             if (playAwarenessCue) SyncSharedPlayerIncident();
@@ -2307,6 +2356,8 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
 
     private void ShareNearbyPlayerHostility()
     {
+        if (IsSilenceOathIncidentPrivate)
+        { lastSharedHostilityTarget = targetMover; return; }
         if (GameSaveSystem.IsLoading || !CanJoinNearbyPlayerHostility() ||
             targetMover == null || targetMover == lastSharedHostilityTarget ||
             !IsActivelyHostileTo(targetMover) || targetMover != ZeldaRuntimeRegistry.GetControlledMover()) return;
@@ -2432,6 +2483,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         ZeldaFourWayMover visiblePossessingPlayer = FindVisiblePossessingPlayer();
         if (visiblePossessingPlayer != null)
         {
+            ReportFreshSilenceOathEvidence();
             if (targetMover != visiblePossessingPlayer || !regularHostile)
             {
                 BeginTemporaryHostility(visiblePossessingPlayer, true);
@@ -2537,6 +2589,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
             ZeldaFourWayMover rediscoveredPlayer = FindVisiblePlayer();
             if (rediscoveredPlayer != null)
             {
+                PrepareFreshSilenceOathIncident();
                 targetMover = rediscoveredPlayer;
                 lastKnownTargetPosition = rediscoveredPlayer.transform.position;
                 regularHostile = true;
@@ -2706,7 +2759,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         foreach (ZeldaCharacterAiBase otherAi in ZeldaRuntimeRegistry.AiCharacters)
         {
             if (otherAi != null && otherAi != this && otherAi.isActiveAndEnabled &&
-                otherAi.SharesHostilityWithOtherNpcs &&
+                otherAi.SharesHostilityWithOtherNpcs && !otherAi.IsSilenceOathIncidentPrivate &&
                 otherAi.IsActivelyHostileTo(candidate))
             {
                 return true;
@@ -2731,6 +2784,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
             return;
         }
 
+        PrepareFreshSilenceOathIncident();
         targetMover = hostileTarget;
         lastKnownTargetPosition = hostileTarget.transform.position;
         activePermissionArea = null;
@@ -2815,6 +2869,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
 
     private void BeginPermissionResponse(int permissionDifference)
     {
+        PrepareFreshSilenceOathIncident();
         recognizedPermissionTarget = targetMover;
         if (permissionDifference >= 2)
         {
@@ -2832,6 +2887,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
 
     private void BeginSearch()
     {
+        investigationReactionRemaining = 0f;
         hostileUntilTargetDeath = false;
         retaliationHostile = false;
         regularHostile = false;
@@ -2898,17 +2954,15 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
     {
         searchWaypointTimer = 0f;
         previousSearchWaypointDistance = float.PositiveInfinity;
+        if (isDoorIncidentInvestigation)
+        {
+            ChooseNextInvestigationWaypoint();
+            return;
+        }
         for (int attempt = 0; attempt < searchWaypointSamplingAttempts; attempt++)
         {
             Vector2 candidate =
                 searchCenter + Random.insideUnitCircle * searchRadius;
-            if (isDoorIncidentInvestigation &&
-                (candidate - investigationIncidentPosition).sqrMagnitude <
-                investigationApproachMinimumRadius *
-                investigationApproachMinimumRadius)
-            {
-                continue;
-            }
 
             if (!IsSearchWaypointClear(candidate))
             {
@@ -2922,6 +2976,45 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         // The current position is known to be reachable. Waiting here and
         // sampling again is safer than committing to a point against a wall.
         searchWaypoint = rb.position;
+    }
+
+    private void ChooseNextInvestigationWaypoint()
+    {
+        Vector2 origin = rb.position;
+        Vector2 heading = facingDirection.sqrMagnitude > 0.0001f
+            ? facingDirection.normalized : Vector2.down;
+        Vector2 fromCenter = origin - searchCenter;
+        float minimumStep = Mathf.Max(0.35f, searchWaypointTolerance * 2f);
+        // Only sampled on arrival or after a pause, never an unbounded search.
+        for (int attempt = 0; attempt < searchWaypointSamplingAttempts; attempt++)
+        {
+            float angle = Random.Range(60f, 120f) * (Random.value < 0.5f ? -1f : 1f) * Mathf.Deg2Rad;
+            float sin = Mathf.Sin(angle), cos = Mathf.Cos(angle);
+            Vector2 direction = new Vector2(heading.x * cos - heading.y * sin,
+                heading.x * sin + heading.y * cos);
+            // Clip this ray to the original search circle. Even near its edge,
+            // short valid steps remain possible without drifting the centre.
+            float projection = Vector2.Dot(fromCenter, direction);
+            float discriminant = projection * projection + searchRadius * searchRadius - fromCenter.sqrMagnitude;
+            if (discriminant < 0f) continue;
+            float root = Mathf.Sqrt(discriminant);
+            float near = Mathf.Max(minimumStep, -projection - root);
+            float far = Mathf.Min(searchRadius, -projection + root);
+            if (far < near) continue;
+            Vector2 candidate = origin + direction * Random.Range(near, far);
+            if ((candidate - investigationIncidentPosition).sqrMagnitude <
+                    investigationApproachMinimumRadius * investigationApproachMinimumRadius ||
+                !IsSearchWaypointClear(candidate) || !IsBodyPathSegmentClear(origin, candidate, 0f)) continue;
+
+            InvalidateNavigationPlan();
+            searchWaypoint = candidate;
+            SetFacingDirection(direction);
+            return;
+        }
+
+        // No safe 60-120 degree turn: keep observing here, then retry after the
+        // normal pause rather than reversing, walking into a wall or spinning.
+        searchWaypoint = origin;
     }
 
     private void UpdateSearchWaypointProgress(
@@ -2990,11 +3083,8 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
     private void BeginInvestigationPause()
     {
         moveDirection = Vector2.zero;
-        if (isDoorIncidentInvestigation)
-        {
-            SetFacingDirection(
-                investigationIncidentPosition - rb.position);
-        }
+        // Preserve the arrival heading as the baseline for the next 60-120
+        // degree turn; looking back at the incident would cause a second turn.
         searchWaypointTimer = 0f;
         previousSearchWaypointDistance = float.PositiveInfinity;
         isPausingDuringInvestigation = true;
@@ -5728,7 +5818,8 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
             currentState,
             SuspicionProgress,
             warningProgress,
-            hostileIndicatorTimer > 0f);
+            hostileIndicatorTimer > 0f,
+            IsReactingToAttraction);
     }
 
     private void UpdateVisionMesh()
@@ -5822,6 +5913,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void OnDestroy()
     {
+        SilenceOathRuntime.Unregister(this);
         ZeldaRuntimeRegistry.Unregister(this);
         if (visionMesh != null) Destroy(visionMesh);
         if (visionMaterial != null) Destroy(visionMaterial);

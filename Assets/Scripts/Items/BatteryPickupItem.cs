@@ -98,6 +98,7 @@ public sealed class BatteryPickupItem : PickupItemBase, IConsumableExplosive
         }
         PlacedBomb explosion = template.CreateConfiguredPlacedBomb(
             source.transform.position, attacker, ExplosionAttackPower);
+        explosion.ExplosionSource = source.transform;
         // Attribute damage to the attacker, but keep effects in the battery's scene.
         var scene = source.gameObject.scene;
         if (scene.IsValid() && scene.isLoaded)

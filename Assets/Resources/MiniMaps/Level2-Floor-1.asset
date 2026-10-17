@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Level2-Floor-1
   m_EditorClassIdentifier: 
   schemaVersion: 6
-  sourceRevision: 4204ce14a55f7520ab90e08f75d4def2
+  sourceRevision: a50906eb1f2b1bc3e6e09ee0d1c600d3
   sceneName: Level2-Floor-1
   displayName: "Level2 \xB7 \u5730\u4E0B\u4E00\u5C42"
   blockPaths:
@@ -402,6 +402,12 @@ MonoBehaviour:
     - {x: 110.42172, y: 29.153112}
     - {x: 110.42172, y: 28.653112}
   - points:
+    - {x: 38.667694, y: 49.179794}
+    - {x: 38.667694, y: 51.329628}
+    - {x: 38.97003, y: 51.329628}
+    - {x: 38.97003, y: 49.179794}
+    - {x: 38.667694, y: 49.179794}
+  - points:
     - {x: 66.80584, y: 55.349865}
     - {x: 66.80584, y: 84.94334}
     - {x: 109.69941, y: 84.94334}
@@ -419,6 +425,12 @@ MonoBehaviour:
     - {x: 2.29703, y: -20.39422}
     - {x: 2.29703, y: -23.276754}
     - {x: 1.79703, y: -23.276754}
+  - points:
+    - {x: 38.66703, y: 51.315815}
+    - {x: 38.66703, y: 55.76221}
+    - {x: 39.16703, y: 55.76221}
+    - {x: 39.16703, y: 51.315815}
+    - {x: 38.66703, y: 51.315815}
   - points:
     - {x: 19.7, y: -18.901133}
     - {x: 19.7, y: -10.812841}
@@ -762,11 +774,11 @@ MonoBehaviour:
     - {x: 105.09545, y: 52.90311}
     - {x: 105.09545, y: 52.40311}
   - points:
-    - {x: 38.66703, y: 43.297375}
-    - {x: 38.66703, y: 55.50105}
-    - {x: 39.16703, y: 55.50105}
-    - {x: 39.16703, y: 43.297375}
-    - {x: 38.66703, y: 43.297375}
+    - {x: 38.66703, y: 43.297157}
+    - {x: 38.66703, y: 49.295265}
+    - {x: 39.16703, y: 49.295265}
+    - {x: 39.16703, y: 43.297157}
+    - {x: 38.66703, y: 43.297157}
   - points:
     - {x: 102.03473, y: 48.61311}
     - {x: 99.38153, y: 48.61311}
@@ -1714,6 +1726,10 @@ MonoBehaviour:
     position: {x: -41.08, y: 34.36023}
   - questId: level2.sandworm.device
     position: {x: 58.66, y: 24.883}
+  - questId: level2.gravekeeper.crystal
+    position: {x: 53.82576, y: 66.19}
+  - questId: level2.gravekeeper.return
+    position: {x: 69.66, y: 50.220062}
   - questId: level2.arena.registrar
     position: {x: 68.85, y: -10.1499405}
   - questId: level2.arena.entrance

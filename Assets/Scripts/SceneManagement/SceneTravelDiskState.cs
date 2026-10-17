@@ -198,7 +198,7 @@ public sealed partial class SceneTravelStateManager
 
     private static bool IsTransformOnly(ObjectState s)
     {
-        return !s.hasArenaChallenge && !s.hasCharacter && !s.hasMover && !s.hasAi && !s.hasDoor && !s.hasLever && !s.hasBatterySocket &&
+        return !s.hasTrapdoor && !s.hasKnightAmbush && !s.hasArenaChallenge && !s.hasCharacter && !s.hasMover && !s.hasAi && !s.hasDoor && !s.hasLever && !s.hasBatterySocket &&
             !s.hasEnergyCrystal && !s.hasSummoningCircle && !s.hasElectricGate && !s.hasTemporaryEffectArea && !s.hasLiquidInjector &&
             !s.hasAlchemyCauldron && !s.hasItemSubmissionStation && !s.hasTrialProofAltar && !s.hasMortarInstallation && string.IsNullOrEmpty(s.pickupId) &&
             string.IsNullOrEmpty(s.deviceKind) && string.IsNullOrEmpty(s.builderOwnerId) &&

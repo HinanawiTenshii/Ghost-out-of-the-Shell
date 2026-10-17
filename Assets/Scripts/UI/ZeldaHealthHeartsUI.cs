@@ -359,10 +359,11 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
 
     private void LateUpdate()
     {
-        // The camera continues its smooth follow briefly after movement input
-        // ends. Re-project the fixed world target after that camera movement.
+        // Re-project after camera motion. Moving world targets use live actor
+        // positions, independently of the lower-frequency map sample.
         if (trackedQuestTargetInCurrentScene)
         {
+            RefreshTrackedKnightMapPosition();
             UpdateTrackedQuestWorldMarker(
                 true,
                 trackedQuestTargetWorldPosition);
@@ -2108,6 +2109,16 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
             case QuestJournalManager.Level2SandwormQuestId:
                 AddObjective(texts, completion, "击杀沙虫并取得试炼证明", questComplete);
                 break;
+            case QuestJournalManager.KnightAmbushQuestId:
+                AddObjective(texts, completion, QuestJournalManager.KnightAmbushObjective, questComplete);
+                break;
+            case QuestJournalManager.GravekeeperQuestId:
+                AddObjective(texts, completion, "摧毁埋骨地被污染的镇抚水晶", questComplete || journal.GraveyardCrystalDestroyed);
+                AddObjective(texts, completion, "向守墓人复命，取得圣物间密码", questComplete);
+                break;
+            case QuestJournalManager.FortressProofQuestId:
+                AddObjective(texts, completion, QuestJournalManager.FortressProofObjective, questComplete);
+                break;
             case QuestJournalManager.CounterfeitQuestId:
                 bool gemAcquired = questComplete || journal.EntryDetailsContain(questId, QuestJournalManager.CounterfeitGemAcquired);
                 bool priceKnown = gemAcquired || journal.EntryDetailsContain(questId, QuestJournalManager.CounterfeitPriceKnown);
@@ -2741,6 +2752,8 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
 
     private void UpdateTrackedQuestWorldMarker(bool hasTarget, Vector2 targetPosition)
     {
+        if (hasTarget && questJournal != null && questJournal.TrackedEntryId == QuestJournalManager.KnightAmbushQuestId)
+            hasTarget = KnightCaptainAmbush.TryGetWorldMarker(SceneManager.GetActiveScene().name, out targetPosition);
         Camera camera = Camera.main;
         EnsureTrackedQuestWorldMarker();
         if (trackedQuestWorldMarker == null)
@@ -2758,6 +2771,20 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         for (int i = 0; i < additionalQuestWorldMarkers.Count; i++)
             PlaceQuestWorldMarker(additionalQuestWorldMarkers[i], camera, i < extraCount,
                 i < extraCount ? trackedQuestTargetPositions[i + 1] : Vector2.zero);
+    }
+
+    private void RefreshTrackedKnightMapPosition()
+    {
+        if (questJournal == null || questJournal.TrackedEntryId != QuestJournalManager.KnightAmbushQuestId ||
+            taskMiniMapGraphic == null || trackedQuestTargetPositions.Count == 0 ||
+            !KnightCaptainAmbush.TryGetMarker(SceneManager.GetActiveScene().name, out var sampledPosition) ||
+            sampledPosition == trackedQuestTargetWorldPosition)
+            return;
+        // The director changes this cache every 0.7 s. A stationary player must
+        // still see map updates, but live world motion must never dirty the map.
+        trackedQuestTargetWorldPosition = sampledPosition;
+        trackedQuestTargetPositions[0] = sampledPosition;
+        taskMiniMapGraphic.SetTrackedQuestTargets(trackedQuestTargetPositions, true);
     }
 
     private static void PlaceQuestWorldMarker(GameObject marker, Camera camera, bool hasTarget, Vector2 targetPosition)
@@ -3379,10 +3406,23 @@ public sealed class RuntimeSkillSlots : MonoBehaviour
     // Preserve indices 0..4 for the existing equipment/save data. Index 5 is displayed as key 0.
     public const int CharacterSlotIndex = 5;
     private ZeldaCharacterData observedCharacter;
+    private string observedCharacterSkillId;
     private DominoSkillPreview dominoPreview;
+    private SilenceOathPreview silenceOathPreview;
     private void LateUpdate()
     {
         var mover = ZeldaRuntimeRegistry.GetControlledMover();
+        bool oathSelected = mover != null && mover.CharacterData != null && !mover.CharacterData.IsDead &&
+            !mover.CharacterData.IsGhostLike && !DocumentReader.IsInputBlocked && !ClockworkPuppetRuntime.BlocksCharacterInput &&
+            SilenceOathRuntime.RankFor(mover.CharacterData) > 0 &&
+            (SelectedIndex == CharacterSlotIndex ? mover.CharacterData.NativeCharacterSkillId == SilenceOathRuntime.SkillId :
+                observedEquipment != null && PlayerGrowthAttributes.IsSilenceOathSkill(observedEquipment.GetEquippedSkill(SelectedIndex)));
+        if (oathSelected)
+        {
+            if (silenceOathPreview == null) silenceOathPreview = new GameObject("Silence Oath Preview").AddComponent<SilenceOathPreview>();
+            silenceOathPreview.Show(mover);
+        }
+        else if (silenceOathPreview != null) silenceOathPreview.Hide();
         bool show = mover != null && !mover.GetComponent<ZeldaCharacterData>().IsDead && !mover.GetComponent<ZeldaCharacterData>().IsGhostForm &&
             !DocumentReader.IsInputBlocked && !ClockworkPuppetRuntime.BlocksCharacterInput &&
             observedEquipment != null && PlayerGrowthAttributes.IsDominoSkill(observedEquipment.GetEquippedSkill(SelectedIndex)) && observedEquipment.HasSkill("domino");
@@ -3390,7 +3430,11 @@ public sealed class RuntimeSkillSlots : MonoBehaviour
         if (dominoPreview == null) dominoPreview = new GameObject("Domino Skill Preview").AddComponent<DominoSkillPreview>();
         dominoPreview.Show(mover);
     }
-    private void OnDisable() { if (dominoPreview != null) dominoPreview.Hide(); }
+    private void OnDisable()
+    {
+        if (dominoPreview != null) dominoPreview.Hide();
+        if (silenceOathPreview != null) silenceOathPreview.Hide();
+    }
     private PlayerGrowthAttributes observedEquipment;
     private void RefreshEquipment()
     {
@@ -3404,6 +3448,7 @@ public sealed class RuntimeSkillSlots : MonoBehaviour
     private void OnDestroy()
     {
         if (dominoPreview != null) Destroy(dominoPreview.gameObject);
+        if (silenceOathPreview != null) Destroy(silenceOathPreview.gameObject);
         if (observedEquipment != null) observedEquipment.AttributesChanged -= RefreshEquipment;
     }
     public int SelectedIndex { get; private set; } = 0;
@@ -3483,9 +3528,11 @@ public sealed class RuntimeSkillSlots : MonoBehaviour
         }
         var mover = ZeldaRuntimeRegistry.GetControlledMover();
         var character = mover != null ? mover.GetComponent<ZeldaCharacterData>() : null;
-        if (observedCharacter != character)
+        string characterSkillId = character != null ? character.NativeCharacterSkillId : null;
+        if (observedCharacter != character || observedCharacterSkillId != characterSkillId)
         {
             observedCharacter = character;
+            observedCharacterSkillId = characterSkillId;
             AssignSlot(CharacterSlotIndex, character != null ? character.CharacterSkillName : "", character != null ? character.CharacterSkillIcon : null);
         }
         bool isGhost = mover != null && mover.GetComponent<ZeldaCharacterData>() != null && mover.GetComponent<ZeldaCharacterData>().IsGhostLike;
@@ -3507,6 +3554,9 @@ public sealed class RuntimeSkillSlots : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.LeftControl) && observedEquipment != null && character != null &&
             PlayerGrowthAttributes.IsHolyShieldSkill(observedEquipment.GetEquippedSkill(SelectedIndex)))
             HolyShieldRuntime.TryUse(character);
+        if (Input.GetKeyDown(KeyCode.LeftControl) && observedEquipment != null && character != null &&
+            PlayerGrowthAttributes.IsSilenceOathSkill(observedEquipment.GetEquippedSkill(SelectedIndex)))
+            SilenceOathRuntime.TryUse(character);
         if (Input.GetKeyDown(KeyCode.LeftControl) && observedEquipment != null && character != null &&
             PlayerGrowthAttributes.IsMeteorShowerSkill(observedEquipment.GetEquippedSkill(SelectedIndex)))
             MeteorShowerSkillRuntime.TryUse(character);

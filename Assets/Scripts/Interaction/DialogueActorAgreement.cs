@@ -52,6 +52,8 @@ public sealed class DialogueActorAgreement : DialogueOptionEffect
         var journal = QuestJournalManager.GetOrCreate();
         journal.RememberDialogueActor(memoryId,
             player.GetComponent<ZeldaCharacterData>().IndividualAccessId);
+        if (memoryId == QuestJournalManager.SandwormMortarAgreementId)
+            journal.UnlockEngineerSafePassword();
         if (!string.IsNullOrWhiteSpace(questOnAccept.entryId))
             journal.AddOrUpdateEntry(questOnAccept.entryId, questOnAccept.title, questOnAccept.details,
                 gameObject.scene.name, questOnAccept.parentEntryId);

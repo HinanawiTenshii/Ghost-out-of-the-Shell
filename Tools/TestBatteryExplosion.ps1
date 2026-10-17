@@ -28,7 +28,7 @@ public class PickupItemBase:UnityEngine.Component {
  protected virtual bool ApplyUseEffect(ZeldaCharacterData user)=>true;public virtual bool TryPickUp()=>true;
  protected void Destroy(UnityEngine.GameObject go){go.destroyed=true;}
 }
-public class PlacedBomb:UnityEngine.Component {public int detonations;public System.Action onDetonate;public void DetonateImmediately(){detonations++;onDetonate?.Invoke();}}
+public class PlacedBomb:UnityEngine.Component {public UnityEngine.Transform ExplosionSource;public int detonations;public System.Action onDetonate;public void DetonateImmediately(){detonations++;onDetonate?.Invoke();}}
 public class BombPickupItem {
  public int calls,power;public UnityEngine.Vector3 position;public ZeldaCharacterData owner;public PlacedBomb last;
  public PlacedBomb CreateConfiguredPlacedBomb(UnityEngine.Vector3 p,ZeldaCharacterData user,int? attackPowerOverride=null){calls++;position=p;owner=user;power=attackPowerOverride??3;return last=new PlacedBomb();}

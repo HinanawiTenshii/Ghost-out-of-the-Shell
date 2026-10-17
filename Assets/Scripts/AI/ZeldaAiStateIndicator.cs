@@ -17,6 +17,7 @@ public class ZeldaAiStateIndicator : MonoBehaviour
     private Sprite indicatorSprite;
     private bool componentVisible = true;
     private static Sprite stunnedSprite;
+    private static Sprite investigationReactionSprite;
     private bool showingStun;
     private float stunBlinkTime;
 
@@ -46,7 +47,8 @@ public class ZeldaAiStateIndicator : MonoBehaviour
         ZeldaAiState state,
         float suspicionProgress,
         float warningProgress,
-        bool showHostileIndicator)
+        bool showHostileIndicator,
+        bool showInvestigationReaction = false)
     {
         EnsureVisual();
 
@@ -57,6 +59,13 @@ public class ZeldaAiStateIndicator : MonoBehaviour
             spriteRenderer.color = Color.white;
         }
         showingStun = nextShowingStun;
+        if (componentVisible && state == ZeldaAiState.Search && showInvestigationReaction)
+        {
+            spriteRenderer.enabled = true;
+            spriteRenderer.color = Color.white;
+            spriteRenderer.sprite = GetInvestigationReactionSprite();
+            return;
+        }
         if (!componentVisible || state == ZeldaAiState.Idle || state == ZeldaAiState.Search ||
             state == ZeldaAiState.Recovery ||
             (state == ZeldaAiState.Hostile && !showHostileIndicator))
@@ -98,6 +107,21 @@ public class ZeldaAiStateIndicator : MonoBehaviour
         }
 
         indicatorTexture.Apply(false);
+    }
+
+    private static Sprite GetInvestigationReactionSprite()
+    {
+        if (investigationReactionSprite != null) return investigationReactionSprite;
+        var texture = new Texture2D(TextureWidth, TextureHeight, TextureFormat.RGBA32, false);
+        texture.name = "AI Attraction White Exclamation";
+        texture.filterMode = FilterMode.Point;
+        texture.wrapMode = TextureWrapMode.Clamp;
+        for (int y = 0; y < TextureHeight; y++) for (int x = 0; x < TextureWidth; x++)
+            texture.SetPixel(x, y, IsExclamationMarkPixel(x, y) ? Color.white : Color.clear);
+        texture.Apply(false, true);
+        investigationReactionSprite = Sprite.Create(texture, new Rect(0, 0, TextureWidth, TextureHeight), new Vector2(.5f, 0f), 10f);
+        investigationReactionSprite.name = "AI Attraction Reaction";
+        return investigationReactionSprite;
     }
 
     private static Sprite GetStunnedSprite()

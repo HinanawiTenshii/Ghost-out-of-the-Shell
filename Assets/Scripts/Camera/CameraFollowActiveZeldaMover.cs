@@ -139,6 +139,18 @@ public class CameraFollowActiveZeldaMover : MonoBehaviour
         soulTransferFollow = true;
     }
 
+    /// <summary>Teleport while the screen is covered; do not pan through the intervening level.</summary>
+    public void SnapToControlledCharacter()
+    {
+        var target = ZeldaRuntimeRegistry.GetControlledMover();
+        if (target == null) return;
+        ClearShake();
+        currentTarget = target;
+        followVelocity = Vector3.zero;
+        soulTransferFollow = false;
+        transform.position = target.transform.position + followOffset;
+    }
+
     private void FollowActiveTarget()
     {
         ZeldaFourWayMover target = FindActiveControlledCharacter();

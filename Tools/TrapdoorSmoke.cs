@@ -12,12 +12,12 @@ public static class TrapdoorSmoke
     {
         try
         {
-            var prefab=AssetDatabase.LoadAssetAtPath<GameObject>("Assets/TestPrefabs/Trapdoor.prefab");
+            var prefab=AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Decorations/Trapdoor.prefab");
             Check(prefab!=null,"Prefab imports");
             var obj=UnityEngine.Object.Instantiate(prefab);
             var decoration=obj.GetComponent<GeometricFortressInteriorDecoration>();
             Check(decoration!=null,"Shared visual component bound");
-            Check(obj.GetComponents<MonoBehaviour>().Length==1,"No gameplay scripts");
+            Check(obj.GetComponents<MonoBehaviour>().Length==2 && obj.GetComponent<TrapdoorInteraction>()!=null,"Interaction attached without changing visual geometry");
             Check(!obj.GetComponent<BoxCollider2D>().enabled,"Flat ground asset has no active collision");
             Check(obj.GetComponentsInChildren<MeshRenderer>().Length==1,"One combined renderer");
             var renderer=obj.GetComponentInChildren<MeshRenderer>();

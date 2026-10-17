@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Level1-Garden
   m_EditorClassIdentifier: Assembly-CSharp::RuntimeMiniMapSceneData
   schemaVersion: 6
-  sourceRevision: 4f093bf7e536197947a59dee5822b966
+  sourceRevision: 5ad6b6d4a7129fcab49313ffef9975e6
   sceneName: Level1-Garden
   displayName: "\u57CE\u5821\u5EAD\u9662"
   blockPaths:

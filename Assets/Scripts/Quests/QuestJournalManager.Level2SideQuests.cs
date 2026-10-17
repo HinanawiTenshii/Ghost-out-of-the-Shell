@@ -1,7 +1,17 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 public sealed partial class QuestJournalManager
 {
+    public const string KnightAmbushQuestId = "level2.knight_ambush";
+    public const string KnightAmbushQuestTitle = "不必刺杀骑士团长";
+    public const string KnightAmbushObjective = "制造一场足够规模的袭击";
+    public const string KnightAmbushDescription = "骑士长由三名圣骑士护送。小队遭到严重袭击后，会护送骑士长撤往安全屋，并在入口驻守。可以利用加农炮或自动人偶制造袭击，再设法进入安全屋附身骑士长，利用他的权限接近试炼证明。骑士长必须存活。\n\n当前目标：制造一场足够规模的袭击。";
+    public const string FortressProofQuestId = "level2.fortress_proof";
+    public const string FortressProofQuestTitle = "失窃的证明";
+    public const string FortressProofObjective = "进入骑士长房间并取得试炼证明";
+    public const string FortressProofDescription = "要塞情报记载，要塞二楼守卫者骑士长的房间内存放着一份试炼证明。该区域需要极高权限，周围有严密守卫。进入房间后可直接取得证明。\n\n当前目标：进入守卫者骑士长的房间，取得试炼证明。";
+
     public const string CounterfeitQuestId = "level2_counterfeit_trial_proof";
     public const string CounterfeitQuestTitle = "假作真时";
     public const string CounterfeitMerchantTarget = "level2.counterfeit.gem_merchant";
@@ -15,6 +25,45 @@ public sealed partial class QuestJournalManager
     private int summoningLitCrystals;
     private bool summoningPerformed;
     public int SummoningLitCrystals => summoningLitCrystals;
+    private readonly HashSet<string> summoningTargetIds = new HashSet<string>();
+    private readonly HashSet<string> summoningConsumedIds = new HashSet<string>();
+    private bool summoningTargetsConfigured;
+
+    public void RecordSummoningMarkerBindings(IReadOnlyList<CharacterPersistentIdentity> identities, IEnumerable<string> consumed)
+    {
+        summoningTargetsConfigured = true;
+        summoningTargetIds.Clear(); summoningConsumedIds.Clear();
+        if (identities != null) foreach (var identity in identities)
+            if (identity != null) summoningTargetIds.Add(identity.StableId);
+        if (consumed != null) foreach (string id in consumed) summoningConsumedIds.Add(id);
+    }
+
+    private void RestoreSummoningMarkerState(List<string> targets, List<string> consumed)
+    {
+        summoningTargetsConfigured = targets != null && targets.Count > 0;
+        summoningTargetIds.Clear(); summoningConsumedIds.Clear();
+        if (targets != null) summoningTargetIds.UnionWith(targets);
+        if (consumed != null) summoningConsumedIds.UnionWith(consumed);
+    }
+
+    public bool IsTrackedSummoningTarget(string identity)
+    {
+        if (TrackedEntryId != SummoningQuestId || !ContainsEntry(SummoningQuestId) ||
+            IsEntryCompleted(SummoningQuestId) || string.IsNullOrEmpty(identity)) return false;
+        if (!summoningTargetsConfigured)
+        {
+            // Legacy saves may resume on a floor without the ritual circle.
+            // Resolve the original six identity assets once; live circle bindings
+            // replace these defaults and are carried by subsequent saves.
+            summoningTargetsConfigured = true;
+            foreach (string name in new[] { "GrandPriest", "GoldenSoldier", "GreatChief", "MatserEngineer", "StrangeMerchant", "TheSwordsMan" })
+            {
+                var asset = Resources.Load<CharacterPersistentIdentity>("ItemIdentity/" + name);
+                if (asset != null) summoningTargetIds.Add(asset.StableId);
+            }
+        }
+        return summoningTargetIds.Contains(identity) && !summoningConsumedIds.Contains(identity);
+    }
 
     // Milestones use the same saved journal evidence as the other item quests.
     // Do not poll the scene or search for individual coins while tracking this task.

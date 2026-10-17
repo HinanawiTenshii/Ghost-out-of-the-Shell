@@ -125,6 +125,7 @@ public class ZeldaAttackHitbox : MonoBehaviour
     private readonly HashSet<PlacedBomb> detonatedPlacedBombs =
         new HashSet<PlacedBomb>();
     private List<Collider2D> circularOverlaps;
+    private HashSet<Collider2D> exposedBombTargets;
 
     private SpriteRenderer spriteRenderer;
     private BoxCollider2D triggerCollider;
@@ -251,6 +252,7 @@ public class ZeldaAttackHitbox : MonoBehaviour
         // The guard also prevents a later activation from resetting configured geometry.
         if (!initialized) Awake();
         ResetPotionSweepVisual();
+        exposedBombTargets = null;
         lifetime = attackLifetime;
         attackPower = inheritedAttackPower;
         visualTint = tint;
@@ -375,6 +377,69 @@ public class ZeldaAttackHitbox : MonoBehaviour
         TryDamage(other);
     }
 
+    /// <summary>Freeze a bomb's exposed contacts before any damage disables a door/glass collider.
+    /// The short-lived trigger still delivers damage once, but cannot reach through a barrier that
+    /// this same blast just destroyed. Other weapons/area skills do not opt into this policy.</summary>
+    public void CaptureBombBlastTargets(Transform explosiveSource)
+    {
+        Physics2D.SyncTransforms();
+        Vector2 origin = transform.position;
+        var scene = gameObject.scene;
+        var overlaps = new List<Collider2D>(32);
+        var originOverlaps = new List<Collider2D>(8);
+        var hits = new List<RaycastHit2D>(16);
+        var solidFilter = new ContactFilter2D { useTriggers = false };
+        Physics2D.OverlapBox(origin, configuredMaximumScale, transform.eulerAngles.z,
+            new ContactFilter2D { useTriggers = true }, overlaps);
+        // Explicitly test enclosing solids too, independent of queriesStartInColliders.
+        Physics2D.OverlapPoint(origin, solidFilter, originOverlaps);
+        exposedBombTargets = new HashSet<Collider2D>();
+        foreach (var candidate in overlaps)
+        {
+            if (candidate == null || ZeldaRuntimeRegistry.GetGameplayScene(candidate.gameObject) != scene) continue;
+            Transform damageRoot = GetBombDamageRoot(candidate);
+            if (damageRoot == null) continue;
+            bool blocked = false;
+            foreach (var solid in originOverlaps)
+                if (IsBombBarrier(solid, candidate, damageRoot, explosiveSource)) { blocked = true; break; }
+            if (blocked) continue;
+
+            // Aim at the actual collider's near surface, not a sprite pivot or a far-side center.
+            // This lets a large door/glass pane take damage on its exposed face.
+            Vector2 contact = candidate.ClosestPoint(origin);
+            if ((contact - origin).sqrMagnitude > .000001f)
+            {
+                hits.Clear();
+                Physics2D.Linecast(origin, contact, solidFilter, hits);
+                foreach (var hit in hits)
+                    if (IsBombBarrier(hit.collider, candidate, damageRoot, explosiveSource)) { blocked = true; break; }
+            }
+            if (!blocked) exposedBombTargets.Add(candidate);
+        }
+    }
+
+    private bool IsBombBarrier(Collider2D solid, Collider2D target, Transform damageRoot, Transform source)
+    {
+        if (solid == null || solid == target || solid.isTrigger ||
+            ZeldaRuntimeRegistry.GetGameplayScene(solid.gameObject) != gameObject.scene ||
+            solid.transform.IsChildOf(damageRoot) ||
+            (source != null && solid.transform.IsChildOf(source))) return false;
+        // Bodies do not shield nearby characters; only solid scenery blocks a bomb.
+        return solid.GetComponentInParent<ZeldaCharacterData>() == null;
+    }
+
+    private static Transform GetBombDamageRoot(Collider2D collider)
+    {
+        Component target = collider.GetComponentInParent<ZeldaCharacterData>();
+        if (target == null) target = collider.GetComponentInParent<DoorData>();
+        if (target == null) target = collider.GetComponentInParent<PickupItemBase>();
+        if (target == null) target = collider.GetComponentInParent<BatterySocket>();
+        if (target == null) target = collider.GetComponentInParent<EnergyCrystal>();
+        if (target == null) target = collider.GetComponentInParent<PlacedBomb>();
+        if (target == null) target = collider.GetComponentInParent<DollAttackShake>();
+        return target != null ? target.transform : null;
+    }
+
     /// <summary>An instantaneous circular pulse using the same damage rules as weapons/bombs.
     /// The resolver stays inactive: neither a physical collider nor a persistent hit trigger is enabled.</summary>
     public static void ApplyCircularPulse(Vector2 center, float radius, int power, ZeldaCharacterData attacker)
@@ -441,6 +506,7 @@ public class ZeldaAttackHitbox : MonoBehaviour
 
     private void TryDamage(Collider2D other)
     {
+        if (other == null || (exposedBombTargets != null && !exposedBombTargets.Contains(other))) return;
         if (CancelForStunnedOwner()) return;
         ZeldaCharacterData target = other.GetComponentInParent<ZeldaCharacterData>();
         if ((potionMeleeSweep || visualShape == ZeldaAttackVisualShape.DirectionalWave) &&

@@ -70,6 +70,8 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
     public bool TryGetQuestTarget(string questId, out Vector2 position)
     {
         questId = QuestJournalManager.ResolveQuestMapTargetId(questId);
+        if (questId == QuestJournalManager.KnightAmbushQuestId &&
+            KnightCaptainAmbush.TryGetMarker(geometrySceneName, out position)) return true;
         for (int index = 0; index < questTargets.Count; index++)
         {
             if (questTargets[index].questId == questId)
@@ -88,6 +90,9 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
         positions.Clear();
         questId = QuestJournalManager.ResolveQuestMapTargetId(questId);
         if (string.IsNullOrEmpty(questId)) return;
+        if (questId == QuestJournalManager.KnightAmbushQuestId &&
+            KnightCaptainAmbush.TryGetMarker(geometrySceneName, out var captainPosition))
+        { positions.Add(captainPosition); return; }
         for (int i = 0; i < questTargets.Count; i++)
             if (questTargets[i].questId == questId && !positions.Contains(questTargets[i].position))
                 positions.Add(questTargets[i].position);
@@ -687,11 +692,12 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
             "level0.escape_prison", "level0.obtain_gate_key", "level1.escape_castle",
             "level1.craft_super_bomb", "level1.open_monster_cage", "level1.find_castle_gate_key",
             QuestJournalManager.Level2CityTargetId, QuestJournalManager.Level2TrialTargetId,
-            QuestJournalManager.Level2SandwormQuestId,
+            QuestJournalManager.Level2SandwormQuestId, QuestJournalManager.FortressProofQuestId, QuestJournalManager.KnightAmbushQuestId,
             QuestJournalManager.SandwormToolsTarget, QuestJournalManager.SandwormMerchantTarget,
             QuestJournalManager.SandwormDeviceTarget, QuestJournalManager.SandwormMortarTarget,
             QuestJournalManager.CounterfeitMerchantTarget, QuestJournalManager.CounterfeitCraftsmanTarget,
             QuestJournalManager.SummoningCircleTarget,
+            QuestJournalManager.GravekeeperCrystalTarget, QuestJournalManager.GravekeeperReturnTarget,
             QuestJournalManager.ArenaRegistrarTarget, QuestJournalManager.ArenaEntranceTarget, QuestJournalManager.ArenaCombatTarget
         };
         foreach (string id in ids)
@@ -718,6 +724,26 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
             return false;
         questId = QuestJournalManager.ResolveQuestMapTargetId(questId);
         if (string.IsNullOrEmpty(questId)) return false;
+        if (questId == QuestJournalManager.GravekeeperCrystalTarget)
+            return TryGetQuestComponentPosition<GraveyardCrystalQuestTarget>(scene, out position);
+        if (questId == QuestJournalManager.GravekeeperReturnTarget)
+        {
+            foreach (var dialogue in FindObjectsOfType<DialogueQuestProgression>(true))
+                if (dialogue.gameObject.scene == scene && dialogue.QuestId == QuestJournalManager.GravekeeperQuestId)
+                { position = dialogue.transform.position; return true; }
+            return false;
+        }
+        if (questId == QuestJournalManager.KnightAmbushQuestId)
+        {
+            if (KnightCaptainAmbush.TryGetMarker(scene.name, out position)) return true;
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+                foreach (var director in FindObjectsOfType<KnightCaptainAmbush>(true))
+                    if (director.gameObject.scene == scene && director.captain != null)
+                    { position = director.captain.transform.position; return true; }
+#endif
+            return false;
+        }
         if (questId == QuestJournalManager.ArenaInjectionQuestId)
         {
             foreach (var injector in FindObjectsOfType<LiquidInjector>(true))
@@ -750,6 +776,13 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
         }
         if (questId == QuestJournalManager.SandwormToolsTarget)
             return TryGetQuestComponentPosition<SynthesisToolsPickupItem>(scene, out position);
+        if (questId == QuestJournalManager.FortressProofQuestId)
+        {
+            foreach (var proof in FindObjectsOfType<TrialProofPickupItem>(true))
+                if (proof.gameObject.scene == scene && proof.CompletesQuestOnPickup(questId))
+                { position = proof.transform.position; return true; }
+            return false;
+        }
         if (questId == QuestJournalManager.SandwormDeviceTarget)
             return TryGetQuestComponentPosition<MortarControlDevicePickupItem>(scene, out position);
         if (questId == QuestJournalManager.SandwormMortarTarget)

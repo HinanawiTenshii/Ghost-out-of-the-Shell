@@ -18,6 +18,13 @@ public sealed partial class QuestJournalManager
     // Resolving an ID each display update is allocation-free and never scans a scene.
     public static string ResolveQuestMapTargetId(string questId)
     {
+        if (questId == KnownPasswordsEntryId) return null;
+        if (questId == GravekeeperQuestId)
+        {
+            var journal = Instance;
+            if (journal == null || !journal.ContainsEntry(questId) || journal.IsEntryCompleted(questId)) return null;
+            return journal.GraveyardCrystalDestroyed ? GravekeeperReturnTarget : GravekeeperCrystalTarget;
+        }
         if (questId == ArenaInjectionQuestId)
         {
             var journal = Instance;

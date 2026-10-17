@@ -43,7 +43,9 @@ public class PickupItemBase : MonoBehaviour, ISerializationCallbackReceiver
     private bool pickupInProgress;
     private bool pickupCommitted;
     protected bool IsPickupBeingConsumed => pickupInProgress || pickupCommitted;
-    internal bool IsAvailableForShop => !IsPickupBeingConsumed && CanAttemptPickup;
+    internal bool IsAvailableForShop => EntersInventoryOnPickup && !IsPickupBeingConsumed && CanAttemptPickup;
+    // One-shot relics use the same interaction/description UI but grant a body ability directly.
+    public virtual bool EntersInventoryOnPickup => true;
 
     // Shop transactions own inventory mutation and deliberately avoid opening a
     // second modal item-description window on top of the conversation.
@@ -62,6 +64,17 @@ public class PickupItemBase : MonoBehaviour, ISerializationCallbackReceiver
     }
 
     public string ItemId => itemId;
+    // Read-only map lookup: use this scene instance's authored completion event
+    // rather than matching every item with the same item ID or prefab name.
+    internal bool CompletesQuestOnPickup(string questId)
+    {
+        if (string.IsNullOrWhiteSpace(questId) || journalChangesOnPickup == null) return false;
+        foreach (var change in journalChangesOnPickup)
+            if (change.operation == QuestJournalEventOperation.Complete &&
+                string.Equals(change.entryId, questId, StringComparison.Ordinal)) return true;
+        return false;
+    }
+
     public string ItemName => itemName;
     public string ItemDescription => FormatDescriptionWithRequirements(itemDescription);
     protected virtual int DefaultRequiredUseSkill => 0;

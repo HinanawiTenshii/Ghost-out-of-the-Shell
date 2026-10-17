@@ -31,6 +31,8 @@ public static class CharacterSkillBuffs
         var growth = PlayerGrowthAttributes.Instance;
         switch (kind)
         {
+            case BuffDurationIcon.SilenceOath:
+                return SilenceOathRuntime.TryGetBuff(character, out state);
             case BuffDurationIcon.HolyShield:
                 if (character.HolyShieldCharges <= 0) return false;
                 state = new SkillBuffState(HolyShieldCharacterSkillData.GetIcon(character.HolyShieldPreservesCharges

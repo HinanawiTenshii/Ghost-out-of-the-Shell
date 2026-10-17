@@ -4,7 +4,7 @@ using UnityEngine;
 
 /// <summary>Replace the ordinary AI with this script; only the initial leader assigns members.</summary>
 [AddComponentMenu("Characters/AI/Squad Patrol Character AI")]
-public sealed class SquadPatrolCharacterAi : ZeldaPatrolCharacterAi
+public sealed partial class SquadPatrolCharacterAi : ZeldaPatrolCharacterAi
 {
     [Header("Patrol Squad / 巡逻队")]
     [Tooltip("仅默认队长填写。最多四名队员，数组顺序也是队长递补顺序；队员也需使用本脚本。")]
@@ -36,11 +36,14 @@ public sealed class SquadPatrolCharacterAi : ZeldaPatrolCharacterAi
     public bool IsSquadLeader => CurrentLeader == this;
     public bool IsUsingSingleFile => group != null && Time.time < group.compactUntil;
     public Vector2 CurrentFormationTarget => followTarget;
+    public IReadOnlyList<SquadPatrolCharacterAi> SquadMembers
+    { get { EnsureGroup(); return group != null ? group.roster : null; } }
     protected override int MinimumPermissionViolationDifference => civilianPermissionRules ? 2 : 1;
 
     // Retain the small squad while any member is on camera, not forever merely
     // because another member happens to remain active after a streaming pass.
     public override bool RequiresVisionStreamingRetention =>
+        HasAmbushOrders && Ambush.NeedsRetention(this) ||
         base.RequiresVisionStreamingRetention || (group != null && group.IsNearCamera());
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -80,7 +83,7 @@ public sealed class SquadPatrolCharacterAi : ZeldaPatrolCharacterAi
         if (CharacterDialogueWindow.BlocksInput || Time.deltaTime <= 0f) return;
         EnsureGroup(); group?.Refresh();
         base.Update();
-        if (group != null && group.leader == this && CurrentState == ZeldaAiState.Idle)
+        if (!HasAmbushOrders && group != null && group.leader == this && CurrentState == ZeldaAiState.Idle)
             CapturePatrolRoute(group.route);
     }
     protected override void OnDestroy()
@@ -125,6 +128,7 @@ public sealed class SquadPatrolCharacterAi : ZeldaPatrolCharacterAi
     {
         get
         {
+            if (HasAmbushOrders) return Ambush.OrderedSpeedMultiplier;
             if (CurrentState != ZeldaAiState.Idle || group == null) return base.AiMovementSpeedMultiplier;
             if (group.leader != this) return followSpeed;
             float multiplier = base.AiMovementSpeedMultiplier;
@@ -144,6 +148,7 @@ public sealed class SquadPatrolCharacterAi : ZeldaPatrolCharacterAi
 
     protected override void TickIdle(float deltaTime)
     {
+        if (HasAmbushOrders) { TickAmbushPost(); return; }
         EnsureGroup(); group?.Refresh();
         var leader = group?.leader;
         if (leader == null) { AiMoveDirection = Vector2.zero; return; }
@@ -215,7 +220,7 @@ public sealed class SquadPatrolCharacterAi : ZeldaPatrolCharacterAi
         checkedFollowLeader = null;
         nextFollowClearanceCheck = 0f;
         base.OnStateEntered(previousState, newState);
-        if (newState == ZeldaAiState.Idle && group != null && group.leader == this)
+        if (!HasAmbushOrders && newState == ZeldaAiState.Idle && group != null && group.leader == this)
             ApplyPatrolRoute(group.route);
     }
 

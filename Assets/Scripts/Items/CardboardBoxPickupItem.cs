@@ -480,6 +480,7 @@ public sealed class CardboardBoxPickupItem : PickupItemBase, IConsumableExplosiv
         {
             PlacedBomb releasedBomb = armedBomb.CreateConfiguredPlacedBomb(
                 transform.position, ResolveStoredBombOwner());
+            releasedBomb.ExplosionSource = transform;
             // The owner may be gone or in another scene; the explosion belongs
             // to the container's scene, never the owner's current scene.
             UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(

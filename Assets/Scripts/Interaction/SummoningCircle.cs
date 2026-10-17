@@ -125,6 +125,8 @@ public sealed class SummoningCircle : MonoBehaviour
         consumed.Add(identity); // Reserve both the identity and destination before another death callback.
         absorptions.Add(new Absorption { crystal = crystal, seed = UnityEngine.Random.Range(1, 1000000), origin = origin,
             bodySize = size, elapsed = 0, duration = absorptionDuration });
+        if (journalQuestId == QuestJournalManager.SummoningQuestId)
+            QuestJournalManager.GetOrCreate().RecordSummoningMarkerBindings(boundCharacters, consumed);
     }
     private void Update()
     {
@@ -159,7 +161,10 @@ public sealed class SummoningCircle : MonoBehaviour
     private void ReportQuestProgress()
     {
         if (journalQuestId == QuestJournalManager.SummoningQuestId)
+        {
+            QuestJournalManager.GetOrCreate().RecordSummoningMarkerBindings(boundCharacters, consumed);
             QuestJournalManager.GetOrCreate().RecordSummoningQuestProgress(LitCrystalCount, summoned);
+        }
     }
 
     public static void ReportLoadedQuestProgress()

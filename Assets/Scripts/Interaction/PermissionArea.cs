@@ -17,6 +17,15 @@ public class PermissionArea : MonoBehaviour
     public Vector2 AreaSize => areaSize;
     public Bounds AreaBounds => GetAreaCollider().bounds;
 
+    public void SetPermissionLevel(int level)
+    {
+        if (permissionLevel == Mathf.Max(0, level)) return;
+        permissionLevel = Mathf.Max(0, level);
+        // Existing permission displays cache registry changes.
+        if (Application.isPlaying && isActiveAndEnabled)
+        { ZeldaRuntimeRegistry.Unregister(this); ZeldaRuntimeRegistry.Register(this); }
+    }
+
     private void Awake()
     {
         if (Application.isPlaying)

@@ -24,11 +24,11 @@ public sealed partial class SceneTravelStateManager
             foreach (var c in components)
             {
                 if (c is Renderer || c is Collider2D || c is GrowthCollectible) tracked = true;
-                if (c is ZeldaCharacterData || c is ZeldaFourWayMover || c is ZeldaCharacterAiBase || c is DoorHingeInteraction ||
+                if (c is ZeldaCharacterData || c is ZeldaFourWayMover || c is ZeldaCharacterAiBase || c is DoorHingeInteraction || c is TrapdoorInteraction ||
                     c is DoorData || c is LeverData || c is BatterySocket || c is EnergyCrystal || c is SummoningCircle || c is ElectricGatePillar ||
                     c is TemporaryCharacterEffectArea || c is LiquidInjector || c is AlchemyCauldron || c is SpecificItemSubmissionStation ||
                     c is PickupItemBase || c is DocumentReader || c is TimedLeverObjectToggle || c is PlacedBomb ||
-                    c is ClockworkPuppetRuntime || c is BuilderTurretBond || c is TrialProofAltar || c is FortressMortarRemoteInstallation || c is ArenaChallengeController)
+                    c is ClockworkPuppetRuntime || c is BuilderTurretBond || c is TrialProofAltar || c is FortressMortarRemoteInstallation || c is ArenaChallengeController || c is KnightCaptainAmbush)
                 { tracked = true; transformOnly = false; }
             }
         }

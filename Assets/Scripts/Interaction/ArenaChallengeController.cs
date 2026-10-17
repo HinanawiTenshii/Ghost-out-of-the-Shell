@@ -377,11 +377,25 @@ public sealed class ArenaChallengeController : MonoBehaviour
     }
     private bool IsCombatant(ZeldaCharacterData data) => data != null &&
         (data.IndividualAccessId == state.entrantId || Array.IndexOf(guardians, data) >= 0);
+    private bool IsRegistrar(ZeldaCharacterData data) => data != null && registrar != null &&
+        data.gameObject == registrar.gameObject;
+    public static bool ProtectsRegistrar(ZeldaCharacterData data)
+    {
+        // Derive protection from the restored challenge state, never a saved
+        // character flag that could remain enabled after leaving the challenge.
+        foreach (var arena in active)
+            if (arena != null && arena.ChallengeActive && arena.IsRegistrar(data)) return true;
+        return false;
+    }
     public static int LimitDamage(ZeldaCharacterData data, int damage)
     {
         foreach (var arena in active)
         {
-            if (arena == null || !arena.ChallengeActive || !arena.IsCombatant(data)) continue;
+            if (arena == null || !arena.ChallengeActive) continue;
+            // Keep the withdrawal dialogue available, including preparation,
+            // result pauses and the covered return to the original layout.
+            if (arena.IsRegistrar(data)) return 0;
+            if (!arena.IsCombatant(data)) continue;
             if (arena.state.phase == Phase.Result || arena.state.pendingLayout || arena.transitionRequested) return 0;
             if (data != null && data != (arena.entrant != null ? arena.entrant.CharacterData : null) && !arena.CombatRunning) return 0;
             return Mathf.Min(damage, Mathf.Max(0, data.CurrentHealth - 1));

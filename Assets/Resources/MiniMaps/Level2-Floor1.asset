@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Level2-Floor1
   m_EditorClassIdentifier: 
   schemaVersion: 6
-  sourceRevision: 55946f5b2390476545745038f897c5be
+  sourceRevision: 2828cfbd0acd3a9700f09478b9dfbed7
   sceneName: Level2-Floor1
   displayName: "Level2 \xB7 \u4E00\u5C42"
   blockPaths:
@@ -29,18 +29,6 @@ MonoBehaviour:
     - {x: 19.505608, y: 42.74}
     - {x: 19.505608, y: 41.74}
     - {x: 18.505608, y: 41.74}
-  - points:
-    - {x: -98.048035, y: 72.21738}
-    - {x: -98.048035, y: 73.21738}
-    - {x: -92.048035, y: 73.21738}
-    - {x: -92.048035, y: 72.21738}
-    - {x: -98.048035, y: 72.21738}
-  - points:
-    - {x: -104.048035, y: 72.21738}
-    - {x: -104.048035, y: 73.21738}
-    - {x: -98.048035, y: 73.21738}
-    - {x: -98.048035, y: 72.21738}
-    - {x: -104.048035, y: 72.21738}
   - points:
     - {x: -24.679468, y: 24.877499}
     - {x: -24.679468, y: 25.302502}
@@ -1654,11 +1642,11 @@ MonoBehaviour:
     - {x: 37.46703, y: 22.303114}
     - {x: 36.96703, y: 22.303114}
   - points:
-    - {x: 63.837032, y: -31.178698}
-    - {x: 63.837032, y: -22.424677}
-    - {x: 64.33703, y: -22.424677}
-    - {x: 64.33703, y: -31.178698}
-    - {x: 63.837032, y: -31.178698}
+    - {x: 63.837032, y: -31.1785}
+    - {x: 63.837032, y: -20.292875}
+    - {x: 64.33703, y: -20.292875}
+    - {x: 64.33703, y: -31.1785}
+    - {x: 63.837032, y: -31.1785}
   - points:
     - {x: -38.342968, y: 4.979098}
     - {x: -38.342968, y: 6.065128}
@@ -2421,6 +2409,9 @@ MonoBehaviour:
   - position: {x: -97.85, y: 77.26}
     targetSceneName: LastScene
     preservesSceneState: 0
+  - position: {x: -76.16528, y: -25.25785}
+    targetSceneName: Level2-Floor2
+    preservesSceneState: 1
   - position: {x: -0.6800003, y: 11.010002}
     targetSceneName: Level2-Floor-1
     preservesSceneState: 1

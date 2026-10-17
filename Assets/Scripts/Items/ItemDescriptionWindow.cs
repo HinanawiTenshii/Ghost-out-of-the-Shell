@@ -114,7 +114,15 @@ public sealed class ItemDescriptionWindow : MonoBehaviour
             return;
 
         PersistentInventory inventory = PersistentInventory.Instance;
-        PersistentInventory.Slot slot = FindPickedItemSlot(inventory, pickedItem);
+        PersistentInventory.Slot slot;
+        if (pickedItem.EntersInventoryOnPickup) slot = FindPickedItemSlot(inventory, pickedItem);
+        else
+        {
+            // Display-only record: never insert the consumed relic into the inventory.
+            slot = new PersistentInventory.Slot();
+            slot.Set(pickedItem.ItemId, 1, "", pickedItem.ItemName, pickedItem.ItemDescription,
+                pickedItem.ItemVisual != null, pickedItem.ItemVisual != null ? pickedItem.ItemVisual.DisplayColor : Color.white);
+        }
         // Register discovery only after the matching inventory slot has been
         // found and its window has actually opened. During a scene restore the
         // selected-slot index can briefly still refer to the previous scene;
@@ -194,6 +202,8 @@ public sealed class ItemDescriptionWindow : MonoBehaviour
         PickupItemBase itemPrefab = inventory != null
             ? inventory.ResolveItemPrefab(slot.ItemId)
             : null;
+        if (itemPrefab == null)
+            itemPrefab = System.Array.Find(SaveGameCatalog.LoadPickupTemplates(), item => item != null && item.ItemId == slot.ItemId);
         PickupItemVisualBase visual = itemPrefab != null ? itemPrefab.ItemVisual : null;
 
         EnsureWindowBuilt();

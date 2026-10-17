@@ -86,6 +86,17 @@ public sealed class TabJournalMenuController : MonoBehaviour
     private Image questTrackButtonBackground;
     private Text questTrackButtonText;
     private readonly List<Image> questEntryBackgrounds = new List<Image>();
+    private sealed class QuestRowView
+    {
+        public RectTransform rect;
+        public Image background;
+        public Button button;
+        public Text label;
+        public Image[] edges;
+        public GameObject foldout, objectiveCorners;
+    }
+    private readonly Dictionary<string, QuestRowView> questRows = new Dictionary<string, QuestRowView>();
+    private readonly HashSet<string> visibleQuestRows = new HashSet<string>();
     private readonly List<Image> levelObjectiveCorners = new List<Image>();
     private string selectedQuestId;
     private readonly List<QuestJournalManager.HierarchyRow> questHierarchyRows = new List<QuestJournalManager.HierarchyRow>();
@@ -169,6 +180,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
         }
     }
 
+    private float nextCaptainMapRefresh;
     private void LateUpdate()
     {
         if (IsOpen)
@@ -185,6 +197,12 @@ public sealed class TabJournalMenuController : MonoBehaviour
 
             if (selectedTab == 0)
             {
+                if (questJournal != null && questJournal.TrackedEntryId == QuestJournalManager.KnightAmbushQuestId &&
+                    Time.unscaledTime >= nextCaptainMapRefresh)
+                {
+                    nextCaptainMapRefresh = Time.unscaledTime + .7f;
+                    ApplyTrackedQuestTargetToMap(selectedMapSceneName, miniMapGraphic, false);
+                }
                 UpdateMiniMapTransitionPositions();
                 UpdateMiniMapPointPositions();
             }
@@ -438,6 +456,8 @@ public sealed class TabJournalMenuController : MonoBehaviour
             art.builderLevel = skill.id == "builder_2" ? 2 : 1;
             art.holyLight = PlayerGrowthAttributes.IsHolyLightSkill(skill.id);
             art.holyShield = PlayerGrowthAttributes.IsHolyShieldSkill(skill.id);
+            art.silenceOath = PlayerGrowthAttributes.IsSilenceOathSkill(skill.id);
+            art.silenceOathRank = skill.id == "silence_oath_3" ? 2 : skill.id == "silence_oath_2" ? 1 : 0;
             art.meteorShower = PlayerGrowthAttributes.IsMeteorShowerSkill(skill.id);
             art.meteorShowerRank = skill.id == "meteor_shower_3" ? 2 : skill.id == "meteor_shower_2" ? 1 : 0;
             art.holyShieldRank = skill.id == "holy_shield_3" ? 2 : skill.id == "holy_shield_2" ? 1 : 0;
@@ -1618,15 +1638,9 @@ public sealed class TabJournalMenuController : MonoBehaviour
             questJournal = QuestJournalManager.GetOrCreate();
         }
 
-        for (int index = questListContent.childCount - 1; index >= 0; index--)
-        {
-            GameObject oldRow = questListContent.GetChild(index).gameObject;
-            oldRow.SetActive(false); // Deferred destruction must not leave invisible raycast blockers.
-            Destroy(oldRow);
-        }
-        questEntryBackgrounds.Clear();
-        levelObjectiveCorners.Clear();
-
+        // Keep row instances, hover/press state and font meshes across selection
+        // and folding. Only newly accepted quests need new UI objects.
+        visibleQuestRows.Clear();
         questJournal.GetVisibleHierarchy(questHierarchyRows);
         QuestJournalManager.Entry selectedEntry = null;
         // If the selected child was folded, show its closest visible ancestor.
@@ -1645,7 +1659,8 @@ public sealed class TabJournalMenuController : MonoBehaviour
         if (selectedEntry != null) selectedQuestId = selectedEntry.Id;
 
         float rowTop = 0f;
-        Color selectedColor = Color.Lerp(TabBlue, GhostBlue, 0.48f);
+        Color trackedColor = Color.Lerp(TabBlue, GhostBlue, 0.48f);
+        Color trackedAccent = Color.Lerp(GhostBlue, ZeldaUiPalette.Primary, 0.55f);
         for (int index = 0; index < questHierarchyRows.Count; index++)
         {
             var hierarchy = questHierarchyRows[index];
@@ -1655,13 +1670,15 @@ public sealed class TabJournalMenuController : MonoBehaviour
             float indent = Mathf.Min(hierarchy.depth, 5) * 18f;
             if (index > 0) rowTop += child ? 4f : 12f;
             bool selected = entry.Id == selectedQuestId;
+            bool tracked = entry.Id == questJournal.TrackedEntryId && !questJournal.IsEntryCompleted(entry.Id);
+            Color rowColor = tracked ? trackedColor : TabBlue;
+            Color accentColor = tracked ? trackedAccent : GhostBlue;
             bool levelObjective = entry.IsLevelObjective;
-            GameObject rowObject = CreateUiObject(
-                "Quest " + entry.Id,
-                questListContent,
-                typeof(Image),
-                typeof(Button));
-            RectTransform rowRect = rowObject.GetComponent<RectTransform>();
+            visibleQuestRows.Add(entry.Id);
+            QuestRowView view = GetOrCreateQuestRow(entry.Id);
+            RectTransform rowRect = view.rect;
+            if (!rowRect.gameObject.activeSelf) rowRect.gameObject.SetActive(true);
+            if (rowRect.GetSiblingIndex() != index) rowRect.SetSiblingIndex(index);
             rowRect.anchorMin = new Vector2(0f, 1f);
             rowRect.anchorMax = new Vector2(1f, 1f);
             rowRect.pivot = new Vector2(0.5f, 1f);
@@ -1669,44 +1686,49 @@ public sealed class TabJournalMenuController : MonoBehaviour
             rowRect.sizeDelta = new Vector2(-4f - indent, rowHeight);
             rowTop += rowHeight;
 
-            Image background = rowObject.GetComponent<Image>();
-            background.color = selected ? selectedColor : TabBlue;
-            questEntryBackgrounds.Add(background);
-            CreateBorder(rowRect, GhostBlue, 2f, out _);
-            if (levelObjective)
-                CreateLevelObjectiveCorners(rowRect);
+            float thickness = selected ? 5f : 2f;
+            foreach (Image edge in view.edges) edge.color = accentColor;
+            view.edges[0].rectTransform.offsetMin = new Vector2(0f, -thickness);
+            view.edges[1].rectTransform.offsetMax = new Vector2(0f, thickness);
+            view.edges[2].rectTransform.offsetMax = new Vector2(thickness, 0f);
+            view.edges[3].rectTransform.offsetMin = new Vector2(-thickness, 0f);
+            if (levelObjective && view.objectiveCorners == null)
+            {
+                view.objectiveCorners = CreateUiObject("Level Objective Corners", rowRect);
+                Stretch(view.objectiveCorners.GetComponent<RectTransform>());
+                CreateLevelObjectiveCorners(view.objectiveCorners.GetComponent<RectTransform>());
+            }
+            if (view.objectiveCorners != null && view.objectiveCorners.activeSelf != levelObjective)
+                view.objectiveCorners.SetActive(levelObjective);
 
-            Button button = rowObject.GetComponent<Button>();
-            button.targetGraphic = background;
-            button.transition = Selectable.Transition.ColorTint;
+            Button button = view.button;
             ColorBlock colors = button.colors;
-            colors.normalColor = selected ? selectedColor : TabBlue;
-            colors.highlightedColor = Color.Lerp(colors.normalColor, GhostBlue, 0.30f);
+            colors.normalColor = rowColor;
+            colors.highlightedColor = Color.Lerp(rowColor, GhostBlue, 0.22f);
             colors.pressedColor = Color.Lerp(colors.highlightedColor, Color.white, 0.12f);
-            colors.selectedColor = colors.highlightedColor;
+            colors.selectedColor = colors.normalColor;
             colors.colorMultiplier = 1f;
             colors.fadeDuration = 0.08f;
             button.colors = colors;
-            string entryId = entry.Id;
-            button.onClick.AddListener(() => SelectQuestEntry(entryId));
-
-            GameObject labelObject = CreateUiObject("Title", rowRect, typeof(Text));
-            RectTransform labelRect = labelObject.GetComponent<RectTransform>();
-            Stretch(labelRect);
+            RectTransform labelRect = view.label.rectTransform;
             labelRect.offsetMin = new Vector2(hierarchy.hasChildren ? 46f : 12f, 5f);
             labelRect.offsetMax = new Vector2(-12f, -5f);
-            Text label = labelObject.GetComponent<Text>();
+            Text label = view.label;
             label.text = entry.Title;
-            label.font = menuFont;
-            label.fontSize = 20;
-            label.fontStyle = FontStyle.Normal;
-            label.alignment = TextAnchor.MiddleCenter;
-            label.horizontalOverflow = HorizontalWrapMode.Wrap;
-            label.verticalOverflow = VerticalWrapMode.Truncate;
-            label.color = GhostBlue;
-            label.raycastTarget = false;
-            if (hierarchy.hasChildren) CreateQuestFoldout(rowRect, entryId);
+            label.color = accentColor;
+            if (hierarchy.hasChildren && view.foldout == null)
+                view.foldout = CreateQuestFoldout(rowRect, entry.Id);
+            if (view.foldout != null)
+            {
+                if (view.foldout.activeSelf != hierarchy.hasChildren) view.foldout.SetActive(hierarchy.hasChildren);
+                var glyph = view.foldout.GetComponent<QuestFoldoutGraphic>();
+                bool expanded = !questJournal.IsEntryCollapsed(entry.Id);
+                if (glyph.expanded != expanded) { glyph.expanded = expanded; glyph.SetVerticesDirty(); }
+            }
         }
+        foreach (var pair in questRows)
+            if (!visibleQuestRows.Contains(pair.Key) && pair.Value.rect.gameObject.activeSelf)
+                pair.Value.rect.gameObject.SetActive(false);
         questListContent.sizeDelta = new Vector2(0f, rowTop);
 
         if (selectedEntry == null)
@@ -1725,7 +1747,29 @@ public sealed class TabJournalMenuController : MonoBehaviour
         UpdateQuestTrackButton(selectedEntry);
     }
 
-    private void CreateQuestFoldout(RectTransform row, string entryId)
+    private QuestRowView GetOrCreateQuestRow(string entryId)
+    {
+        if (questRows.TryGetValue(entryId, out var view)) return view;
+        var root = CreateUiObject("Quest " + entryId, questListContent, typeof(Image), typeof(Button));
+        view = new QuestRowView { rect = root.GetComponent<RectTransform>(), background = root.GetComponent<Image>(), button = root.GetComponent<Button>() };
+        view.background.color = Color.white; // Neutral mask: Button supplies the actual tint.
+        questEntryBackgrounds.Add(view.background);
+        CreateBorder(view.rect, GhostBlue, 2f, out _);
+        view.edges = new[] { view.rect.Find("Top").GetComponent<Image>(), view.rect.Find("Bottom").GetComponent<Image>(),
+            view.rect.Find("Left").GetComponent<Image>(), view.rect.Find("Right").GetComponent<Image>() };
+        view.button.targetGraphic = view.background;
+        view.button.transition = Selectable.Transition.ColorTint;
+        view.button.onClick.AddListener(() => SelectQuestEntry(entryId));
+        view.label = CreateUiObject("Title", view.rect, typeof(Text)).GetComponent<Text>();
+        Stretch(view.label.rectTransform);
+        view.label.font = menuFont; view.label.fontSize = 20; view.label.alignment = TextAnchor.MiddleCenter;
+        view.label.horizontalOverflow = HorizontalWrapMode.Wrap; view.label.verticalOverflow = VerticalWrapMode.Truncate;
+        view.label.raycastTarget = false;
+        questRows.Add(entryId, view);
+        return view;
+    }
+
+    private GameObject CreateQuestFoldout(RectTransform row, string entryId)
     {
         var root = CreateUiObject("Foldout " + entryId, row, typeof(QuestFoldoutGraphic), typeof(Button));
         var rect = root.GetComponent<RectTransform>();
@@ -1747,6 +1791,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
         colors.fadeDuration = .06f;
         button.colors = colors;
         button.onClick.AddListener(() => questJournal.SetEntryCollapsed(entryId, !questJournal.IsEntryCollapsed(entryId)));
+        return root;
     }
 
     private void CreateLevelObjectiveCorners(RectTransform row)
@@ -1822,7 +1867,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
             return;
         }
 
-        bool hasEntry = selectedEntry != null;
+        bool hasEntry = selectedEntry != null && selectedEntry.CanTrack;
         bool isCompleted = hasEntry && questJournal != null &&
             questJournal.IsEntryCompleted(selectedEntry.Id);
         bool isTracked = hasEntry && questJournal != null &&
@@ -2179,7 +2224,7 @@ public sealed class CharacterSkillPage : MonoBehaviour
         viewport.gameObject.AddComponent<RectMask2D>();
         tree = viewport.gameObject.AddComponent<SkillTreeScroll>();
         tree.viewport = viewport;
-        tree.content = Rect("Tree Content", viewport, Vector2.zero, new Vector2(1200, 600));
+        tree.content = Rect("Tree Content", viewport, Vector2.zero, new Vector2(1200, 1040));
         tree.movementType = ScrollRect.MovementType.Clamped;
         tree.inertia = false;
         foreach (var skill in PlayerGrowthAttributes.Skills)
@@ -2245,6 +2290,8 @@ public sealed class CharacterSkillPage : MonoBehaviour
             skillArt.builderLevel = skill.id == "builder_2" ? 2 : 1;
             skillArt.holyLight = PlayerGrowthAttributes.IsHolyLightSkill(skill.id);
             skillArt.holyShield = PlayerGrowthAttributes.IsHolyShieldSkill(skill.id);
+            skillArt.silenceOath = PlayerGrowthAttributes.IsSilenceOathSkill(skill.id);
+            skillArt.silenceOathRank = skill.id == "silence_oath_3" ? 2 : skill.id == "silence_oath_2" ? 1 : 0;
             skillArt.meteorShower = PlayerGrowthAttributes.IsMeteorShowerSkill(skill.id);
             skillArt.meteorShowerRank = skill.id == "meteor_shower_3" ? 2 : skill.id == "meteor_shower_2" ? 1 : 0;
             skillArt.holyShieldRank = skill.id == "holy_shield_3" ? 2 : skill.id == "holy_shield_2" ? 1 : 0;
@@ -2321,7 +2368,9 @@ public sealed class CharacterSkillPage : MonoBehaviour
         bool discovered = selected != null && growth != null && growth.IsSkillDiscovered(selected);
         title.text = selected == null ? "" : discovered ? selected.title : "未解锁技能";
         titleDivider.SetActive(selected != null);
-        description.text = selected == null ? "" : discovered ? selected.description : "该技能需要附身特定角色才能解锁";
+        description.text = selected == null ? "" : discovered ? selected.description :
+            PlayerGrowthAttributes.IsSilenceOathSkill(selected.id) ? "拾取封言圣印后，可在此学习缄口之誓。只有尚无角色能力的角色能够承接圣印。" :
+            "该技能需要附身特定角色才能解锁";
         bool upgraded = selected != null && growth != null && growth.HasSkill(selected.id);
         bool prerequisiteMet = selected != null && growth != null && growth.HasSkillPrerequisite(selected);
         upgradeButton.interactable = selected != null && discovered && !selected.locked && !upgraded && prerequisiteMet && growth.CollectibleCount >= selected.cost;
@@ -2393,7 +2442,7 @@ public sealed class CharacterSkillPage : MonoBehaviour
 public sealed class SkillTreeScroll : ScrollRect
 {
     private const float MinimumScale = 0.5f;
-    private Vector2 baseContentSize = new Vector2(1200, 600);
+    private Vector2 baseContentSize = new Vector2(1200, 1040);
     public float Scale { get; private set; } = 1f;
     public void CenterTreeLayout()
     {
@@ -2533,6 +2582,7 @@ public sealed class SkillPageArt : MaskableGraphic
         if (PlayerGrowthAttributes.IsBuilderSkill(id)) return BuilderCharacterSkillData.GetIcon(id == "builder_2" ? 2 : 1);
         if (PlayerGrowthAttributes.IsHolyLightSkill(id)) return HolyLightCharacterSkillData.GetIcon(id == "holy_light_3" ? 2 : id == "holy_light_2" ? 1 : 0);
         if (PlayerGrowthAttributes.IsHolyShieldSkill(id)) return HolyShieldCharacterSkillData.GetIcon(id == "holy_shield_3" ? 2 : id == "holy_shield_2" ? 1 : 0);
+        if (PlayerGrowthAttributes.IsSilenceOathSkill(id)) return SilenceOathRuntime.GetIcon(id == "silence_oath_3" ? 2 : id == "silence_oath_2" ? 1 : 0);
         if (PlayerGrowthAttributes.IsMeteorShowerSkill(id)) return MeteorShowerCharacterSkillData.GetIcon(id == "meteor_shower_3" ? 2 : id == "meteor_shower_2" ? 1 : 0);
         if (PlayerGrowthAttributes.IsRoyalCommandSkill(id)) return ZeldaCharacterData.GetRankedCommandIcon(id == "royal_command_2" ? 2 : 1);
         if (PlayerGrowthAttributes.IsFearRoarSkill(id)) return FearRoarArea.GetRankedIcon(id == "fear_roar_3" ? 3 : id == "fear_roar_2" ? 2 : 1);
@@ -2581,6 +2631,8 @@ public sealed class SkillPageArt : MaskableGraphic
     public int holyLightRank;
     public bool holyShield;
     public int holyShieldRank;
+    public bool silenceOath;
+    public int silenceOathRank;
     public bool meteorShower;
     public int meteorShowerRank;
     public int builderLevel = 1;
@@ -2602,6 +2654,7 @@ public sealed class SkillPageArt : MaskableGraphic
     public bool royalCommand;
     public int royalCommandLevel = 1;
     public override Texture mainTexture => !locked && meteorShower ? MeteorShowerCharacterSkillData.GetIcon(meteorShowerRank).texture :
+        !locked && silenceOath ? SilenceOathRuntime.GetIcon(silenceOathRank).texture :
         !locked && holyShield ? HolyShieldCharacterSkillData.GetIcon(holyShieldRank).texture :
         !locked && holyLight ? HolyLightCharacterSkillData.GetIcon(holyLightRank).texture :
         !locked && builder ? BuilderCharacterSkillData.GetIcon(builderLevel).texture :
@@ -2672,7 +2725,7 @@ public sealed class SkillPageArt : MaskableGraphic
             Quad(vh, Vector2.zero, new Vector2(30.8f, 17.6f), ZeldaUiPalette.Ghost);
             return;
         }
-        if ((combatExpertise || strengthBonus || fearRoar || royalCommand || builder || holyLight || holyShield || meteorShower || skillBonus) && !locked)
+        if ((combatExpertise || strengthBonus || fearRoar || royalCommand || builder || holyLight || holyShield || silenceOath || meteorShower || skillBonus) && !locked)
         {
             Color swordTint = ZeldaUiPalette.Ghost;
             Rect r = strengthBonus ? new Rect(-17f, -17f, 34f, 34f) : rectTransform.rect;

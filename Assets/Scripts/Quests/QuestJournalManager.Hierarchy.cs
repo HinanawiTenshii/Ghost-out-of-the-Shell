@@ -25,6 +25,7 @@ public sealed partial class QuestJournalManager
         entryId = entryId.Trim();
         if (parentEntries.TryGetValue(entryId, out string parent)) return parent;
         if (entryId == ArenaInjectionQuestId) return ArenaQuestId;
+        if (entryId == KnightAmbushQuestId) return FortressProofQuestId;
         // Stable IDs also gate item/scene events before the NPC's scene is loaded.
         return entryId == SandwormBaitQuestId || entryId == SandwormMortarQuestId
             ? Level2SandwormQuestId : string.Empty;
@@ -93,6 +94,9 @@ public sealed partial class QuestJournalManager
             siblings.Add(entry);
         }
         AppendHierarchyRows(string.Empty, 0, children, rows, new HashSet<string>());
+        // Informational row only: excluded from quest completion, automatic tracking and notifications.
+        Entry passwords = GetKnownPasswordsEntry();
+        if (passwords != null) rows.Add(new HierarchyRow { entry = passwords });
     }
 
     private void AppendHierarchyRows(string parent, int depth, Dictionary<string, List<Entry>> children,

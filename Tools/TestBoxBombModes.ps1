@@ -46,6 +46,7 @@ public class BombPickupItem:PickupItemBase {
  }
 }
 public class PlacedBomb {
+ public Transform ExplosionSource;
  public float fuseDuration,elapsed,position;
  public int detonations;
  public ZeldaCharacterData owner;

@@ -24,6 +24,8 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
         public float ghostFormRemaining;
         public float ghostFormDuration;
         public bool hasCharacterSkillState;
+        // Relic inheritance belongs to this body, not the shared skill tree or prefab.
+        public string grantedCharacterSkillId;
         // Legacy save fields only; these are not editable character configuration.
         public bool combatExpertiseSkill;
         public bool commandSkill;
@@ -222,10 +224,29 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
     private NativeCharacterSkillData nativeSkillData;
     private NativeCharacterSkillData NativeSkillData => nativeSkillData != null
         ? nativeSkillData : (nativeSkillData = GetComponent<NativeCharacterSkillData>());
+    private string grantedCharacterSkillId;
+    private bool HasGrantedSilenceOath => grantedCharacterSkillId == SilenceOathRuntime.SkillId;
 
-    public virtual string CharacterSkillName => NativeSkillData != null ? NativeSkillData.SkillName : string.Empty;
-    public virtual Sprite CharacterSkillIcon => NativeSkillData != null ? NativeSkillData.Icon : null;
-    public virtual string NativeCharacterSkillId => NativeSkillData != null ? NativeSkillData.SkillId : null;
+    public virtual string CharacterSkillName => HasGrantedSilenceOath ? SilenceOathRuntime.SkillName : NativeSkillData != null ? NativeSkillData.SkillName : string.Empty;
+    public virtual Sprite CharacterSkillIcon => HasGrantedSilenceOath ? SilenceOathRuntime.GetIcon(0) : NativeSkillData != null ? NativeSkillData.Icon : null;
+    public virtual string NativeCharacterSkillId => HasGrantedSilenceOath ? SilenceOathRuntime.SkillId : NativeSkillData != null ? NativeSkillData.SkillId : null;
+    public bool CanReceiveRelicCharacterSkill => !IsDead && !IsGhostLike && string.IsNullOrEmpty(NativeCharacterSkillId);
+
+    public bool TryGrantRelicCharacterSkill(string skillId)
+    {
+        if (skillId != SilenceOathRuntime.SkillId || !CanReceiveRelicCharacterSkill) return false;
+        grantedCharacterSkillId = skillId;
+        ValuesChanged?.Invoke();
+        return true;
+    }
+
+    private void RestoreGrantedCharacterSkill(string skillId)
+    {
+        grantedCharacterSkillId = null;
+        // Old saves remove a later acquisition. Authored abilities are never replaced.
+        if (skillId == SilenceOathRuntime.SkillId && string.IsNullOrEmpty(NativeCharacterSkillId))
+            grantedCharacterSkillId = skillId;
+    }
     public bool TryUseRoyalCommand()
     {
         var growth = PlayerGrowthAttributes.Instance;
@@ -259,7 +280,8 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
         if (camera != null) camera.GetComponent<CameraFollowActiveZeldaMover>()?.PlayShake(1f, shakeStrength, shakeFrequency);
         return true;
     }
-    public virtual bool TryUseCharacterSkill() => NativeSkillData != null && NativeSkillData.TryUse(this);
+    public virtual bool TryUseCharacterSkill() => HasGrantedSilenceOath
+        ? SilenceOathRuntime.TryUse(this) : NativeSkillData != null && NativeSkillData.TryUse(this);
     public bool TryUseCombatExpertise()
     {
         bool learned = PlayerGrowthAttributes.Instance != null && PlayerGrowthAttributes.Instance.HasSkill("combat_expertise");
@@ -294,6 +316,8 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
     public event Action ValuesChanged;
     // Bound protectors receive direct evidence even for anonymous gunfire, before death.
     public event Action<ZeldaCharacterData> AttackedBy;
+    // Post-mitigation HP loss only: shields, healing and UI value updates are not damage.
+    public event Action<ZeldaCharacterData, int, ZeldaCharacterData> HealthDamaged;
     public static event Action<ZeldaCharacterData> AnyCharacterDied;
 
     /// <summary>Plays this character's configured attack sound.</summary>
@@ -396,6 +420,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
             ghostFormRemaining = IsGhostForm ? GhostForm.Remaining : 0f,
             ghostFormDuration = IsGhostForm ? GhostForm.TotalDuration : 0f,
             hasCharacterSkillState = true,
+            grantedCharacterSkillId = grantedCharacterSkillId,
             combatExpertiseSkill = NativeCharacterSkillId == "combat_expertise",
             commandSkill = NativeCharacterSkillId == "royal_command",
             combatExpertiseRemaining = combatExpertiseRemaining,
@@ -408,6 +433,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
 
     public virtual void ApplyRuntimeState(RuntimeState state)
     {
+        RestoreGrantedCharacterSkill(state.grantedCharacterSkillId);
         if (!string.IsNullOrEmpty(state.individualAccessId)) individualAccessId = state.individualAccessId;
         restoredPersistentCharacterId = state.persistentCharacterId;
         if (!string.IsNullOrEmpty(state.summonedPrefabName))
@@ -444,6 +470,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
         combatExpertiseRemaining = !isDead
             ? Mathf.Clamp(state.combatExpertiseRemaining, 0f, CombatExpertiseDuration) : 0f;
         GhostFormRuntime.Restore(this, state.ghostFormRemaining, state.ghostFormDuration);
+        SummoningQuestCharacterMarker.EnsureFor(this);
         ValuesChanged?.Invoke();
     }
 
@@ -478,6 +505,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
     {
         currentHealth = health;
         EnsureAttributeWindow();
+        SummoningQuestCharacterMarker.EnsureFor(this);
     }
 
     protected virtual void Update()
@@ -593,7 +621,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
 
     public void KillFromPotion()
     {
-        if (isDead) return;
+        if (isDead || ArenaChallengeController.ProtectsRegistrar(this)) return;
         controlTransferDamage = 0;
         Die();
     }
@@ -613,7 +641,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
 
     public void DieFromSoulDetonation()
     {
-        if (isDead) return;
+        if (isDead || ArenaChallengeController.ProtectsRegistrar(this)) return;
         controlTransferDamage = Mathf.Max(0, currentHealth);
         soulDetonationDeath = true;
         currentHealth = 0;
@@ -680,6 +708,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
 
         resolvedDamage = ArenaChallengeController.LimitDamage(this, resolvedDamage);
         int echoHealth = 0;
+        int healthBeforeDamage = currentHealth;
         bool echoed = resolvedDamage >= currentHealth && CharacterPotionBuffs.TryPreventLethalDamage(this, out echoHealth);
         currentHealth = echoed ? echoHealth : Mathf.Max(0, currentHealth - resolvedDamage);
         ArenaChallengeController.HealthChanged(this);
@@ -695,6 +724,8 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
         Debug.Log($"{name} took {resolvedDamage} damage. Current health: {currentHealth}/{health}", this);
         NotifyAttackEvidence(attacker, evidenceSource, shared);
 
+        int lostHealth = Mathf.Max(0, healthBeforeDamage - currentHealth);
+        if (lostHealth > 0) HealthDamaged?.Invoke(this, lostHealth, attacker != null ? attacker : evidenceSource);
         if (!shared) DominoSkillRuntime.ShareDamage(this, resolvedDamage, attacker);
         if (currentHealth == 0)
         {

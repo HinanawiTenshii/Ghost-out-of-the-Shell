@@ -5,7 +5,7 @@ public partial class ZeldaCharacterAiBase
     private SharedPlayerHostilityTimer sharedPlayerTimer;
     private bool sharedReturnAfterStun;
     internal void SetSharedPlayerTimer(SharedPlayerHostilityTimer timer) => sharedPlayerTimer = timer;
-    private bool UsesSharedPlayerTimer => ArenaChallengeController.ForAi(this) == null && !(this is AutomatonCharacterAi) && !(this is SkeletonCharacterAi) && !(this is TurretCharacterAi);
+    protected virtual bool UsesSharedPlayerTimer => !IsSilenceOathIncidentPrivate && ArenaChallengeController.ForAi(this) == null && !(this is AutomatonCharacterAi) && !(this is SkeletonCharacterAi) && !(this is TurretCharacterAi);
     private void SyncSharedPlayerIncident()
     {
         var player = ZeldaRuntimeRegistry.GetControlledMover();

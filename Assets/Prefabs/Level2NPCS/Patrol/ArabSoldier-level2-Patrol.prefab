@@ -150,7 +150,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   health: 7
   skillValue: 3
-  permissionLevel: 1
+  permissionLevel: 2
   possessionEnergy: 3
   possessionCost: 2
   moveSpeed: 5.5
@@ -181,6 +181,7 @@ MonoBehaviour:
   deathSoundMaxDistance: 16
   attributeWindowOffset: {x: 0, y: -0.25}
   attributeWindowScale: 2.2
+  persistentIdentity: {fileID: 0}
   attackPower: 2
   attackPrefab: {fileID: 100000, guid: c7a3afec32db4e4d83d29bb18d2f601c, type: 3}
   attackDuration: 0.25
@@ -278,13 +279,15 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   collisionSkinWidth: 0.01
+  independentHostileDuration: 9
+  independentSearchDuration: 12
   searchRadius: 1.8
   searchWaypointTolerance: 0.15
   searchWaypointChangeInterval: 1.2
   searchWaypointObstacleClearance: 0.45
   searchWaypointSamplingAttempts: 12
-  investigationDuration: 3
-  investigationWaypointPauseDuration: 0.65
+  investigationDuration: 16
+  investigationWaypointPauseDuration: 3.5
   investigationTargetRelocationRadius: 1.5
   investigationRelocationSamplesPerRing: 12
   investigationApproachMinimumRadius: 0.75
@@ -353,6 +356,7 @@ MonoBehaviour:
   pursuitLookAheadTime: 0.7
   pursuitOvertakeSpeedAdvantage: 0.15
   patrolSpeedMultiplier: 0.75
+  legacyPatrolPointCount: 4
   patrolPoint2Offset: {x: 2, y: 0}
   patrolPoint3Offset: {x: 2, y: 2}
   patrolPoint4Offset: {x: 0, y: 2}

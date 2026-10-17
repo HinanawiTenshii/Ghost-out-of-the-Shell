@@ -365,21 +365,27 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
         if (markerRoot != null)
             return;
 
-        EnsureSharedSprite();
-        markerRoot = new GameObject("Quest Journal Interaction Marker") { hideFlags = HideFlags.DontSave };
-        UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(markerRoot, gameObject.scene);
+        markerRoot = CreateWorldVisual(gameObject.scene);
         markerRoot.transform.position = GetAnchorPosition();
-        markerRoot.transform.rotation = Quaternion.Euler(0f, 0f, 45f);
-
-        CreateLayer("White Border", 0.46f, Color.white, WhiteBorderOrder);
-        CreateLayer("Dark Cyan Outer", 0.36f, new Color32(18, 92, 108, 255), DarkCyanOrder);
-        CreateLayer("Sky Blue Inner", 0.18f, new Color32(86, 190, 245, 255), SkyBlueOrder);
     }
 
-    private void CreateLayer(string layerName, float size, Color color, int order)
+    internal static GameObject CreateWorldVisual(UnityEngine.SceneManagement.Scene scene)
+    {
+        EnsureSharedSprite();
+        var root = new GameObject("Quest Journal Interaction Marker") { hideFlags = HideFlags.DontSave };
+        UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(root, scene);
+        root.transform.rotation = Quaternion.Euler(0f, 0f, 45f);
+
+        CreateLayer(root, "White Border", 0.46f, Color.white, WhiteBorderOrder);
+        CreateLayer(root, "Dark Cyan Outer", 0.36f, new Color32(18, 92, 108, 255), DarkCyanOrder);
+        CreateLayer(root, "Sky Blue Inner", 0.18f, new Color32(86, 190, 245, 255), SkyBlueOrder);
+        return root;
+    }
+
+    private static void CreateLayer(GameObject root, string layerName, float size, Color color, int order)
     {
         GameObject layer = new GameObject(layerName, typeof(SpriteRenderer));
-        layer.transform.SetParent(markerRoot.transform, false);
+        layer.transform.SetParent(root.transform, false);
         layer.transform.localScale = new Vector3(size, size, 1f);
 
         SpriteRenderer renderer = layer.GetComponent<SpriteRenderer>();

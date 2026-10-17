@@ -50,6 +50,9 @@ public sealed class PlayerGrowthAttributes : MonoBehaviour
     // Add future nodes and effects here; saved progress is keyed by stable IDs.
     public static readonly SkillDefinition[] Skills =
     {
+        new SkillDefinition { id = "silence_oath", title = "缄口之誓", description = "消耗两点E.G.O发动，约束面前三步内的一名角色，持续三十秒。目标仍会追击与攻击，但不会传递敌意，追击与搜索独立计时。不能对警告、敌对或搜索中的新目标施放；重复施放可刷新时间。", type = SkillType.Active, cost = 4, position = new Vector2(-540, -660), requiredPossessedSkillId = "silence_oath" },
+        new SkillDefinition { id = "silence_oath_2", title = "缄口之誓Ⅱ", description = "通过强化，使誓约伴随一次警戒。目标在效果期间进入警告、敌对或搜索时，誓约延续至其恢复平静或开始返回，最长九十秒。仍消耗两点E.G.O，其他角色亲眼发现你的行为时仍会正常反应。", type = SkillType.Active, cost = 2, position = new Vector2(-390, -660), parentId = "silence_oath", replacesSkillId = "silence_oath", requiredPossessedSkillId = "silence_oath" },
+        new SkillDefinition { id = "silence_oath_3", title = "缄口之誓Ⅲ", description = "进一步强化誓约，可同时约束两名角色。每次仍只对一个目标施放，消耗两点E.G.O，两道誓约独立计时。对已有目标再次施放会刷新时间，不会占用另一个名额。", type = SkillType.Active, cost = 2, position = new Vector2(-240, -660), parentId = "silence_oath_2", replacesSkillId = "silence_oath_2", requiredPossessedSkillId = "silence_oath" },
         new SkillDefinition { id = "meteor_shower", title = "流星群", description = "消耗五点E.G.O发动，唤来十二颗紫色陨石，依次轰击施放时视野内的位置。六颗锁定不同角色当时的位置，其余随机坠落；可见角色不足时，缺少的落点也会随机选取。每次落地造成半径四、攻击力十的爆炸，不会伤及施术者。", type = SkillType.Active, cost = 6, position = new Vector2(-90, -495), requiredPossessedSkillId = "meteor_shower" },
         new SkillDefinition { id = "meteor_shower_2", title = "流星群Ⅱ", description = "通过强化，牵引更多域外星石。锁定角色的陨石增加两颗，随机坠落的陨石增加一颗，共十五颗。每名角色最多被锁定一次，不足的数量改为随机落点。仍消耗五点E.G.O发动。", type = SkillType.Active, cost = 3, position = new Vector2(100, -495), parentId = "meteor_shower", replacesSkillId = "meteor_shower", requiredPossessedSkillId = "meteor_shower" },
         new SkillDefinition { id = "meteor_shower_3", title = "流星群Ⅲ", description = "进一步强化，使陨石落地后留下燃烧五秒的紫色魔焰。魔焰覆盖爆炸范围，每秒造成一次攻击力二的伤害，不会伤及施术者。仍召唤十五颗陨石，消耗五点E.G.O发动。", type = SkillType.Active, cost = 3, position = new Vector2(280, -495), parentId = "meteor_shower_2", replacesSkillId = "meteor_shower_2", requiredPossessedSkillId = "meteor_shower" },
@@ -87,6 +90,7 @@ public sealed class PlayerGrowthAttributes : MonoBehaviour
     public static bool IsBuilderSkill(string id) => id == "builder" || id == "builder_2";
     public static bool IsHolyLightSkill(string id) => id == "holy_light" || id == "holy_light_2" || id == "holy_light_3";
     public static bool IsHolyShieldSkill(string id) => id == "holy_shield" || id == "holy_shield_2" || id == "holy_shield_3";
+    public static bool IsSilenceOathSkill(string id) => id == "silence_oath" || id == "silence_oath_2" || id == "silence_oath_3";
     public static bool IsMeteorShowerSkill(string id) => id == "meteor_shower" || id == "meteor_shower_2" || id == "meteor_shower_3";
     public static bool IsFearRoarSkill(string id) => id == "fear_roar" || id == "fear_roar_2" || id == "fear_roar_3";
     public static bool IsRoyalCommandSkill(string id) => id == "royal_command" || id == "royal_command_2";
@@ -94,7 +98,8 @@ public sealed class PlayerGrowthAttributes : MonoBehaviour
     public int FearRoarLevel => HasSkill("fear_roar_3") ? 3 : HasSkill("fear_roar_2") ? 2 : HasSkill("fear_roar") ? 1 : 0;
     public bool HasSkill(string id) => unlockedSkills.Contains(id);
     public bool IsSkillDiscovered(SkillDefinition skill) => skill != null &&
-        (string.IsNullOrEmpty(skill.requiredPossessedSkillId) || HasSkill(skill.id) || discoveredCharacterSkills.Contains(skill.requiredPossessedSkillId));
+        (string.IsNullOrEmpty(skill.requiredPossessedSkillId) || HasSkill(skill.id) ||
+            HasSkill(skill.requiredPossessedSkillId) || discoveredCharacterSkills.Contains(skill.requiredPossessedSkillId));
 
     public void RecordPossessedCharacter(ZeldaCharacterData character)
     {

@@ -23,6 +23,7 @@ public sealed class EnergyCrystal : MonoBehaviour
     private EnergyCrystalVisual visual;
     private static readonly HashSet<EnergyCrystal> Instances = new HashSet<EnergyCrystal>();
     public bool IsBroken => broken;
+    public event Action<EnergyCrystal> StateChanged;
     public bool IsFunctional => !broken && enabled;
     public Vector2 ActivitySize
     {
@@ -135,6 +136,7 @@ public sealed class EnergyCrystal : MonoBehaviour
     {
         if (damage <= 0 || broken) return;
         broken = true; // Latch before effects or linked death callbacks.
+        StateChanged?.Invoke(this);
         // Detach the currently visible link particles before hiding the intact visuals.
         // The gameplay latch above already prevents resurrection/repeated damage callbacks.
         if (Visual != null) { Visual.PlayShatter(shatterSound, shatterVolume); Visual.SetBroken(true); }
@@ -145,6 +147,7 @@ public sealed class EnergyCrystal : MonoBehaviour
     public void ApplyRuntimeState(RuntimeState state)
     {
         broken = state.broken;
+        StateChanged?.Invoke(this);
         RefreshBindings();
         if (Visual != null) Visual.SetBroken(broken);
         if (broken) foreach (var skeleton in skeletons)

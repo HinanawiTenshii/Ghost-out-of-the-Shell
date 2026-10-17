@@ -277,8 +277,8 @@ MonoBehaviour:
   searchWaypointChangeInterval: 1.2
   searchWaypointObstacleClearance: 0.45
   searchWaypointSamplingAttempts: 12
-  investigationDuration: 3
-  investigationWaypointPauseDuration: 0.65
+  investigationDuration: 16
+  investigationWaypointPauseDuration: 3.5
   investigationTargetRelocationRadius: 1.5
   investigationRelocationSamplesPerRing: 12
   investigationApproachMinimumRadius: 0.75

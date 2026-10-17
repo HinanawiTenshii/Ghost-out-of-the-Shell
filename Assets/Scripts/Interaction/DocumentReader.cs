@@ -7,6 +7,8 @@ public sealed class DocumentReader : MonoBehaviour
 {
     [SerializeField, TextArea(6, 20), Tooltip("在游戏内阅读窗口中显示的文字，支持换行。可在预制体或场景实例上分别编辑。")]
     private string documentText = "在此输入文档内容。";
+    [SerializeField, Tooltip("读档时保留编辑器中的最新正文，不被旧快照的文本覆盖；不重置阅读或任务进度。")]
+    private bool keepAuthoredTextOnLoad;
     [SerializeField, Tooltip("公告牌等现有物件启用此项：保留原有外观与碰撞，并从碰撞边缘计算阅读距离；关闭时生成纸张文档。")]
     private bool preserveExistingAppearance;
     [SerializeField] private string interactionPrompt = "按[E]阅读文件";
@@ -67,6 +69,29 @@ public sealed class DocumentReader : MonoBehaviour
         RetroSceneLoadReveal.IsBlockingInput ||
         Time.frameCount <= inputBlockedThroughFrame;
     public string DocumentText => documentText;
+
+    internal void RestoreSavedFields(System.Collections.Generic.List<SavedScalarFields.Value> fields)
+    {
+        // Old saves also contain authored text/quest fields. If this readable has
+        // since gained a new quest, keep that authored entry and allow a reread;
+        // otherwise the old 'already read' flag could permanently hide it.
+        bool migrate = false;
+        if (addJournalEntryOnOpen && !string.IsNullOrEmpty(journalEntryId) && fields != null)
+            foreach (var value in fields)
+                if (value.declaringType == typeof(DocumentReader).FullName && value.name == "journalEntryId")
+                { migrate = value.text != journalEntryId; break; }
+        string id = journalEntryId, parent = journalParentEntryId, title = journalEntryTitle,
+            details = journalEntryDetails, text = documentText;
+        bool once = addJournalEntryOnlyOnce;
+        bool keepText = keepAuthoredTextOnLoad;
+        SavedScalarFields.Apply(this, fields);
+        keepAuthoredTextOnLoad = keepText;
+        if (keepText) documentText = text;
+        if (!migrate) return;
+        addJournalEntryOnOpen = true; addJournalEntryOnlyOnce = once;
+        journalEntryId = id; journalParentEntryId = parent; journalEntryTitle = title;
+        journalEntryDetails = details; documentText = text; journalEntryWasAdded = false;
+    }
 
     private void Awake()
     {
@@ -156,6 +181,15 @@ public sealed class DocumentReader : MonoBehaviour
         EnsureReadingCanvasOnTop();
         readingCanvasObject.SetActive(true);
         SetInteractionPromptVisible(false, null);
+        if (gameObject.scene.name == "Level2-Floor1" && name == "酒馆二楼密码")
+            QuestJournalManager.GetOrCreate().UnlockTavernRoomPassword();
+        if (gameObject.scene.name == "Level2-Floor-1")
+        {
+            if (name == "娱乐中心客房密码")
+                QuestJournalManager.GetOrCreate().UnlockEntertainmentRoomPassword();
+            else if (name == "仓库大门密码")
+                QuestJournalManager.GetOrCreate().UnlockWarehouseGatePassword();
+        }
         if (setTemporaryTaskOnOpen && (!setTaskOnlyOnce || !temporaryTaskWasSet))
         {
             ZeldaHealthHeartsUI ui = ZeldaHealthHeartsUI.Instance;
