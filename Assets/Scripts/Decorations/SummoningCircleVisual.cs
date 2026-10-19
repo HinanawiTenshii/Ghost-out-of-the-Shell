@@ -2,15 +2,22 @@ using UnityEngine;
 
 /// <summary>One batched mesh per visual layer, including all six streams of fragments.</summary>
 [ExecuteAlways, DisallowMultipleComponent]
-public sealed class SummoningCircleVisual : MonoBehaviour
+public sealed partial class SummoningCircleVisual : MonoBehaviour
 {
     [SerializeField, Min(.5f)] private float radius = 2.1f;
     [SerializeField] private Color runeColor = new Color(.62f, .25f, .86f, 1);
     [SerializeField] private int sortingOrder = -4;
     [SerializeField, Range(24, 120)] private int fragmentsPerCharacter = 72;
+    [Header("Activated Crystals / 已激活水晶")]
+    [SerializeField, Min(.5f), Tooltip("已激活水晶的呼吸周期（秒）。")]
+    private float crystalBreathDuration = 3f;
+    [SerializeField, Range(0f, 3f), Tooltip("水晶局部泛光强度，不影响献祭粒子与召唤闪光。")]
+    private float crystalGlowIntensity = 1.3f;
+    [SerializeField, Min(.5f), Tooltip("水晶外围柔光的直径（法阵局部单位）。")]
+    private float crystalHaloSize = 1.8f;
     private SummoningCircle circle;
-    private CrystalMesh seal, crystals, glow, fragments, fragmentGlow;
-    private Material solidMaterial, glowMaterial;
+    private CrystalMesh seal, crystals, glow, crystalBloom, fragments, fragmentGlow;
+    private Material solidMaterial, glowMaterial, crystalBloomMaterial;
     private Renderer visibilityProbe;
     private float nextFrame, pulseStarted = -100;
     private bool dirty;
@@ -23,8 +30,16 @@ public sealed class SummoningCircleVisual : MonoBehaviour
         return new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
     }
     public Vector3 CrystalPosition(int index) => transform.TransformPoint(Tip(index));
+    public Bounds SealBounds => visibilityProbe != null ? visibilityProbe.bounds : new Bounds(transform.position, Vector3.one * radius * 2.4f);
     private void OnEnable() { Build(); RefreshImmediately(); }
-    private void OnValidate() { radius = Mathf.Max(.5f, radius); dirty = true; }
+    private void OnValidate()
+    {
+        radius = Mathf.Max(.5f, radius);
+        crystalBreathDuration = Mathf.Max(.5f, crystalBreathDuration);
+        crystalGlowIntensity = Mathf.Clamp(crystalGlowIntensity, 0f, 3f);
+        crystalHaloSize = Mathf.Max(.5f, crystalHaloSize);
+        dirty = true;
+    }
     private void OnDisable() { if (!Application.isPlaying) Release(); }
     private void OnDestroy() => Release();
     private void Update()
@@ -36,7 +51,7 @@ public sealed class SummoningCircleVisual : MonoBehaviour
         nextFrame = time + 1f / 30;
         // Keep gameplay awake, but avoid rebuilding decorative meshes outside every camera.
         if (Application.isPlaying && visibilityProbe != null && !visibilityProbe.isVisible &&
-            (circle == null || circle.Absorptions.Count == 0) && time - pulseStarted > 1) return;
+            (circle == null || (circle.Absorptions.Count == 0 && !circle.IsRitualActive)) && time - pulseStarted > 1) return;
         DrawFrame(time);
     }
     public void RefreshImmediately()
@@ -54,12 +69,24 @@ public sealed class SummoningCircleVisual : MonoBehaviour
         var shader = Resources.Load<Shader>("ElectricGateGlow");
         glowMaterial = new Material(shader != null ? shader : Shader.Find("Sprites/Default")) { hideFlags = HideFlags.HideAndDontSave };
         glowMaterial.SetFloat("_Radial", 1); glowMaterial.SetFloat("_Intensity", 1.15f); glowMaterial.SetFloat("_CoreFraction", .24f);
+        // Separate local bloom material: changing crystal brightness must not
+        // amplify the offering particles or the one-shot summon pulse.
+        var bloomShader = Resources.Load<Shader>("WarmLightGlow");
+        crystalBloomMaterial = new Material(bloomShader != null ? bloomShader : Shader.Find("Sprites/Default"))
+            { hideFlags = HideFlags.HideAndDontSave };
+        crystalBloomMaterial.SetFloat("_RadialFalloff", 1);
+        crystalBloomMaterial.SetFloat("_Intensity", crystalGlowIntensity);
         seal = new CrystalMesh(transform, "Summoning Hexagram", solidMaterial, sortingOrder);
         visibilityProbe = seal.Root.GetComponent<Renderer>();
         glow = new CrystalMesh(transform, "Six Crystal Halos", glowMaterial, sortingOrder + 1);
         crystals = new CrystalMesh(transform, "Six Offering Crystals", solidMaterial, sortingOrder + 2);
+        // One shared mesh for all six gems; normal world sorting/vision masking
+        // still applies. No lights or full-screen bloom pass per crystal.
+        crystalBloom = new CrystalMesh(transform, "Activated Crystal Bloom", crystalBloomMaterial, sortingOrder + 3);
         fragments = new CrystalMesh(transform, "Offering Fragments", solidMaterial, sortingOrder + 3);
         fragmentGlow = new CrystalMesh(transform, "Offering Fragment Glow", glowMaterial, sortingOrder + 3);
+        ritualParticles = new CrystalMesh(transform, "Summoning Ritual Particles", solidMaterial, sortingOrder + 5);
+        ritualGlow = new CrystalMesh(transform, "Summoning Ritual Glow", glowMaterial, sortingOrder + 4);
 
         Ring(seal, radius * 1.14f, .15f, Stone);
         Ring(seal, radius * 1.19f, .035f, StoneEdge);
@@ -98,7 +125,8 @@ public sealed class SummoningCircleVisual : MonoBehaviour
     }
     private void DrawFrame(float time)
     {
-        crystals.Clear(); glow.Clear(); fragments.Clear(); fragmentGlow.Clear();
+        crystals.Clear(); glow.Clear(); crystalBloom.Clear(); fragments.Clear(); fragmentGlow.Clear();
+        crystalBloomMaterial.SetFloat("_Intensity", crystalGlowIntensity);
         for (int i = 0; i < 6; i++)
         {
             Vector2 p = Tip(i);
@@ -106,6 +134,13 @@ public sealed class SummoningCircleVisual : MonoBehaviour
             Color dark = lit ? new Color(.44f, .12f, .69f) : new Color(.22f, .17f, .29f);
             Color light = lit ? new Color(.82f, .53f, 1) : new Color(.43f, .34f, .52f);
             Color bright = lit ? new Color(.96f, .82f, 1) : new Color(.55f, .46f, .62f);
+            float breath = .5f + .5f * Mathf.Sin(time * (Mathf.PI * 2 / Mathf.Max(.5f, crystalBreathDuration)) + i * .35f);
+            if (lit)
+            {
+                // Keep the gem's facets legible at the bright end of the breath.
+                dark = Color.Lerp(dark, new Color(.59f, .23f, .83f), breath);
+                light = Color.Lerp(light, new Color(.9f, .67f, 1), breath);
+            }
             Vector2 top = p + Vector2.up * .34f, bottom = p - Vector2.up * .27f;
             Vector2 left = p + new Vector2(-.19f, .07f), right = p + new Vector2(.19f, .07f);
             crystals.Triangle(bottom, left, top, light);
@@ -113,13 +148,19 @@ public sealed class SummoningCircleVisual : MonoBehaviour
             crystals.Triangle(left, top, p + new Vector2(0, .09f), bright);
             if (lit)
             {
-                float breath = .5f + .5f * Mathf.Sin(time * 2.1f + i * .35f);
-                glow.Quad(p, Vector2.one * (1.4f + breath * .18f), new Color(.69f, .25f, 1, .48f + breath * .12f));
+                float size = crystalHaloSize * (.92f + breath * .16f);
+                float strength = .55f + breath * .45f;
+                // Wide diffuse bloom escapes the silhouette. The smaller lobe
+                // sits above the gem, so opaque facets cannot hide its light.
+                glow.Quad(p, Vector2.one * size, new Color(.69f, .25f, 1, strength * .62f * crystalGlowIntensity));
+                crystalBloom.Quad(p, Vector2.one * size, new Color(.63f, .2f, 1, strength * .18f));
+                crystalBloom.Quad(p + Vector2.up * .035f, new Vector2(.7f, .95f), new Color(.8f, .48f, 1, strength * .28f));
                 crystals.Quad(p, Vector2.one * .07f, new Color(.98f, .87f, 1));
             }
         }
         if (circle != null)
             foreach (var flight in circle.Absorptions) DrawFlight(flight);
+        DrawRitual();
         float pulse = (time - pulseStarted) / 1.0f;
         if (pulse >= 0 && pulse < 1)
         {
@@ -127,7 +168,7 @@ public sealed class SummoningCircleVisual : MonoBehaviour
             glow.Quad(Vector2.zero, Vector2.one * (1 + pulse * radius * 2), new Color(.77f, .4f, 1, alpha * .65f));
             Ring(crystals, Mathf.Max(.01f, radius * pulse), .05f * alpha, new Color(.88f, .65f, 1, alpha));
         }
-        crystals.Upload(); glow.Upload(); fragments.Upload(); fragmentGlow.Upload();
+        crystals.Upload(); glow.Upload(); crystalBloom.Upload(); fragments.Upload(); fragmentGlow.Upload();
     }
     private static float Random01(int seed, int i, uint salt)
     {
@@ -172,9 +213,10 @@ public sealed class SummoningCircleVisual : MonoBehaviour
     }
     private void Release()
     {
-        seal?.Dispose(); crystals?.Dispose(); glow?.Dispose(); fragments?.Dispose(); fragmentGlow?.Dispose();
-        seal = crystals = glow = fragments = fragmentGlow = null;
-        CrystalMesh.Release(solidMaterial); CrystalMesh.Release(glowMaterial);
-        solidMaterial = glowMaterial = null;
+        seal?.Dispose(); crystals?.Dispose(); glow?.Dispose(); crystalBloom?.Dispose(); fragments?.Dispose(); fragmentGlow?.Dispose();
+        ritualParticles?.Dispose(); ritualGlow?.Dispose(); ritualParticles = ritualGlow = null;
+        seal = crystals = glow = crystalBloom = fragments = fragmentGlow = null;
+        CrystalMesh.Release(solidMaterial); CrystalMesh.Release(glowMaterial); CrystalMesh.Release(crystalBloomMaterial);
+        solidMaterial = glowMaterial = crystalBloomMaterial = null;
     }
 }

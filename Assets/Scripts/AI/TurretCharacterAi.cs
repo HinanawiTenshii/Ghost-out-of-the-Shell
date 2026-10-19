@@ -70,7 +70,7 @@ public sealed class TurretCharacterAi : ZeldaCharacterAiBase
     protected override void OnValidate() { base.OnValidate(); ConfigureOmnidirectionalVision(); }
     protected override void Update()
     {
-        if (Time.deltaTime <= 0f) return;
+        if (RetroSceneLoadReveal.IsPreparingGameplay || Time.deltaTime <= 0f) return;
         Subscribe();
         base.Update();
     }

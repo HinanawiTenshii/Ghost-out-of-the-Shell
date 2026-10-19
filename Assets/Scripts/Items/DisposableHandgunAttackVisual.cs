@@ -77,7 +77,11 @@ public sealed class DisposableHandgunAttackVisual : MonoBehaviour
         visual.flash.sprite = flashSprite;
         visual.flash.color = new Color(1f, .87f, .42f);
         visual.ApplyPose();
-        if (DisposableHandgunBullet.FireFromMuzzle(user, visual.facing, speed, visual.MuzzleWorld)) return true;
+        if (DisposableHandgunBullet.FireFromMuzzle(user, visual.facing, speed, visual.MuzzleWorld))
+        {
+            mover.InterruptPossessionByAttack();
+            return true;
+        }
         // A failed spawn must not consume the item or leave the player in an attack pose.
         visual.gameObject.SetActive(false);
         Destroy(root);

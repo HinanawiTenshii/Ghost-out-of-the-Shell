@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -12,10 +11,12 @@ public sealed partial class RuntimeMiniMapGraphic
         public readonly Dictionary<string, WaterwayGateTargetFade> faders = new Dictionary<string, WaterwayGateTargetFade>();
         public readonly Dictionary<string, RotatingBridgeMechanism> bridges = new Dictionary<string, RotatingBridgeMechanism>();
     }
-    private sealed class Triangles { public Vector2[] points; }
     private static readonly Dictionary<int, SceneGeometry> sceneGeometry = new Dictionary<int, SceneGeometry>();
-    // Weak keys release temporary geometry when its scene is unloaded.
-    private static ConditionalWeakTable<Vector2[], Triangles> triangleCache = new ConditionalWeakTable<Vector2[], Triangles>();
+    // Keep mesh sources strongly owned through Unity's scene-unload GC. Weak
+    // entries proved unstable during repeated load/restart on the Mono runtime.
+    // Bound this cache as journal previews can also introduce off-scene paths.
+    private const int MaximumCachedPaths = 8192;
+    private static readonly Dictionary<Vector2[], Vector2[]> triangleCache = new Dictionary<Vector2[], Vector2[]>();
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetGeometryCache()
@@ -23,22 +24,26 @@ public sealed partial class RuntimeMiniMapGraphic
         foreach (var value in sceneGeometry.Values)
             if (value.generated && value.data != null) Destroy(value.data);
         sceneGeometry.Clear();
-        triangleCache = new ConditionalWeakTable<Vector2[], Triangles>();
+        triangleCache.Clear();
         SceneManager.sceneUnloaded -= ReleaseSceneGeometry;
         SceneManager.sceneUnloaded += ReleaseSceneGeometry;
     }
     private static void ReleaseSceneGeometry(Scene scene)
     {
+        triangleCache.Clear();
         if (!sceneGeometry.TryGetValue(scene.handle, out var value)) return;
         if (value.generated && value.data != null) Destroy(value.data);
         sceneGeometry.Remove(scene.handle);
     }
     private static Vector2[] GetCachedTriangles(Vector2[] path)
     {
-        return triangleCache.GetValue(path, points => {
-            var result = new List<Vector2>(); TriangulateClosedPath(points, result);
-            return new Triangles { points = result.ToArray() };
-        }).points;
+        if (triangleCache.TryGetValue(path, out var triangles)) return triangles;
+        var result = new List<Vector2>();
+        TriangulateClosedPath(path, result);
+        triangles = result.ToArray();
+        if (triangleCache.Count >= MaximumCachedPaths) triangleCache.Clear();
+        triangleCache.Add(path, triangles);
+        return triangles;
     }
     private bool TryLoadCachedScene(Scene scene)
     {

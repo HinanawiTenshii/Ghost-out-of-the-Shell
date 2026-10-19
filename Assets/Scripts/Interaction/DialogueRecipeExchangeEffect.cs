@@ -10,6 +10,7 @@ public sealed class DialogueRecipeExchangeEffect : DialogueOptionEffect
     [SerializeField, InspectorName("解锁任务（可选）"), Tooltip("可选：仅在此任务完成后允许交易。")]
     private DialogueQuestProgression requiredQuest;
     private bool purchasing;
+    public PickupItemBase Merchandise => merchandise;
     public override bool CanSelect(CharacterDialogue speaker, ZeldaFourWayMover player, out string reason)
     {
         reason = null;

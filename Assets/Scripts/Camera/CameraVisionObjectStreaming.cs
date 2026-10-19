@@ -202,6 +202,9 @@ public sealed partial class CameraVisionObjectStreaming : MonoBehaviour
 
     private void LateUpdate()
     {
+        // Scene restore and the covered preparation pass own activation until
+        // the arrival camera is final. Do not cull against the authored camera.
+        if (RetroSceneLoadReveal.IsPreparingGameplay || initialPreparationRunning) return;
         if (!enableVisionStreaming)
         {
             puppetHighlightWasActive = false;
@@ -271,7 +274,7 @@ public sealed partial class CameraVisionObjectStreaming : MonoBehaviour
     {
         SceneManager.sceneLoaded -= OnSceneLoaded;
         ReleasePatrolStreamingGroups();
-        if (restoreObjectsWhenDisabled)
+        if (restoreObjectsWhenDisabled && CanRestoreOnTeardown())
         {
             RestoreAllObjects();
         }
@@ -279,8 +282,12 @@ public sealed partial class CameraVisionObjectStreaming : MonoBehaviour
 
     private void OnDestroy()
     {
-        RestoreAllObjects();
+        if (CanRestoreOnTeardown()) RestoreAllObjects();
     }
+
+    private bool CanRestoreOnTeardown() => Application.isPlaying &&
+        gameObject.scene.IsValid() && gameObject.scene.isLoaded &&
+        !RetroSceneLoadReveal.IsChangingScenes;
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
@@ -299,16 +306,10 @@ public sealed partial class CameraVisionObjectStreaming : MonoBehaviour
 
     private void RebuildObjectRegistry()
     {
-        RestoreAllObjects();
-        managedObjects.Clear();
-        managedLookup.Clear();
-        discoveryQueue.Clear();
-        activationQueue.Clear();
-        spatialIndex.Clear();
-        puppetHighlightWasActive = false;
-        visibilityCursor = 0;
+        // Refresh is incremental. Camera rebinding and sceneLoaded can both
+        // request it; neither may wake sleeping objects or discard ownership.
         sceneRescanTimer = sceneRescanInterval;
-        BeginDiscoveryScan();
+        if (discoveryQueue.Count == 0) BeginDiscoveryScan();
     }
 
     private void BeginDiscoveryScan()
@@ -332,9 +333,14 @@ public sealed partial class CameraVisionObjectStreaming : MonoBehaviour
 
     private void ProcessDiscoveryScan()
     {
-        int remainingBudget = Mathf.Max(1, discoveryTransformsPerFrame);
+        DiscoverObjects(Mathf.Max(1, discoveryTransformsPerFrame), 0);
+    }
+
+    private void DiscoverObjects(int remainingBudget, long deadline)
+    {
         while (remainingBudget-- > 0 && discoveryQueue.Count > 0)
         {
+            if (deadline != 0 && System.Diagnostics.Stopwatch.GetTimestamp() >= deadline) break;
             Transform candidateTransform = discoveryQueue.Dequeue();
             if (candidateTransform == null)
             {
@@ -408,6 +414,7 @@ public sealed partial class CameraVisionObjectStreaming : MonoBehaviour
             GameObject target = managedObject.gameObject;
             if (target == null)
             {
+                if (!ReferenceEquals(target, null)) managedLookup.Remove(target);
                 spatialIndex.Remove(managedObject);
                 managedObjects.RemoveAt(visibilityCursor);
                 continue;
@@ -962,6 +969,10 @@ public sealed partial class CameraVisionObjectStreaming : MonoBehaviour
         {
             EncapsulateWorldBounds(target.transform, colliders[i].bounds, ref localBounds, ref initialized);
         }
+
+        foreach (var ai in target.GetComponentsInChildren<ZeldaCharacterAiBase>(true))
+            if (ai.enabled && !ai.HasPreparedVision)
+                EncapsulateWorldBounds(target.transform, ai.GetUnoccludedVisionBounds(), ref localBounds, ref initialized);
 
         if (!initialized)
         {

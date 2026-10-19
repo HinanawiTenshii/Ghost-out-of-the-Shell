@@ -112,4 +112,3 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   titleFont: {fileID: 12800000, guid: 292af55397c443f6a5d7774297dac481, type: 3}
-  gameSceneName: TutorialLevel

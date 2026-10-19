@@ -47,7 +47,11 @@ public sealed class AlchemyCauldron : MonoBehaviour
         ApplyLiquidColor();
     }
     private static bool ValidColor(Color color) => color.a>0 && !float.IsNaN(color.r+color.g+color.b) && !float.IsInfinity(color.r+color.g+color.b);
-    private void Awake() => ZeldaRequirementWindow.AttachSkillRequirement(this, CharacterSkillRequirements.Alchemy);
+    private void Awake()
+    {
+        ZeldaRequirementWindow.AttachSkillRequirement(this, CharacterSkillRequirements.Alchemy);
+        MapPointOfInterest.AttachMechanism(this);
+    }
     private void OnEnable() => ApplyLiquidColor();
     private void ApplyLiquidColor()
     {

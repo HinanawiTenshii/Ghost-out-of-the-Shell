@@ -64,6 +64,14 @@ namespace UnityEngine {
     public static class Mathf {public static float Max(float a,float b){return Math.Max(a,b);}}
 }
 public class LeverData:UnityEngine.MonoBehaviour {}
+// Mechanism attachment/geometry has a separate real-Unity regression suite.
+public sealed partial class MapPointOfInterest {
+    private bool isMechanism=false;
+    private void ConfigureMechanism(){}
+    public UnityEngine.Vector3 MapWorldPosition {get{return transform.position;}}
+    private UnityEngine.Bounds MechanismBounds {get{return new UnityEngine.Bounds();}}
+    private bool IsMechanismInViewport(UnityEngine.Camera camera){return true;}
+}
 public class ZeldaFourWayMover:UnityEngine.MonoBehaviour {}
 public class CameraCircularVision:UnityEngine.MonoBehaviour {
     public bool isActiveAndEnabled=true,insideRadius=true,unoccluded=true;

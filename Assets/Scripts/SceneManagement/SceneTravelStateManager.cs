@@ -126,6 +126,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
     private bool hasQuickRestartInventory;
     private PlayerGrowthAttributes.RuntimeState quickRestartGrowthState;
     private bool hasQuickRestartGrowth;
+    private LevelRunStatistics.State quickRestartLevelRun;
     private bool quickRestartPending;
     private bool sceneTravelRestoreInProgress;
 
@@ -315,6 +316,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
         QuestJournalManager.GetOrCreate().ResetAllEntries();
         MapPointOfInterestManager.GetOrCreate().ResetAllPoints();
         ItemDescriptionWindow.ResetDiscoveryHistoryIfPresent();
+        LevelRunStatistics.ResetSession();
 
         restorePending = false;
         pendingArrivalPosition = Vector2.zero;
@@ -1054,6 +1056,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
         {
             quickRestartGrowthState = growth.CaptureRuntimeState();
         }
+        quickRestartLevelRun = LevelRunStatistics.Capture();
     }
 
     public bool RestartFromQuickCheckpoint()
@@ -1159,6 +1162,7 @@ public sealed partial class SceneTravelStateManager : MonoBehaviour
             PlayerGrowthAttributes.GetOrCreate().ApplyRuntimeState(
                 quickRestartGrowthState);
         }
+        LevelRunStatistics.Restore(quickRestartLevelRun);
 
         Physics2D.SyncTransforms();
         ActiveZeldaCharacterDataSource source =

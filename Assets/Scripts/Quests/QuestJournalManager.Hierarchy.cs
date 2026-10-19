@@ -51,13 +51,14 @@ public sealed partial class QuestJournalManager
 
     public bool CanTriggerEntry(string entryId, string parentEntryId = null)
     {
+        if (IsEntryFailed(entryId)) return false;
         if (!ConfigureParent(entryId, parentEntryId)) return false;
         string ancestor = GetParentEntryId(entryId);
         // Configuration rejects cycles; the bound also protects malformed old saves.
         int remaining = parentEntries.Count + 3;
         while (!string.IsNullOrEmpty(ancestor) && remaining-- > 0)
         {
-            if (!ContainsEntry(ancestor)) return false;
+            if (!ContainsEntry(ancestor) || IsEntryFailed(ancestor)) return false;
             ancestor = GetParentEntryId(ancestor);
         }
         return string.IsNullOrEmpty(ancestor);

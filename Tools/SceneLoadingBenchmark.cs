@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -27,7 +29,7 @@ public static class SceneLoadingBenchmark
         try
         {
             if (SessionState.GetBool("LoadingBenchmark", false))
-            { SessionState.SetBool("LoadingBenchmark", false); deadline = EditorApplication.timeSinceStartup + 240; suite = Verify(); }
+            { SessionState.SetBool("LoadingBenchmark", false); deadline = EditorApplication.timeSinceStartup + 360; suite = Verify(); }
             if (suite == null) return;
             if (EditorApplication.timeSinceStartup > deadline) throw new Exception("benchmark timeout");
             if (suite.MoveNext()) return;
@@ -42,17 +44,33 @@ public static class SceneLoadingBenchmark
         {
             stable = SceneManager.GetActiveScene().name == name && !RetroSceneLoadReveal.IsBlockingInput && !GameSaveSystem.IsPreparingSceneSave &&
                 !GameSaveSystem.IsLoading && !SceneTravelStateManager.GetOrCreate().IsSceneTravelRestoreInProgress && ZeldaRuntimeRegistry.GetControlledMover() != null ? stable + 1 : 0;
+            if (stable == 1)
+            {
+                var streamers = UnityEngine.Object.FindObjectsOfType<CameraVisionObjectStreaming>();
+                if (streamers.Any(s => s.StreamingEnabled && !s.IsInitialViewPrepared) || RetroSceneLoadReveal.IsPreparingGameplay)
+                    throw new Exception("Revealed before startup streaming finished: " + name);
+                var npcs = UnityEngine.Object.FindObjectsOfType<ZeldaCharacterAiBase>(true);
+                var cone = typeof(ZeldaCharacterAiBase).GetField("visionMesh", BindingFlags.Instance | BindingFlags.NonPublic);
+                Debug.Log("STARTUP_READY " + name + " activeNPC=" + npcs.Count(n => n.isActiveAndEnabled) + "/" + npcs.Length +
+                    " allocatedCones=" + npcs.Count(n => (UnityEngine.Object)cone.GetValue(n) != null) + " timeScale=" + Time.timeScale);
+                if (Time.timeScale != 1f) throw new Exception("Clock not resumed: " + name);
+            }
             yield return null;
         }
     }
     static IEnumerator Verify()
     {
         var wait = Ready("Level2-Floor1"); while (wait.MoveNext()) yield return null;
-        foreach (var name in new[] { "Level2-Floor2", "Level2-Floor-1", "Level2-Floor1" })
+        foreach (var name in new[] { "Level2-Floor2", "Level2-Floor1", "Level2-Floor-1", "Level2-Floor1", "Level2-Desert", "Level2-Floor1" })
         {
-            SceneTravelStateManager.GetOrCreate().TravelToScene(name, Vector2.zero);
+            var portal = UnityEngine.Object.FindObjectsOfType<PersistentSceneTransitionPoint>(true).FirstOrDefault(p => p.TargetSceneName == name);
+            if (portal == null) throw new Exception("No actual transition to " + name);
+            Vector2 arrival = portal.TargetArrivalPosition;
+            SceneTravelStateManager.GetOrCreate().TravelToScene(name, arrival);
             wait = Ready(name); while (wait.MoveNext()) yield return null;
-            Debug.Log("BENCHMARK_SAVE_BYTES " + name + " " + new FileInfo(Path.Combine(GameSaveSystem.SaveDirectory, "auto.json")).Length);
+            if (Vector2.Distance(ZeldaRuntimeRegistry.GetControlledMover().transform.position, arrival) > .25f)
+                throw new Exception("Arrival position changed: " + name);
+            Debug.Log("BENCHMARK_ARRIVAL " + name + " " + arrival);
         }
     }
 }

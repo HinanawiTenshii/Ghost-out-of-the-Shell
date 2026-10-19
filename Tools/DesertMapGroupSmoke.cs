@@ -64,7 +64,7 @@ public static class DesertMapGroupSmoke
                 Check(Surfaces(live).Any(s => s.points.SequenceEqual(expected)), "World-space road footprint: " + sprite.name);
             }
             var menu = InScene<TabJournalMenuController>(desert).Single();
-            Check(menu.AreaDisplayName == "Level2 · 沙漠", "Desert has distinct menu/HUD label");
+            Check(menu.AreaDisplayName == "沙漠", "Desert has distinct menu/HUD label without level prefix");
             const string mapPath = "Assets/Resources/MiniMaps/Level2-Desert.asset";
             var data = AssetDatabase.LoadAssetAtPath<RuntimeMiniMapSceneData>(mapPath);
             if (!data) { data = ScriptableObject.CreateInstance<RuntimeMiniMapSceneData>(); AssetDatabase.CreateAsset(data, mapPath); }

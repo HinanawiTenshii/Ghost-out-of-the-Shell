@@ -56,6 +56,9 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
     private Coroutine revealRoutine;
 
     public static bool IsBlockingInput { get; private set; }
+    // Separate from input blocking: local panels/settlement need no world rebuild.
+    public static bool IsPreparingGameplay { get; private set; }
+    public static bool IsChangingScenes => instance != null && instance.pendingLoad != null;
 
     /// <summary>Start only after the transition has fully covered gameplay.</summary>
     public static void LoadSceneAsync(string sceneName)
@@ -95,6 +98,7 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
             return false;
         }
         instance.transitionPending = true;
+        IsPreparingGameplay = true;
         SceneLoadMetrics.Begin(sceneName);
         SoulMarkRuntime.ClearForSceneTransition();
         DominoSkillRuntime.ClearForSceneTransition();
@@ -185,6 +189,7 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         }
 
         instance = this;
+        IsPreparingGameplay = true;
         DontDestroyOnLoad(gameObject);
         BuildOverlay();
         ShowFullBlack();
@@ -207,14 +212,15 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
             ResumeLoadClock();
             RestoreMenuNavigation();
             IsBlockingInput = false;
+            IsPreparingGameplay = false;
             instance = null;
         }
     }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        ResumeLoadClock();
         pendingLoad = null;
+        IsPreparingGameplay = true;
         SceneLoadMetrics.SceneLoaded();
         waitingForSceneLoaded = false;
         ShowFullBlack();
@@ -223,7 +229,7 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
             StopCoroutine(revealRoutine);
         }
 
-        revealRoutine = StartCoroutine(RevealAfterSceneLoad());
+        revealRoutine = StartCoroutine(RevealAfterSceneLoad(true));
     }
 
     private void BuildOverlay()
@@ -315,7 +321,7 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         Canvas.ForceUpdateCanvases();
     }
 
-    private IEnumerator RevealAfterSceneLoad()
+    private IEnumerator RevealAfterSceneLoad(bool prepareStreaming = false)
     {
         // Keep at least one completely black rendered frame. This prevents scene
         // initialization and persistent-state restoration from flashing onscreen.
@@ -332,6 +338,33 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         // Entry snapshots and auto-save must finish before uncovering gameplay.
         while (GameSaveSystem.IsPreparingSceneSave || GameSaveSystem.IsLoading)
             yield return null;
+
+        if (prepareStreaming)
+        {
+            // The arrival position (including trapdoors/save restores) is final
+            // now. Do not prepare against the camera's authored scene position.
+            foreach (var follow in FindObjectsOfType<CameraFollowActiveZeldaMover>())
+                follow.PrepareLoadedSceneView();
+            foreach (var streamer in FindObjectsOfType<CameraVisionObjectStreaming>())
+            {
+                var preparation = streamer.PrepareInitialView();
+                try
+                {
+                    while (true)
+                    {
+                        bool more;
+                        try { more = preparation.MoveNext(); }
+                        catch (System.Exception ex) { Debug.LogException(ex, streamer); break; }
+                        if (!more) break;
+                        yield return preparation.Current;
+                    }
+                }
+                finally { (preparation as System.IDisposable)?.Dispose(); }
+            }
+            // Let Start/renderer registration from newly awakened objects finish
+            // before the first band uncovers gameplay.
+            yield return null;
+        }
 
         if (blackHoldDuration > 0f)
         {
@@ -357,6 +390,8 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         canvasGroup.interactable = false;
         canvasObject.SetActive(false);
         IsBlockingInput = false;
+        IsPreparingGameplay = false;
+        ResumeLoadClock();
         transitionPending = false;
         RestoreMenuNavigation();
         revealRoutine = null;

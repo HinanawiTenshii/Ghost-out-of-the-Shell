@@ -24,6 +24,7 @@ namespace UnityEngine.EventSystems {
     public class PointerEventData {public enum InputButton {Left,Right,Middle} public InputButton button;}
 }
 public enum MapPointIconShape {Diamond,Circle,Square,Star,Exclamation,Lever}
+public class MapPointOfInterestRecord {public static bool IsHoverOnly(MapPointIconShape shape){return shape>=MapPointIconShape.Lever;}}
 public class MapPointOfInterestManager {
     public static int Clicks;
     public static MapPointOfInterestManager GetOrCreate(){return new MapPointOfInterestManager();}

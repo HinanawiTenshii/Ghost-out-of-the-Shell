@@ -80,7 +80,7 @@ public sealed partial class SquadPatrolCharacterAi : ZeldaPatrolCharacterAi
     protected override void Update()
     {
         using var sample = UpdateMarker.Auto();
-        if (CharacterDialogueWindow.BlocksInput || Time.deltaTime <= 0f) return;
+        if (RetroSceneLoadReveal.IsPreparingGameplay || CharacterDialogueWindow.BlocksInput || Time.deltaTime <= 0f) return;
         EnsureGroup(); group?.Refresh();
         base.Update();
         if (!HasAmbushOrders && group != null && group.leader == this && CurrentState == ZeldaAiState.Idle)

@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: Level2-Desert
   m_EditorClassIdentifier: 
   schemaVersion: 6
-  sourceRevision: 3b23121050fc207aa61f9cc9f86e2ca0
+  sourceRevision: f1951476bb1fe887b66961d2611bf22a
   sceneName: Level2-Desert
-  displayName: "Level2 \xB7 \u6C99\u6F20"
+  displayName: "\u6C99\u6F20"
   blockPaths:
   - points:
     - {x: 1.8600001, y: 0.77750015}

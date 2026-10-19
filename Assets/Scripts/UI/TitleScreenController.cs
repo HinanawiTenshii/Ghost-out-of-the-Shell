@@ -7,7 +7,7 @@ using UnityEngine.UI;
 [RequireComponent(typeof(CanvasScaler))]
 [RequireComponent(typeof(GraphicRaycaster))]
 [DefaultExecutionOrder(10000)]
-public sealed class TitleScreenController : MonoBehaviour
+public sealed partial class TitleScreenController : MonoBehaviour
 {
     private static readonly Color GhostBlue = ZeldaUiPalette.Ghost;
     private static readonly Color BackgroundBlue = new Color(0.018f, 0.055f, 0.095f, 1f);
@@ -15,14 +15,11 @@ public sealed class TitleScreenController : MonoBehaviour
     private static readonly Color DisabledBlue = new Color(0.18f, 0.28f, 0.35f, 1f);
 
     [SerializeField] private Font titleFont;
-    [Header("Level Selection")]
-    [SerializeField] private string tutorialSceneName = "TutorialLevel";
-    [SerializeField] private string level0SceneName = "Level0";
-    [SerializeField] private string level1SceneName = "Level1-Garden";
 
     private Canvas titleCanvas;
     private RectTransform mainOptionsRoot;
-    private RectTransform levelSelectOptionsRoot;
+    private Button continueButton;
+    private Text mainStatus;
 
     private void Awake()
     {
@@ -38,6 +35,7 @@ public sealed class TitleScreenController : MonoBehaviour
 
         EnsureEventSystem();
         BuildInterface();
+        if (GameSaveSystem.Instance != null) GameSaveSystem.Instance.Changed += RefreshSaveMessage;
         Cursor.visible = true;
         Cursor.lockState = CursorLockMode.None;
     }
@@ -50,48 +48,14 @@ public sealed class TitleScreenController : MonoBehaviour
     private void Update()
     {
         if (RetroSceneLoadReveal.IsBlockingInput) return;
-        if (levelSelectOptionsRoot != null &&
-            levelSelectOptionsRoot.gameObject.activeSelf &&
-            Input.GetKeyDown(KeyCode.Escape))
-        {
-            ShowMainMenu();
-        }
+        if (SaveSlotPanel.IsOpen || SaveSlotPanel.LastClosedFrame == Time.frameCount) return;
+        if (progressOptionsRoot != null && progressOptionsRoot.gameObject.activeSelf && Input.GetKeyDown(KeyCode.Escape))
+        { progressBack?.Invoke(); return; }
     }
 
     public void StartGame()
     {
-        ShowLevelSelection();
-    }
-
-    public void LoadTutorialLevel()
-    {
-        LoadFreshScene(tutorialSceneName);
-    }
-
-    public void LoadLevel0()
-    {
-        LoadFreshScene(level0SceneName);
-    }
-
-    public void LoadLevel1()
-    {
-        LoadFreshScene(level1SceneName);
-    }
-
-    private void LoadFreshScene(string sceneName)
-    {
-        if (string.IsNullOrWhiteSpace(sceneName))
-        {
-            Debug.LogWarning("TitleScreenController needs a target scene name.", this);
-            return;
-        }
-
-        RetroSceneLoadReveal.BeginTransition(sceneName.Trim(), () =>
-        {
-            GameSaveSystem.Instance?.BeginNewGame();
-            SceneTravelStateManager.GetOrCreate().ResetAllSceneStates();
-            RetroSceneLoadReveal.LoadSceneAsync(sceneName.Trim());
-        });
+        ShowNewGameSlots();
     }
 
     public void QuitGame()
@@ -153,28 +117,21 @@ public sealed class TitleScreenController : MonoBehaviour
         optionsRoot.anchoredPosition = new Vector2(255f, 0f);
         optionsRoot.sizeDelta = new Vector2(330f, 390f);
 
-        CreateOption(optionsRoot, "开始游戏", 105f, true, StartGame);
-        CreateOption(optionsRoot, "载入游戏", 35f, true, OpenLoadSlots);
-        CreateOption(optionsRoot, "游戏设置（暂未开放）", -35f, false, null);
-        CreateOption(optionsRoot, "结束游戏", -105f, true, QuitGame);
+        CreateOption(optionsRoot, "开始新游戏", 140f, true, StartGame);
+        continueButton = CreateOption(optionsRoot, "继续游戏", 70f, true, () => GameSaveSystem.Instance?.ContinueLatest());
+        CreateOption(optionsRoot, "游戏进度", 0f, true, ShowProfiles);
+        CreateOption(optionsRoot, "游戏设置（暂未开放）", -70f, false, null);
+        CreateOption(optionsRoot, "结束游戏", -140f, true, QuitGame);
         mainOptionsRoot = optionsRoot;
-
-        levelSelectOptionsRoot = CreateUiObject(
-            "Level Selection Options",
-            outerFrameRect).GetComponent<RectTransform>();
-        ConfigureOptionsRoot(levelSelectOptionsRoot);
-        CreateOption(levelSelectOptionsRoot, "教学关卡", 120f, true, LoadTutorialLevel);
-        CreateOption(levelSelectOptionsRoot, "Level 0-监牢", 60f, true, LoadLevel0);
-        CreateOption(levelSelectOptionsRoot, "Level 1-城堡", 0f, true, LoadLevel1);
-        CreateOption(levelSelectOptionsRoot, "未完待续", -60f, false, null);
-        CreateOption(levelSelectOptionsRoot, "返回", -120f, true, ShowMainMenu);
-        levelSelectOptionsRoot.gameObject.SetActive(false);
+        mainStatus = CreateMenuLabel(optionsRoot, "", -228f, 23);
+        mainStatus.rectTransform.sizeDelta = new Vector2(320f, 84f);
+        RefreshContinueButton();
     }
 
     private void OpenLoadSlots()
     {
-        mainOptionsRoot.gameObject.SetActive(false);
-        SaveSlotPanel.Open(mainOptionsRoot.parent, titleFont, false, true, ShowMainMenu);
+        HideOptions();
+        SaveSlotPanel.Open(mainOptionsRoot.parent, titleFont, false, true, ShowProfileActions);
     }
 
     private static void ConfigureOptionsRoot(RectTransform optionsRoot)
@@ -185,28 +142,15 @@ public sealed class TitleScreenController : MonoBehaviour
         optionsRoot.sizeDelta = new Vector2(330f, 390f);
     }
 
-    private void ShowLevelSelection()
-    {
-        if (mainOptionsRoot != null)
-        {
-            mainOptionsRoot.gameObject.SetActive(false);
-        }
-        if (levelSelectOptionsRoot != null)
-        {
-            levelSelectOptionsRoot.gameObject.SetActive(true);
-        }
-    }
-
     public void ShowMainMenu()
     {
-        if (levelSelectOptionsRoot != null)
-        {
-            levelSelectOptionsRoot.gameObject.SetActive(false);
-        }
+        if (progressOptionsRoot != null) progressOptionsRoot.gameObject.SetActive(false);
         if (mainOptionsRoot != null)
         {
             mainOptionsRoot.gameObject.SetActive(true);
         }
+        if (mainStatus != null) mainStatus.text = "";
+        RefreshContinueButton();
     }
 
     private void CreateTitleText(
@@ -232,7 +176,7 @@ public sealed class TitleScreenController : MonoBehaviour
         TitleScreenGlow.Attach(text);
     }
 
-    private void CreateOption(
+    private Button CreateOption(
         RectTransform parent,
         string label,
         float verticalPosition,
@@ -286,6 +230,7 @@ public sealed class TitleScreenController : MonoBehaviour
         text.color = interactable ? GhostBlue : DisabledBlue;
         text.raycastTarget = false;
         TitleScreenGlow.Attach(text);
+        return button;
     }
 
     private void EnsureRenderPriority()

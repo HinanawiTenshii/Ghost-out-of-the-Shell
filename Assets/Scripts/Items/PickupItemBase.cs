@@ -455,6 +455,7 @@ public class PickupItemBase : MonoBehaviour, ISerializationCallbackReceiver
 
     protected void NotifyPickedUp()
     {
+        LevelRunStatistics.RecordExpansion(this);
         // Pickup feedback applies to every item, independently of its use-animation exceptions.
         // Start before a first-pickup description window can pause the game.
         FindControlledMover()?.TryBeginItemAttack(.24f);

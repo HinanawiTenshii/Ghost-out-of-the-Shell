@@ -56,6 +56,7 @@ public sealed class DocumentReader : MonoBehaviour
 
     public static bool IsDocumentOpen => activeDocument != null;
     public static bool IsInputBlocked =>
+        LevelSettlementScreen.IsOpen ||
         ArenaChallengeController.BlocksPlayerInput ||
         CharacterDialogueWindow.BlocksInput ||
         SignpostInteraction.BlocksInput ||

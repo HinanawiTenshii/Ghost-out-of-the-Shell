@@ -1,0 +1,7 @@
+<Project>
+  <ItemGroup>
+    <Compile Remove="Assets\**\*.cs" />
+    <Compile Include="Assets\Scripts\**\*.cs" Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp'" />
+    <Compile Include="Assets\Editor\**\*.cs" Condition="'$(MSBuildProjectName)' == 'Assembly-CSharp-Editor'" />
+  </ItemGroup>
+</Project>

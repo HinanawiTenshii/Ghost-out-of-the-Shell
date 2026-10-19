@@ -2885,7 +2885,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6319000000000000007, guid: 0d1569d1c8054245861869c4e1cc8acf, type: 3}
       propertyPath: areaNameOverride
-      value: "Level2 \xB7 \u6C99\u6F20"
+      value: "\u6C99\u6F20"
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 0d1569d1c8054245861869c4e1cc8acf, type: 3}
@@ -3137,6 +3137,83 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 101, guid: 885e3ac31d3d4f68b05dca5067d04c62, type: 3}
   m_PrefabInstance: {fileID: 1459574375}
   m_PrefabAsset: {fileID: 0}
+--- !u!1001 &1461834987
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 7832618691216883880, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: m_Name
+      value: TestDummy
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883885, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: health
+      value: 100
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883885, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: moveSpeed
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883885, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: skillValue
+      value: 4
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883885, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: attackPower
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883885, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: permissionLevel
+      value: 4
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883889, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: m_RootOrder
+      value: 11
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883889, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -93.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883889, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -6
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883889, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883889, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883889, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883889, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883889, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883889, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883889, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883889, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: faa378082a386c34b8b3df82888c9528, type: 3}
 --- !u!4 &1489396730 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3510440088134721002, guid: 80f29c094c12495d93a9ee395e5da371, type: 3}
@@ -4679,7 +4756,7 @@ MonoBehaviour:
     sceneName: Level2-Desert
     sceneSaveId: Level2-Desert
     scenePath: Assets/Scenes/Level2/Level2-Desert.unity
-  entrySceneIndex: 0
+  entrySceneIndex: 3
 --- !u!114 &895000220000001
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4722,5 +4799,5 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_RootOrder: 9
+  m_RootOrder: 10
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}

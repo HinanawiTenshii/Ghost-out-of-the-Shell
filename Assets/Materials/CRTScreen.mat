@@ -48,7 +48,7 @@ Material:
     - _CRT_NoiseIntensity: 0.018
     - _CRT_ScanlineCount: 180
     - _CRT_ScanlineIntensity: 0.27
-    - _CRT_TimeValue: 366.04486
+    - _CRT_TimeValue: 6.2441506
     - _CRT_Vignette: 0
     m_Colors: []
   m_BuildTextureStacks: []

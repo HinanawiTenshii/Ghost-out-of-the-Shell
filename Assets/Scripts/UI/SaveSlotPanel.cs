@@ -66,6 +66,8 @@ public sealed class SaveSlotPanel : MonoBehaviour
         RefreshSlots();
         if (titleLayout)
         {
+            Label(list, GameSaveSystem.Instance.ActiveProfileName, new Vector2(0f, 250f),
+                new Vector2(320f, 26f), 18, TextAnchor.MiddleLeft);
             status = Label(
                 list,
                 "",

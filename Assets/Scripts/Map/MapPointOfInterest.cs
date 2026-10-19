@@ -12,7 +12,18 @@ public enum MapPointIconShape
     Star,
     Exclamation,
     Lever,
-    LockedDoor
+    LockedDoor,
+    ElectricGate,
+    Cauldron,
+    BatterySocket,
+    WaterwayGate,
+    WaterwayController,
+    Ballista,
+    BreakableGlass,
+    ElectricField,
+    SceneTransition,
+    KeyLockedDoor,
+    PasswordLockedDoor
 }
 
 [Serializable]
@@ -40,19 +51,26 @@ public sealed class MapPointOfInterestRecord
     public Color IconColor => iconColor;
     public bool VisibleOnMap => visibleOnMap;
     public bool Discovered => discovered;
-    public bool CanBeMarked => iconShape != MapPointIconShape.Lever && iconShape != MapPointIconShape.LockedDoor;
+    public bool CanBeMarked => !IsHoverOnly(iconShape);
+    public bool IsLineMarker => iconShape == MapPointIconShape.ElectricField;
+    public static bool IsDoorIcon(MapPointIconShape shape) => shape == MapPointIconShape.LockedDoor ||
+        shape == MapPointIconShape.KeyLockedDoor || shape == MapPointIconShape.PasswordLockedDoor;
+    public static bool IsHoverOnly(MapPointIconShape shape) => shape >= MapPointIconShape.Lever;
     public Vector2 LineStart => lineStart;
     public Vector2 LineEnd => lineEnd;
 
     internal bool ApplyLockedDoor(string pointId, string scene, Vector2 start, Vector2 end,
-        Color tint, bool lockedAndIntact, bool seen)
+        Color tint, bool lockedAndIntact, bool seen, bool passwordRequired, string requiredKeyName)
     {
+        MapPointIconShape nextShape = passwordRequired ? MapPointIconShape.PasswordLockedDoor : MapPointIconShape.KeyLockedDoor;
+        // Store the cached key name in the existing serialized description, not a live item reference.
+        string nextDescription = passwordRequired ? string.Empty : requiredKeyName ?? string.Empty;
         bool nextDiscovered = discovered || seen;
-        bool changed = id != pointId || sceneName != scene || iconShape != MapPointIconShape.LockedDoor ||
+        bool changed = id != pointId || sceneName != scene || iconShape != nextShape ||
             lineStart != start || lineEnd != end || iconColor != tint ||
-            visibleOnMap != lockedAndIntact || discovered != nextDiscovered;
-        id = pointId; sceneName = scene; title = "锁住的门"; description = "";
-        iconShape = MapPointIconShape.LockedDoor; iconColor = tint;
+            visibleOnMap != lockedAndIntact || discovered != nextDiscovered || description != nextDescription;
+        id = pointId; sceneName = scene; title = passwordRequired ? "锁住的门（密码）" : "锁住的门（钥匙）"; description = nextDescription;
+        iconShape = nextShape; iconColor = tint;
         lineStart = start; lineEnd = end; worldPosition = (start + end) * .5f;
         visibleOnMap = lockedAndIntact; discovered = nextDiscovered; marked = false;
         return changed;
@@ -62,6 +80,9 @@ public sealed class MapPointOfInterestRecord
     public string TooltipText => iconShape == MapPointIconShape.Lever
         ? "拉杆"
         : iconShape == MapPointIconShape.LockedDoor ? "锁住的门"
+        : iconShape == MapPointIconShape.KeyLockedDoor ? title + "\n需要：" +
+            (string.IsNullOrWhiteSpace(description) ? "对应钥匙" : description)
+        : !CanBeMarked ? title
         : string.IsNullOrWhiteSpace(description) ? title : title + "\n" + description;
 
     internal void Apply(MapPointOfInterest source)
@@ -70,7 +91,7 @@ public sealed class MapPointOfInterestRecord
         sceneName = source.SceneName;
         title = source.Title;
         description = source.Description;
-        worldPosition = source.transform.position;
+        worldPosition = source.MapWorldPosition;
         iconShape = source.IconShape;
         iconColor = source.IconColor;
         visibleOnMap = source.VisibleOnMap;
@@ -79,6 +100,18 @@ public sealed class MapPointOfInterestRecord
     internal void SetDiscovered(bool value) => discovered = value;
     internal void SetMarked(bool value) => marked = value;
     internal void SetVisible(bool value) => visibleOnMap = value;
+
+    internal bool ApplyElectricField(string pointId, string scene, Vector2 start, Vector2 end, bool powered, bool seen)
+    {
+        bool nextDiscovered = discovered || seen;
+        bool changed = id != pointId || sceneName != scene || lineStart != start || lineEnd != end ||
+            visibleOnMap != powered || discovered != nextDiscovered;
+        id = pointId; sceneName = scene; title = "电流区"; description = "";
+        iconShape = MapPointIconShape.ElectricField; iconColor = new Color32(65, 175, 235, 210);
+        lineStart = start; lineEnd = end; worldPosition = (start + end) * .5f;
+        visibleOnMap = powered; discovered = nextDiscovered; marked = false;
+        return changed;
+    }
 
     internal void SetInformation(
         string configuredTitle,
@@ -153,9 +186,15 @@ public sealed class MapPointOfInterestManager : MonoBehaviour
             return;
         }
 
+        // A revisited scene instantiates its authored glass before the travel
+        // snapshot removes destroyed objects. Never resurrect its saved marker
+        // during this brief registration window.
+        bool keepBrokenGlassHidden = source.IconShape == MapPointIconShape.BreakableGlass &&
+            points.TryGetValue(source.PointId, out var previous) && !previous.VisibleOnMap;
         MapPointOfInterestRecord record = GetOrCreateRecord(source.PointId);
         bool wasDiscovered = record.Discovered;
         record.Apply(source);
+        if (keepBrokenGlassHidden) record.SetVisible(false);
         record.SetDiscovered(wasDiscovered);
         if (wasDiscovered)
         {
@@ -172,7 +211,7 @@ public sealed class MapPointOfInterestManager : MonoBehaviour
 
     // Shares the normal POI save payload. Do not create records for unseen doors.
     public void UpdateLockedDoor(string pointId, string scene, Vector2 start, Vector2 end,
-        Color tint, bool lockedAndIntact, bool seen)
+        Color tint, bool lockedAndIntact, bool seen, bool passwordRequired = false, string requiredKeyName = null)
     {
         if (string.IsNullOrEmpty(pointId)) return;
         if (!points.TryGetValue(pointId, out MapPointOfInterestRecord record))
@@ -180,7 +219,7 @@ public sealed class MapPointOfInterestManager : MonoBehaviour
             if (!lockedAndIntact || !seen) return;
             record = GetOrCreateRecord(pointId);
         }
-        if (record.ApplyLockedDoor(pointId, scene, start, end, tint, lockedAndIntact, seen))
+        if (record.ApplyLockedDoor(pointId, scene, start, end, tint, lockedAndIntact, seen, passwordRequired, requiredKeyName))
             PointsChanged?.Invoke();
     }
 
@@ -188,8 +227,26 @@ public sealed class MapPointOfInterestManager : MonoBehaviour
     {
         destination.Clear();
         foreach (var record in points.Values)
-            if (record.IconShape == MapPointIconShape.LockedDoor && record.Discovered &&
+            if (MapPointOfInterestRecord.IsDoorIcon(record.IconShape) && record.Discovered &&
                 record.VisibleOnMap && record.SceneName == scene) destination.Add(record);
+    }
+
+    public void CopyVisiblePoints(string scene, List<MapPointOfInterestRecord> destination)
+    {
+        destination.Clear();
+        foreach (var record in points.Values)
+            if (record.Discovered && record.VisibleOnMap && record.SceneName == scene) destination.Add(record);
+    }
+
+    public void UpdateElectricField(string pointId, string scene, Vector2 start, Vector2 end, bool powered, bool seen)
+    {
+        if (string.IsNullOrEmpty(pointId)) return;
+        if (!points.TryGetValue(pointId, out var record))
+        {
+            if (!powered || !seen) return;
+            record = GetOrCreateRecord(pointId);
+        }
+        if (record.ApplyElectricField(pointId, scene, start, end, powered, seen)) PointsChanged?.Invoke();
     }
 
     public void Discover(MapPointOfInterest source)
@@ -240,6 +297,7 @@ public sealed class MapPointOfInterestManager : MonoBehaviour
             return false;
         }
 
+        if (record.VisibleOnMap == visible) return true;
         record.SetVisible(visible);
         if (record.Discovered)
         {
@@ -309,7 +367,7 @@ public sealed class MapPointOfInterestManager : MonoBehaviour
     }
 }
 
-public sealed class MapPointOfInterest : MonoBehaviour
+public sealed partial class MapPointOfInterest : MonoBehaviour
 {
     [SerializeField, Tooltip("Stable ID used to preserve discovery across scenes.")]
     private string pointId;
@@ -351,6 +409,7 @@ public sealed class MapPointOfInterest : MonoBehaviour
             visibleOnMap = true;
             discoveryRenderer = GetComponent<SpriteRenderer>();
         }
+        ConfigureMechanism();
         resolvedPointId = ResolvePointId();
         MapPointOfInterestManager.GetOrCreate().Register(this);
     }
@@ -362,28 +421,27 @@ public sealed class MapPointOfInterest : MonoBehaviour
 
     private void Update()
     {
+        if (Time.unscaledTime < nextVisibilityCheckTime) return;
+        nextVisibilityCheckTime = Time.unscaledTime + visibilityCheckInterval;
         MapPointOfInterestManager manager =
             MapPointOfInterestManager.GetOrCreate();
-        if (manager.IsDiscovered(PointId) ||
-            Time.unscaledTime < nextVisibilityCheckTime)
+        if (!visibleOnMap || manager.IsDiscovered(PointId))
         {
             return;
         }
 
-        nextVisibilityCheckTime =
-            Time.unscaledTime + visibilityCheckInterval;
         Camera camera = Camera.main;
         if (camera == null)
         {
             return;
         }
 
-        Vector3 viewport = camera.WorldToViewportPoint(transform.position);
-        if (viewport.z > 0f &&
+        Vector3 viewport = camera.WorldToViewportPoint(MapWorldPosition);
+        if ((isMechanism ? IsMechanismInViewport(camera) : viewport.z > 0f &&
             viewport.x >= -viewportPadding &&
             viewport.x <= 1f + viewportPadding &&
             viewport.y >= -viewportPadding &&
-            viewport.y <= 1f + viewportPadding &&
+            viewport.y <= 1f + viewportPadding) &&
             IsVisibleToPlayer(camera))
         {
             manager.Discover(this);
@@ -394,7 +452,7 @@ public sealed class MapPointOfInterest : MonoBehaviour
     {
         // Keep authored POI behavior, but levers require actual player vision,
         // not merely a position inside the camera rectangle behind a wall.
-        if (lever == null) return true;
+        if (lever == null && !isMechanism) return true;
         if (GameSaveSystem.IsLoading) return false;
         ZeldaFourWayMover mover = ZeldaRuntimeRegistry.GetControlledMover();
         if (mover == null || ZeldaRuntimeRegistry.GetGameplayScene(mover.gameObject) != gameObject.scene)
@@ -403,6 +461,7 @@ public sealed class MapPointOfInterest : MonoBehaviour
         CameraCircularVision vision = camera.GetComponent<CameraCircularVision>();
         // A minimal test scene without a vision mask exposes its whole viewport.
         if (vision == null || !vision.isActiveAndEnabled) return true;
+        if (isMechanism) return vision.IsWorldBoundsVisible(MechanismBounds, transform);
         return discoveryRenderer != null && discoveryRenderer.sprite != null
             ? vision.IsWorldBoundsVisible(discoveryRenderer.bounds, transform)
             : vision.IsWorldPositionVisible(transform.position, transform);
@@ -456,6 +515,8 @@ public sealed class MapPointOfInterest : MonoBehaviour
     {
         if (lever != null)
             return gameObject.scene.name + ":lever:" + SceneTravelStateManager.GetMapObjectId(transform);
+        if (isMechanism)
+            return gameObject.scene.name + ":mechanism:" + SceneTravelStateManager.GetMapObjectId(transform);
         return string.IsNullOrWhiteSpace(pointId)
             ? BuildFallbackId()
             : pointId.Trim();
@@ -524,8 +585,10 @@ public sealed class MapPointOfInterestUiInteraction : MonoBehaviour,
 }
 
 [RequireComponent(typeof(CanvasRenderer))]
-public sealed class RuntimeMiniMapPointIconGraphic : MaskableGraphic
+public sealed partial class RuntimeMiniMapPointIconGraphic : MaskableGraphic
 {
+    private sealed class IconGeometry { public UIVertex[] vertices; public int[] indices; }
+    private static readonly Dictionary<MapPointIconShape, IconGeometry> IconCache = new Dictionary<MapPointIconShape, IconGeometry>();
     private MapPointIconShape shape;
     private bool marked;
     private bool hovered;
@@ -533,14 +596,14 @@ public sealed class RuntimeMiniMapPointIconGraphic : MaskableGraphic
     public void Configure(MapPointIconShape configuredShape, bool isMarked)
     {
         shape = configuredShape;
-        marked = configuredShape != MapPointIconShape.Lever && isMarked;
+        marked = !MapPointOfInterestRecord.IsHoverOnly(configuredShape) && isMarked;
         hovered = false;
         SetVerticesDirty();
     }
 
     public void SetHovered(bool value)
     {
-        bool next = shape == MapPointIconShape.Lever && value;
+        bool next = MapPointOfInterestRecord.IsHoverOnly(shape) && value;
         if (hovered == next) return;
         hovered = next;
         SetVerticesDirty();
@@ -556,52 +619,81 @@ public sealed class RuntimeMiniMapPointIconGraphic : MaskableGraphic
         // Enlarge only the drawing, keeping the hover hitbox stable at the edges.
         if (hovered) radius *= 1.3f;
 
+        DrawIcon(vertexHelper, shape, center, radius, color, marked);
+    }
+
+    // Shared geometry for the HUD map and the interactive journal map.
+    public static void DrawIcon(VertexHelper vertexHelper, MapPointIconShape shape,
+        Vector2 center, float radius, Color color, bool marked = false)
+    {
+        if (!IconCache.TryGetValue(shape, out var geometry))
+        {
+            using (var builder = new VertexHelper())
+            {
+                BuildIcon(builder, shape, Vector2.zero, 1f, Color.white);
+                geometry = new IconGeometry { vertices = new UIVertex[builder.currentVertCount] };
+                for (int i = 0; i < geometry.vertices.Length; i++) builder.PopulateUIVertex(ref geometry.vertices[i], i);
+                var mesh = new Mesh { hideFlags = HideFlags.HideAndDontSave };
+                builder.FillMesh(mesh); geometry.indices = mesh.triangles;
+                if (Application.isPlaying) Destroy(mesh); else DestroyImmediate(mesh);
+                IconCache.Add(shape, geometry);
+            }
+        }
+        int start = vertexHelper.currentVertCount;
+        for (int i = 0; i < geometry.vertices.Length; i++)
+        {
+            UIVertex v = geometry.vertices[i];
+            v.position = (Vector3)center + v.position * radius;
+            if (v.color.r == 255 && v.color.g == 255 && v.color.b == 255) v.color = color;
+            else { var background = v.color; background.a = (byte)(background.a * color.a); v.color = background; }
+            vertexHelper.AddVert(v);
+        }
+        for (int i = 0; i < geometry.indices.Length; i += 3)
+            vertexHelper.AddTriangle(start + geometry.indices[i], start + geometry.indices[i+1], start + geometry.indices[i+2]);
+        if (marked) AddFrame(vertexHelper, center, radius * 1.85f, Color.Lerp(color, Color.white, .35f));
+    }
+
+    private static void BuildIcon(VertexHelper vertexHelper, MapPointIconShape shape,
+        Vector2 center, float radius, Color color)
+    {
+        Color background = new Color32(15, 33, 60, 245);
+        if (shape == MapPointIconShape.SceneTransition)
+        {
+            AddQuad(vertexHelper, center, radius * 1.6f, background);
+            // No decorative border on exits: keep their footprint very small.
+        }
+        else
+        {
+            AddDiamond(vertexHelper, center, radius * 1.6f, color);
+            AddDiamond(vertexHelper, center, radius * 1.38f, background);
+        }
+        // Keep the door-leaf tint on the badge rim, but keep key/keypad symbols
+        // cyan so even dark-coloured doors have readable lock information.
+        Color glyphColor = MapPointOfInterestRecord.IsDoorIcon(shape) ? (Color)new Color32(91,211,241,255) : color;
+        if (DrawMechanismGlyph(vertexHelper, shape, center, radius * (shape == MapPointIconShape.SceneTransition ? .9f : .72f), glyphColor)) return;
+
         switch (shape)
         {
             case MapPointIconShape.Circle:
-                AddFan(vertexHelper, center, radius, 18, color, 0f);
+                AddFan(vertexHelper, center, radius * .8f, 18, color, 0f);
                 break;
             case MapPointIconShape.Square:
-                AddQuad(vertexHelper, center, radius, color);
+                AddQuad(vertexHelper, center, radius * .65f, color);
                 break;
             case MapPointIconShape.Star:
-                AddStar(vertexHelper, center, radius * 1.25f, color);
+                AddStar(vertexHelper, center, radius, color);
                 break;
             case MapPointIconShape.Exclamation:
-                AddQuad(vertexHelper, center + new Vector2(0f, 2f),
-                    new Vector2(radius * 0.28f, radius), color);
-                AddFan(vertexHelper, center + new Vector2(0f, -radius * 1.35f),
-                    radius * 0.26f, 10, color, 0f);
-                break;
-            case MapPointIconShape.Lever:
-                AddLever(vertexHelper, center, radius, color);
+                AddQuad(vertexHelper, center + new Vector2(0f, radius * .35f),
+                    new Vector2(radius * 0.2f, radius * .6f), color);
+                AddFan(vertexHelper, center + new Vector2(0f, -radius * .75f),
+                    radius * 0.2f, 10, color, 0f);
                 break;
             default:
                 AddDiamond(vertexHelper, center, radius * 1.15f, color);
                 break;
         }
 
-        if (marked)
-        {
-            Color frameColor = Color.Lerp(color, Color.white, 0.35f);
-            float frameRadius = Mathf.Min(rect.width, rect.height) * 0.47f;
-            AddFrame(vertexHelper, center, frameRadius, frameColor);
-        }
-    }
-
-    private static void AddLever(VertexHelper helper, Vector2 center, float radius, Color color)
-    {
-        AddQuad(helper, center + new Vector2(0f, -radius * 0.72f),
-            new Vector2(radius, radius * 0.18f), color);
-        AddPolygon(helper, center, new[]
-        {
-            new Vector2(-0.38f, -0.56f) * radius,
-            new Vector2(-0.10f, -0.68f) * radius,
-            new Vector2(0.68f, 0.70f) * radius,
-            new Vector2(0.40f, 0.82f) * radius
-        }, color);
-        AddFan(helper, center + new Vector2(0.54f, 0.82f) * radius,
-            radius * 0.34f, 8, color, 0f);
     }
 
     private static void AddDiamond(

@@ -19,6 +19,7 @@ public sealed partial class QuestJournalManager
     public static string ResolveQuestMapTargetId(string questId)
     {
         if (questId == KnownPasswordsEntryId) return null;
+        if (Instance != null && Instance.IsEntryFailed(questId)) return null;
         if (questId == GravekeeperQuestId)
         {
             var journal = Instance;
@@ -51,7 +52,7 @@ public sealed partial class QuestJournalManager
             var journal = Instance;
             if (journal == null || !journal.ContainsEntry(questId) || !journal.CanTriggerEntry(questId) || journal.IsEntryCompleted(questId)) return null;
             if (questId == SandwormBaitQuestId)
-                return journal.EntryDetailsContain(questId, SandwormToolsFound) ? SandwormMerchantTarget : SandwormToolsTarget;
+                return journal.BaitToolsDelivered || journal.EntryDetailsContain(questId, SandwormToolsFound) ? SandwormMerchantTarget : SandwormToolsTarget;
             return journal.EntryDetailsContain(questId, SandwormDeviceFound) ? SandwormMortarTarget : SandwormDeviceTarget;
         }
         if (questId != Level2HeroProofId) return questId;
@@ -143,4 +144,9 @@ public sealed partial class QuestJournalManager
     // this after that reset; only successful arrival completes this main quest.
     internal void ExpectLevel2TrialArrival(string sceneName) => pendingLevel2TrialScene = sceneName;
     internal void CancelLevel2TrialArrival() => pendingLevel2TrialScene = null;
+    internal void CompleteLevel2ForSettlement()
+    {
+        level2HeroProofStage = 3;
+        RefreshLevel2HeroProof(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+    }
 }

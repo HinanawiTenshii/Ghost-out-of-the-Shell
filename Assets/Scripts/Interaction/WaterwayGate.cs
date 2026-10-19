@@ -91,6 +91,7 @@ public sealed class WaterwayGate : MonoBehaviour
 
     private void OnEnable()
     {
+        MapPointOfInterest.AttachMechanism(this);
         CaptureInitialOpen();
         barrier = GetComponent<BoxCollider2D>();
         if (!initialized || !Application.isPlaying)

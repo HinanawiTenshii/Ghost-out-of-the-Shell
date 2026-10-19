@@ -146,6 +146,7 @@ public sealed class SandwormBossPrototype : MonoBehaviour
 
     private void Update()
     {
+        if (Application.isPlaying && RetroSceneLoadReveal.IsPreparingGameplay) return;
         if (externalPathControl) return;
         if (!Application.isPlaying)
         {

@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: Level2-Floor-1
   m_EditorClassIdentifier: 
   schemaVersion: 6
-  sourceRevision: a50906eb1f2b1bc3e6e09ee0d1c600d3
+  sourceRevision: 9d9becb3be699c95f87cd5beea5c2532
   sceneName: Level2-Floor-1
-  displayName: "Level2 \xB7 \u5730\u4E0B\u4E00\u5C42"
+  displayName: "\u57CE\u9547\u5730\u4E0B"
   blockPaths:
   - points:
     - {x: 95.88222, y: -19.925909}
@@ -1674,6 +1674,9 @@ MonoBehaviour:
     - {x: 64.86703, y: 53.69674}
     - {x: 63.86703, y: 53.69674}
   transitions:
+  - position: {x: -47.31, y: 30.4}
+    targetSceneName: Level2-Floor1
+    preservesSceneState: 1
   - position: {x: 80.8, y: -34.42}
     targetSceneName: Level2-Floor1
     preservesSceneState: 1

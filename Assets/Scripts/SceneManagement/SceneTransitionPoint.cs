@@ -210,6 +210,7 @@ public class SceneTransitionPoint : MonoBehaviour
             return;
         }
 
+        if (LevelSettlementScreen.TryOpen(targetSceneName.Trim())) return;
         RetroSceneLoadReveal.BeginTransition(targetSceneName.Trim(), () =>
         {
             Level2HeroQuestTarget questTarget = GetComponent<Level2HeroQuestTarget>();
@@ -217,8 +218,14 @@ public class SceneTransitionPoint : MonoBehaviour
             QuestJournalManager journal = QuestJournalManager.GetOrCreate();
             if (questTarget != null && questTarget.IsTrialEntrance)
                 journal.ExpectLevel2TrialArrival(targetSceneName.Trim());
+            PersistentInventory.Instance?.PreserveCapacityForNextSceneLoad();
             try { RetroSceneLoadReveal.LoadSceneAsync(targetSceneName.Trim()); }
-            catch { journal.CancelLevel2TrialArrival(); throw; }
+            catch
+            {
+                PersistentInventory.Instance?.PreserveCapacityForNextSceneLoad(false);
+                journal.CancelLevel2TrialArrival();
+                throw;
+            }
         });
     }
 

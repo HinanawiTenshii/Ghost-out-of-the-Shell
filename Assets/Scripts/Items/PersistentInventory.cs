@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// A character-independent, persistent five-slot inventory.
+/// A character-independent, persistent inventory (five slots before expansion).
 /// Items are identified by stable string IDs so future item systems can use it
 /// without coupling inventory contents to the currently controlled character.
 /// </summary>
@@ -124,6 +124,9 @@ public sealed partial class PersistentInventory : MonoBehaviour
     [SerializeField] private bool clearInventoryOnSceneLoad = true;
     [SerializeField] private string saveKey = "CogitansExtensa.PersistentInventory.v1";
     [SerializeField] private Slot[] slots = new Slot[DefaultSlotCount];
+    // Authoring baseline is separate from runtime expansion, so a fresh session
+    // never inherits the capacity of a previously played character/save.
+    private int initialSlotCount;
     [SerializeField, Min(0.001f)] private float mouseWheelThreshold = 0.01f;
     [SerializeField] private KeyCode useItemKey = KeyCode.R;
     [SerializeField] private KeyCode dropItemKey = KeyCode.Q;
@@ -166,6 +169,9 @@ public sealed partial class PersistentInventory : MonoBehaviour
 
     public void ApplyRuntimeState(RuntimeState state)
     {
+        // The serialized array already records capacity, including empty slots.
+        // This also reads old five-slot saves without a new save schema.
+        slotCount = Mathf.Max(InitialSlotCount, state.slots != null ? state.slots.Length : 0);
         EnsureSlots();
         for (int i = 0; i < slots.Length; i++)
         {
@@ -201,6 +207,7 @@ public sealed partial class PersistentInventory : MonoBehaviour
     private readonly Dictionary<string, PickupItemBase> itemPrefabById =
         new Dictionary<string, PickupItemBase>();
     private bool preserveOnNextSceneLoad;
+    private bool preserveCapacityOnNextSceneLoad;
     private bool potionUseInProgress;
     private bool itemExchangeInProgress;
 
@@ -216,6 +223,7 @@ public sealed partial class PersistentInventory : MonoBehaviour
         }
 
         Instance = this;
+        initialSlotCount = Mathf.Max(1, slotCount);
         EnsureSlots();
         SelectedSlotIndex = 0;
         RebuildItemPrefabCache();
@@ -237,7 +245,7 @@ public sealed partial class PersistentInventory : MonoBehaviour
         // its snapshot through ApplyRuntimeState after the scene is ready.
         if (clearInventoryOnSceneLoad)
         {
-            ClearAll();
+            ResetForNewSession();
         }
         else
         {
@@ -769,6 +777,17 @@ public sealed partial class PersistentInventory : MonoBehaviour
 
     public bool TryUseSelectedItem()
     {
+        bool leavingBox = ZeldaRuntimeRegistry.GetControlledMover()?.ActiveCardboardBox != null;
+        Slot selected = GetSlot(SelectedSlotIndex);
+        if (leavingBox && selected != null && !selected.IsEmpty &&
+            ResolveItemPrefab(selected.ItemId)?.UsePlacesInWorld == true) leavingBox = false;
+        bool used = TryUseSelectedItemCore();
+        if (used && !leavingBox) LevelRunStatistics.RecordItemUse();
+        return used;
+    }
+
+    private bool TryUseSelectedItemCore()
+    {
         if (potionUseInProgress || itemExchangeInProgress) return false;
         ZeldaFourWayMover controlledMover =
             ZeldaRuntimeRegistry.GetControlledMover();
@@ -821,6 +840,7 @@ public sealed partial class PersistentInventory : MonoBehaviour
         if (!CharacterSkillRequirements.Require(user, itemPrefab.RequiredUseSkill)) return false;
         if (magicRemote != null) return magicRemote.TryReconnect(user,slot.ItemInstanceId);
         if (itemPrefab is MortarRemotePickupItem mortarRemote) return TryUseMortarRemote(mortarRemote, slot, user);
+        if (itemPrefab is MemoPickupItem memo) return TryUseMemo(memo, slot, user);
 
         // Old/debug slots may not yet have an individual identity. Assign it before
         // deployment so the runtime, container and replacement remote all agree.
@@ -1151,8 +1171,29 @@ public sealed partial class PersistentInventory : MonoBehaviour
         NotifyChanged();
     }
 
+    private int InitialSlotCount => initialSlotCount > 0 ? initialSlotCount : DefaultSlotCount;
+
+    private void ResetForNewSession()
+    {
+        slotCount = InitialSlotCount;
+        EnsureSlots();
+        SelectedSlotIndex = 0;
+        ClearAll();
+        SelectedSlotChanged?.Invoke(SelectedSlotIndex);
+    }
+
+    public void ResetForProfile()
+    {
+        preserveOnNextSceneLoad = false;
+        preserveCapacityOnNextSceneLoad = false;
+        ResetForNewSession();
+    }
+
     public void Save()
     {
+        // Profile snapshots own gameplay persistence. The legacy global cache
+        // must not leak items between campaigns or be mutated during restoration.
+        if (GameSaveSystem.Instance != null) return;
         if (!saveToPlayerPrefs || string.IsNullOrWhiteSpace(saveKey))
         {
             return;
@@ -1173,8 +1214,16 @@ public sealed partial class PersistentInventory : MonoBehaviour
         Save();
     }
 
+    // A next-level entrance intentionally clears carried items, unlike travel
+    // within a level. Permanent consciousness upgrades still survive it.
+    public void PreserveCapacityForNextSceneLoad(bool preserve = true)
+    {
+        preserveCapacityOnNextSceneLoad = preserve;
+    }
+
     public void Load()
     {
+        if (GameSaveSystem.Instance != null) return;
         if (!saveToPlayerPrefs || string.IsNullOrWhiteSpace(saveKey) || !PlayerPrefs.HasKey(saveKey))
         {
             return;
@@ -1194,6 +1243,9 @@ public sealed partial class PersistentInventory : MonoBehaviour
                 return;
             }
 
+            slotCount = Mathf.Max(InitialSlotCount, data.slots.Length);
+            EnsureSlots();
+            SelectedSlotIndex = Mathf.Clamp(SelectedSlotIndex, 0, slots.Length - 1);
             for (int i = 0; i < slots.Length; i++)
             {
                 if (i < data.slots.Length && data.slots[i] != null)
@@ -1226,6 +1278,7 @@ public sealed partial class PersistentInventory : MonoBehaviour
 
     private void NotifyChanged()
     {
+        QuestJournalManager.Instance?.RecordQuestInventoryEvidence();
         InventoryChanged?.Invoke();
         Save();
     }
@@ -1247,17 +1300,24 @@ public sealed partial class PersistentInventory : MonoBehaviour
         if (preserveOnNextSceneLoad)
         {
             preserveOnNextSceneLoad = false;
+            preserveCapacityOnNextSceneLoad = false;
             InventoryChanged?.Invoke();
             SelectedSlotChanged?.Invoke(SelectedSlotIndex);
             return;
         }
 
-        SelectedSlotIndex = 0;
-        SelectedSlotChanged?.Invoke(SelectedSlotIndex);
         if (clearInventoryOnSceneLoad)
         {
-            ClearAll();
+            if (preserveCapacityOnNextSceneLoad)
+            {
+                SelectedSlotIndex = 0;
+                ClearAll();
+                SelectedSlotChanged?.Invoke(SelectedSlotIndex);
+            }
+            else ResetForNewSession();
         }
+        else { SelectedSlotIndex = 0; SelectedSlotChanged?.Invoke(SelectedSlotIndex); }
+        preserveCapacityOnNextSceneLoad = false;
     }
 
     private void RebuildItemPrefabCache()

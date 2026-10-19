@@ -61,7 +61,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
     private const int SwordPixelSize = 9;
     private const int WrenchPixelSize = 9;
     private const int PermissionPixelSize = 11;
-    private const int InventorySlotCount = 5;
+    private const int DefaultInventorySlotCount = 5;
     private const float TaskContainerScale = 2f;
     private const float EnforcedTaskIndicatorSize = 104f;
     private const int HudSortingOrder = 32760;
@@ -158,9 +158,9 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         spentPossessionEnergySprite = Sprite.Create(texture, new Rect(0, 0, 18, 10), new Vector2(0.5f, 0.5f), 18f);
         return spentPossessionEnergySprite;
     }
-    private readonly Image[] inventorySlots = new Image[InventorySlotCount];
-    private readonly Image[] inventoryItemIcons = new Image[InventorySlotCount];
-    private readonly Text[] inventoryQuantityTexts = new Text[InventorySlotCount];
+    private Image[] inventorySlots = new Image[0];
+    private Image[] inventoryItemIcons = new Image[0];
+    private Text[] inventoryQuantityTexts = new Text[0];
     private readonly Sprite[] permissionSprites = new Sprite[10];
     private readonly Texture2D[] permissionTextures = new Texture2D[10];
     private readonly Sprite[] negativePermissionSprites = new Sprite[2];
@@ -270,6 +270,12 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         currentTaskSceneKey = GetSceneTaskKey(initialScene);
         if (persistBetweenScenes)
         {
+            // Capture the authored scene configuration above before moving the
+            // HUD out of SceneAssets; never retain the scene container itself.
+            if (transform.parent != null)
+            {
+                transform.SetParent(null, true);
+            }
             DontDestroyOnLoad(gameObject);
         }
 
@@ -826,6 +832,11 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
     {
         UpdateTaskPointer();
         RefreshQuestObjectivePanel();
+        if (changeKind == QuestJournalChangeKind.Failed)
+        {
+            ShowJournalStyleNotificationPopup("任务失败", JournalStyleNotificationKind.QuestJournalUpdate);
+            return;
+        }
         if (changeKind == QuestJournalChangeKind.Completed)
         {
             ShowJournalStyleNotificationPopup(
@@ -857,6 +868,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
 
     private void RefreshInventoryDisplay()
     {
+        EnsureInventorySlotCount();
         int selectedIndex = inventory != null ? inventory.SelectedSlotIndex : -1;
         string selectedItemName = string.Empty;
         for (int i = 0; i < inventorySlots.Length; i++)
@@ -1620,60 +1632,26 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         areaPermissionStatusText.color = areaPermissionAllowedColor;
     }
 
-    private void CreateInventoryPlaceholder()
+    private void EnsureInventorySlotCount()
     {
-        GameObject containerObject = new GameObject(
-            "Inventory Placeholder",
-            typeof(RectTransform),
-            typeof(CanvasRenderer),
-            typeof(Image));
-        containerObject.transform.SetParent(transform, false);
-        inventoryContainer = containerObject.GetComponent<RectTransform>();
-        inventoryContainer.anchorMin = new Vector2(0.5f, 0f);
-        inventoryContainer.anchorMax = new Vector2(0.5f, 0f);
-        inventoryContainer.pivot = new Vector2(0.5f, 0f);
-        inventoryContainer.anchoredPosition = new Vector2(
-            0f,
-            inventoryScreenOffset.y + 26f);
-        inventoryLayoutSpacing = Mathf.Max(18f, inventorySlotSpacing);
-        inventoryLayoutHorizontalPadding = 18f;
+        if (inventoryContainer == null) return;
+        int count = inventory != null ? inventory.SlotCount :
+            PersistentInventory.Instance != null ? PersistentInventory.Instance.SlotCount : DefaultInventorySlotCount;
+        if (inventorySlots.Length == count) return;
+        int previousCount = inventorySlots.Length;
+        for (int i = count; i < previousCount; i++)
+        {
+            inventorySlots[i].gameObject.SetActive(false);
+            Destroy(inventorySlots[i].gameObject);
+        }
+        System.Array.Resize(ref inventorySlots, count);
+        System.Array.Resize(ref inventoryItemIcons, count);
+        System.Array.Resize(ref inventoryQuantityTexts, count);
         const float verticalPadding = 12f;
-        float contentWidth =
-            InventorySlotCount * inventorySlotSize +
-            (InventorySlotCount - 1) * inventoryLayoutSpacing;
         inventoryContainer.sizeDelta = new Vector2(
-            contentWidth + inventoryLayoutHorizontalPadding * 2f,
+            count * inventorySlotSize + (count - 1) * inventoryLayoutSpacing + inventoryLayoutHorizontalPadding * 2f,
             inventorySlotSize + verticalPadding * 2f);
-        inventoryFrameImage = containerObject.GetComponent<Image>();
-        inventoryFrameImage.sprite = null;
-        inventoryFrameImage.color = new Color(0f, 0f, 0f, 0.72f);
-        inventoryFrameImage.raycastTarget = false;
-        CreateInventoryOuterFrameEdge(
-            "Top",
-            new Vector2(0f, 1f),
-            new Vector2(1f, 1f),
-            new Vector2(0f, -2f),
-            Vector2.zero);
-        CreateInventoryOuterFrameEdge(
-            "Bottom",
-            new Vector2(0f, 0f),
-            new Vector2(1f, 0f),
-            Vector2.zero,
-            new Vector2(0f, 2f));
-        CreateInventoryOuterFrameEdge(
-            "Left",
-            new Vector2(0f, 0f),
-            new Vector2(0f, 1f),
-            Vector2.zero,
-            new Vector2(2f, 0f));
-        CreateInventoryOuterFrameEdge(
-            "Right",
-            new Vector2(1f, 0f),
-            new Vector2(1f, 1f),
-            new Vector2(-2f, 0f),
-            Vector2.zero);
-
-        for (int i = 0; i < inventorySlots.Length; i++)
+        for (int i = previousCount; i < count; i++)
         {
             GameObject slotObject = new GameObject(
                 $"Inventory Slot {i + 1}",
@@ -1697,7 +1675,8 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
             image.sprite = permissionFrameSprite;
             image.raycastTarget = false;
             image.preserveAspect = true;
-            image.color = ZeldaUiPalette.Primary;
+            image.color = GetCurrentInventoryUiColor();
+            slotObject.SetActive(displayedCharacter != null);
             inventorySlots[i] = image;
 
             GameObject iconObject = new GameObject(
@@ -1751,6 +1730,72 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
             cooldownRect.offsetMin = Vector2.one * 2f; cooldownRect.offsetMax = Vector2.one * -2f;
             cooldownObject.GetComponent<InventoryItemCooldownOverlay>().Configure(i, permissionLabelFont);
         }
+
+        FitInventoryToScreen();
+    }
+
+    private void OnRectTransformDimensionsChange() => FitInventoryToScreen();
+
+    private void FitInventoryToScreen()
+    {
+        if (inventoryContainer == null || !(transform is RectTransform root)) return;
+        float availableWidth = root.rect.width - 48f;
+        float scale = availableWidth > 0f ? Mathf.Min(1f, availableWidth / Mathf.Max(1f, inventoryContainer.sizeDelta.x)) : 1f;
+        inventoryContainer.localScale = new Vector3(scale, scale, 1f);
+        // Center anchor and pivot never change: expansion grows equally to both sides.
+    }
+
+    private void CreateInventoryPlaceholder()
+    {
+        GameObject containerObject = new GameObject(
+            "Inventory Placeholder",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        containerObject.transform.SetParent(transform, false);
+        inventoryContainer = containerObject.GetComponent<RectTransform>();
+        inventoryContainer.anchorMin = new Vector2(0.5f, 0f);
+        inventoryContainer.anchorMax = new Vector2(0.5f, 0f);
+        inventoryContainer.pivot = new Vector2(0.5f, 0f);
+        inventoryContainer.anchoredPosition = new Vector2(
+            0f,
+            inventoryScreenOffset.y + 26f);
+        inventoryLayoutSpacing = Mathf.Max(18f, inventorySlotSpacing);
+        inventoryLayoutHorizontalPadding = 18f;
+        const float verticalPadding = 12f;
+        inventoryContainer.sizeDelta = new Vector2(
+            0f,
+            inventorySlotSize + verticalPadding * 2f);
+        inventoryFrameImage = containerObject.GetComponent<Image>();
+        inventoryFrameImage.sprite = null;
+        inventoryFrameImage.color = new Color(0f, 0f, 0f, 0.72f);
+        inventoryFrameImage.raycastTarget = false;
+        CreateInventoryOuterFrameEdge(
+            "Top",
+            new Vector2(0f, 1f),
+            new Vector2(1f, 1f),
+            new Vector2(0f, -2f),
+            Vector2.zero);
+        CreateInventoryOuterFrameEdge(
+            "Bottom",
+            new Vector2(0f, 0f),
+            new Vector2(1f, 0f),
+            Vector2.zero,
+            new Vector2(0f, 2f));
+        CreateInventoryOuterFrameEdge(
+            "Left",
+            new Vector2(0f, 0f),
+            new Vector2(0f, 1f),
+            Vector2.zero,
+            new Vector2(2f, 0f));
+        CreateInventoryOuterFrameEdge(
+            "Right",
+            new Vector2(1f, 0f),
+            new Vector2(1f, 1f),
+            new Vector2(-2f, 0f),
+            Vector2.zero);
+
+        EnsureInventorySlotCount();
 
         GameObject selectedNameObject = new GameObject(
             "Selected Item Name",
@@ -2134,7 +2179,8 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
             case QuestJournalManager.SandwormBaitQuestId:
                 AddObjective(texts, completion, "前往要塞取得合成工具", questComplete ||
                     journal.EntryDetailsContain(questId, QuestJournalManager.SandwormToolsFound));
-                AddObjective(texts, completion, "将合成工具交给诡异商人", questComplete);
+                AddObjective(texts, completion, "将合成工具交给诡异商人", questComplete || journal.BaitToolsDelivered);
+                AddObjective(texts, completion, "取得诱饵炸弹", questComplete);
                 break;
             case QuestJournalManager.ArenaInjectionQuestId:
                 AddObjective(texts, completion, QuestJournalManager.ArenaInjectionObjective, questComplete);
@@ -2676,6 +2722,16 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
 
     private void UpdateTaskPointer()
     {
+        if (RuntimeUiVisibility.IsPauseOnlyScene)
+        {
+            trackedQuestTargetInCurrentScene = false;
+            if (taskMiniMapGraphic != null) taskMiniMapGraphic.gameObject.SetActive(false);
+            if (taskPointerLabelRect != null) taskPointerLabelRect.gameObject.SetActive(false);
+            if (trackedQuestWorldMarker != null) trackedQuestWorldMarker.SetActive(false);
+            foreach (var marker in additionalQuestWorldMarkers)
+                if (marker != null) marker.SetActive(false);
+            return;
+        }
         if (taskMiniMapGraphic == null)
             return;
 
@@ -2790,6 +2846,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
     private static void PlaceQuestWorldMarker(GameObject marker, Camera camera, bool hasTarget, Vector2 targetPosition)
     {
         if (marker == null) return;
+        hasTarget &= !RuntimeUiVisibility.IsPauseOnlyScene;
         Vector3 viewport = hasTarget && camera != null ? camera.WorldToViewportPoint(targetPosition) : Vector3.back;
         bool visible = viewport.z > 0f && viewport.x >= 0f && viewport.x <= 1f && viewport.y >= 0f && viewport.y <= 1f;
         marker.SetActive(visible);

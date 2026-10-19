@@ -49,7 +49,13 @@ public sealed partial class QuestJournalManager
     public bool IsTrackedSummoningTarget(string identity)
     {
         if (TrackedEntryId != SummoningQuestId || !ContainsEntry(SummoningQuestId) ||
-            IsEntryCompleted(SummoningQuestId) || string.IsNullOrEmpty(identity)) return false;
+            IsEntryFinished(SummoningQuestId) || string.IsNullOrEmpty(identity)) return false;
+        EnsureSummoningTargetsConfigured();
+        return summoningTargetIds.Contains(identity) && !summoningConsumedIds.Contains(identity);
+    }
+
+    private void EnsureSummoningTargetsConfigured()
+    {
         if (!summoningTargetsConfigured)
         {
             // Legacy saves may resume on a floor without the ritual circle.
@@ -62,13 +68,13 @@ public sealed partial class QuestJournalManager
                 if (asset != null) summoningTargetIds.Add(asset.StableId);
             }
         }
-        return summoningTargetIds.Contains(identity) && !summoningConsumedIds.Contains(identity);
     }
 
     // Milestones use the same saved journal evidence as the other item quests.
     // Do not poll the scene or search for individual coins while tracking this task.
     public void RecordCounterfeitGemAcquired()
     {
+        counterfeitGemAcquired = true;
         if (!IsEntryCompleted(CounterfeitQuestId))
             ApplyEventChanges(new[] { new QuestJournalEventChange {
                 entryId = CounterfeitQuestId, operation = QuestJournalEventOperation.AppendDetails,
@@ -97,7 +103,7 @@ public sealed partial class QuestJournalManager
     private void RefreshSummoningQuest()
     {
         // Physical progress before reading the notice is retained, but never starts the task.
-        if (!TryGetEntry(SummoningQuestId, out var entry) || IsEntryCompleted(SummoningQuestId)) return;
+        if (!TryGetEntry(SummoningQuestId, out var entry) || IsEntryFinished(SummoningQuestId)) return;
         string details = SummoningQuestIntroduction + (summoningPerformed
             ? "\n\n六枚水晶已全部点亮，域外来客已被召唤至法阵中央。"
             : "\n\n当前目标：使六名指定角色在法阵范围内死亡，点亮全部水晶并完成召唤。\n已点亮水晶：" + summoningLitCrystals + "/6。");

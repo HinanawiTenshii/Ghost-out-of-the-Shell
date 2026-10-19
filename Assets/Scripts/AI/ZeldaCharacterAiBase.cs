@@ -239,6 +239,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
     private Material visionMaterial;
     private float nextVisionVisualRefreshTime;
     private bool hasBuiltVisionMesh;
+    private bool visionRequestedVisible = true;
     private ZeldaAiStateIndicator stateIndicator;
     private ZeldaAiState currentState = ZeldaAiState.Idle;
     private AudioSource awarenessAudioSource;
@@ -843,7 +844,9 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
             if (!seesPlayer) investigationReactionRemaining = InvestigationReactionDuration;
         }
 
-        anonymousHandgunInvestigation = false;
+        // Another environmental pulse may retarget this search, but must not
+        // turn an ongoing handgun-hit investigation into a permission-exempt one.
+        anonymousHandgunInvestigation = anonymousHandgunInvestigation && currentState == ZeldaAiState.Search;
         targetMover = null;
         activePermissionArea = null;
         recognizedPermissionTarget = null;
@@ -1171,7 +1174,9 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         rb.freezeRotation = true;
         rb.useFullKinematicContacts = true;
         bodyCollider.isTrigger = false;
-        CreateVisionVisual();
+        // Far-away scene NPCs need identity/state, not an unused mesh/material.
+        // Visible NPCs are warmed under cover; other cones are created on demand.
+        if (!RetroSceneLoadReveal.IsPreparingGameplay) CreateVisionVisual();
         CreateStateIndicator();
         CreateNavigationDebugVisual();
     }
@@ -1220,6 +1225,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void OnDisable()
     {
+        LevelRunStatistics.ForgetObserver(this);
         investigationReactionRemaining = 0f;
         if (!enabled || (mover != null && mover.enabled)) ClearSilenceOath();
         if (silenceOathVisual != null) silenceOathVisual.enabled = false;
@@ -1238,6 +1244,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void Update()
     {
+        if (RetroSceneLoadReveal.IsPreparingGameplay) return;
         if (FreezeForArena()) return;
         // Paused conversations must not trigger zero-delta perception/state transitions.
         if (CharacterDialogueWindow.BlocksInput) return;
@@ -1304,6 +1311,11 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void FixedUpdate()
     {
+        if (RetroSceneLoadReveal.IsPreparingGameplay)
+        {
+            if (rb != null) rb.velocity = Vector2.zero;
+            return;
+        }
         if (FreezeForArena()) return;
         if (CharacterDialogueWindow.BlocksInput) return;
         if (RemainsStationary || IsReactingToAttraction)
@@ -1564,6 +1576,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void LateUpdate()
     {
+        if (RetroSceneLoadReveal.IsPreparingGameplay) return;
         if (IsStunned) return;
         if (Time.time < nextVisionVisualRefreshTime)
         {
@@ -1588,6 +1601,36 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
 
         UpdateVisionMesh();
         hasBuiltVisionMesh = true;
+    }
+
+    public void PrepareVisualForSceneReveal()
+    {
+        if (!isActiveAndEnabled || characterData == null || characterData.IsDead) return;
+        UpdateVisionMesh();
+        hasBuiltVisionMesh = true;
+        float stagger = Mathf.Lerp(.85f, 1.15f, Mathf.Abs(GetInstanceID() % 19) / 19f);
+        nextVisionVisualRefreshTime = Time.time + Mathf.Max(.02f, visionVisualRefreshInterval) * stagger;
+    }
+
+    // Keep the old loading footprint even before a cone has a renderer. This
+    // cheap, unoccluded envelope ensures an offscreen NPC whose cone reaches
+    // the camera is not incorrectly put to sleep by lazy visual construction.
+    public bool HasPreparedVision => hasBuiltVisionMesh;
+    public Bounds GetUnoccludedVisionBounds()
+    {
+        Vector3 origin = transform.position;
+        var bounds = new Bounds(origin, Vector3.zero);
+        int rays = Mathf.Max(4, visionRayCount);
+        float facing = Mathf.Atan2(facingDirection.y, facingDirection.x) * Mathf.Rad2Deg;
+        float angle = Mathf.Max(EffectiveVisionAngle, EffectivePeripheralAngle);
+        for (int i = 0; i <= rays; i++)
+        {
+            float ray = facing - angle * .5f + angle * i / rays;
+            float radius = Mathf.Abs(Mathf.DeltaAngle(facing, ray)) <= EffectiveVisionAngle * .5f
+                ? EffectiveVisionRadius : EffectivePeripheralRadius;
+            bounds.Encapsulate(origin + new Vector3(Mathf.Cos(ray * Mathf.Deg2Rad), Mathf.Sin(ray * Mathf.Deg2Rad)) * radius);
+        }
+        return bounds;
     }
 
     protected virtual void TickIdle(float deltaTime)
@@ -2313,6 +2356,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         if (newState != ZeldaAiState.Search) investigationReactionRemaining = 0f;
         if (currentState == newState)
         {
+            LevelRunStatistics.Awareness(this, targetMover, newState, playAwarenessCue);
             if (playAwarenessCue) SyncSharedPlayerIncident();
             if (newState == ZeldaAiState.Hostile && playAwarenessCue) ShareNearbyPlayerHostility();
             return;
@@ -2322,6 +2366,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         ResetHostileAttackCycle();
         OnStateExited(previousState, newState);
         currentState = newState;
+        LevelRunStatistics.Awareness(this, targetMover, newState, playAwarenessCue);
         if (newState != ZeldaAiState.Hostile) lastSharedHostilityTarget = null;
         if (newState != ZeldaAiState.Search) anonymousHandgunInvestigation = false;
         if (newState == ZeldaAiState.Hostile) pendingHandgunInvestigation = false;
@@ -2587,7 +2632,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         if (currentState == ZeldaAiState.Search)
         {
             ZeldaFourWayMover rediscoveredPlayer = FindVisiblePlayer();
-            if (rediscoveredPlayer != null)
+            if (rediscoveredPlayer != null && !HasIncidentInvestigationPermissionExemption(rediscoveredPlayer))
             {
                 PrepareFreshSilenceOathIncident();
                 targetMover = rediscoveredPlayer;
@@ -3089,6 +3134,26 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         previousSearchWaypointDistance = float.PositiveInfinity;
         isPausingDuringInvestigation = true;
         investigationPauseTimer = 0f;
+    }
+
+    private bool HasIncidentInvestigationPermissionExemption(ZeldaFourWayMover candidate)
+    {
+        // An environmental sound incident is suspicion, not evidence of an attack.
+        // Only waive this Search sighting: witnessed offences, retaliation and
+        // pursuit searches keep their existing responses and run before it.
+        // A handgun hit deliberately hides its shooter, but remains an attack:
+        // its investigation must still turn hostile on seeing the player.
+        if (!isDoorIncidentInvestigation || anonymousHandgunInvestigation || alarmResponseActive || candidate == null)
+            return false;
+        ZeldaCharacterData data = candidate.CharacterData;
+        if (data == null || data.PermissionLevel < PermissionArea.DefaultPermissionLevel + 2)
+            return false;
+
+        // Use the observed character's current position, not the investigator's
+        // position or the sound source. Re-evaluate when either permission changes.
+        PermissionArea area = FindHighestPermissionArea(candidate.transform.position);
+        int requiredPermission = area != null ? area.PermissionLevel : PermissionArea.DefaultPermissionLevel;
+        return data.PermissionLevel - requiredPermission >= 2;
     }
 
     private PermissionArea FindHighestPermissionArea(Vector2 worldPosition)
@@ -5755,6 +5820,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         ApplyVisionMaterialAppearance();
         visionRenderer.sharedMaterial = visionMaterial;
         visionRenderer.sortingOrder = 0;
+        visionRenderer.enabled = visionRequestedVisible;
     }
 
     private void ApplyVisionMaterialAppearance()
@@ -5770,6 +5836,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
 
     private void SetVisionVisible(bool isVisible)
     {
+        visionRequestedVisible = isVisible;
         if (visionRenderer != null)
         {
             visionRenderer.enabled = isVisible;
@@ -5826,7 +5893,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
     {
         if (visionMesh == null)
         {
-            return;
+            CreateVisionVisual();
         }
 
         int rayCount = Mathf.Max(4, visionRayCount);

@@ -263,6 +263,16 @@ Napi / M-ART — https://mart.kitunebi.com/
 - 双击写在同一片段内，音源复用；暂停后续播、停用与场景卸载时停止，恢复结算存档不重新播放。`python Tools/GenerateArenaBellAudio.py --check` 校验确定性、两次敲击、电平、格式及端点，哈希记录于 JSON 清单。
 - 无新增第三方素材署名要求，不套用其他音频的 CC0 许可。
 
+### S20 — 项目内程序合成：召唤法阵仪式
+
+- 生成日期：2026-10-18；`Tools/GenerateSummoningAudio.py` 使用 Python 标准库及项目现有合成函数，不使用录音或第三方采样。
+- `Assets/Resources/Audio/SummoningGather.wav`：3 秒水晶汇聚，六组晶体共振与逐渐增强的低频蓄能声，RMS 0.115，峰值 0.4937。
+- `Assets/Resources/Audio/SummoningEruption.wav`：3 秒能量喷发，连续气流、低频与不规则脉动，RMS 0.15，峰值 0.3757。
+- `Assets/Resources/Audio/SummoningBurst.wav`：1.4 秒爆散与晶尘尾声，RMS 0.0986，峰值 0.78。
+- 均为单声道 44.1 kHz PCM16；默认播放音量 0.55，2～26 单位距离衰减，一个法阵只使用一个音源。不新增 AI 吸引或伤害。
+- 音效跟随仪式保存进度；暂停、加载黑幕时暂停，停用或卸载时停止，读档在对应片段位置续播。阶段时长变化时同步适配播放进度。
+- `python Tools/GenerateSummoningAudio.py --check` 检查确定性、格式、时长、峰值、直流偏移与端点。无新增第三方署名要求。
+
 ### S11 — 项目内程序合成：木门与玻璃破坏
 
 - 生成日期：2026-10-04；脚本 `Tools/GenerateDestructionAudio.py`，仅使用 Python 标准库和项目中的合成辅助函数。

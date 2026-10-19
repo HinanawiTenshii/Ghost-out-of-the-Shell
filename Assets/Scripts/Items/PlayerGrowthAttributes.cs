@@ -75,7 +75,7 @@ public sealed class PlayerGrowthAttributes : MonoBehaviour
         new SkillDefinition { id = "combat_expertise_2", title = "战斗专精Ⅱ", description = "消耗两点E.G.O发动，经由强化，可以在技能生效时恢复生命值。", type = SkillType.Active, cost = 2, position = new Vector2(-240, 0), parentId = "combat_expertise", replacesSkillId = "combat_expertise", requiredPossessedSkillId = "combat_expertise" },
         new SkillDefinition { id = "strength_1", title = "力量强化", description = "经由强化，永久提升角色的一点力量。", type = SkillType.Passive, cost = 4, attackBonus = 1, position = new Vector2(-240, -165), parentId = "combat_expertise_2" },
         new SkillDefinition { id = "health_1", title = "生命强化", description = "经由强化，永久增加角色的两点生命上限。", cost = 2, healthBonus = 2, position = new Vector2(-90, 0) },
-        new SkillDefinition { id = "soul_mark", title = "灵魂标记", description = "使用时为一个可以附身的角色施加标记，施加标记后再次使用会将当前角色转化为一个炸弹，同时幽灵会转移到之前施加标记的角色身上\n（注意：切换场景时标记会清除）", type = SkillType.Active, cost = 4, position = new Vector2(100, 165), parentId = "health_1" },
+        new SkillDefinition { id = "soul_mark", title = "灵魂标记", description = "使用时为一个可以附身的角色施加标记，施加标记后再次使用会将当前角色转化为一个炸弹，同时幽灵会转移到之前施加标记的角色身上\n（注意：施加标记会被视为敌对行为；切换场景时标记会清除）", type = SkillType.Active, cost = 4, position = new Vector2(100, 165), parentId = "health_1" },
         new SkillDefinition { id = "soul_mark_2", title = "灵魂标记Ⅱ", description = "强化后的灵魂标记，增强了自爆时的爆炸威力与范围。", type = SkillType.Active, cost = 2, position = new Vector2(280, 165), parentId = "soul_mark", replacesSkillId = "soul_mark" },
         new SkillDefinition { id = "soul_mark_3", title = "灵魂标记Ⅲ", description = "进一步强化后的灵魂标记，降低了使用时消耗的E.G.O量。", type = SkillType.Active, cost = 2, position = new Vector2(460, 165), parentId = "soul_mark_2", replacesSkillId = "soul_mark_2" },
         new SkillDefinition { id = "ghost_form", title = "幽灵形态", description = "消耗两点E.G.O发动，发动后进入幽灵形态，将会变得无法被察觉，同时也无法与物品进行互动。", type = SkillType.Active, cost = 4, position = new Vector2(100, 0), parentId = "health_1" },
@@ -103,6 +103,7 @@ public sealed class PlayerGrowthAttributes : MonoBehaviour
 
     public void RecordPossessedCharacter(ZeldaCharacterData character)
     {
+        LevelRunStatistics.RecordBody(character);
         string id = character != null ? character.NativeCharacterSkillId : null;
         if (string.IsNullOrEmpty(id) || discoveredCharacterSkills.Contains(id)) return;
         discoveredCharacterSkills.Add(id);
@@ -357,11 +358,14 @@ public sealed class PlayerGrowthAttributes : MonoBehaviour
 
         Instance = this;
         ClampValues();
-        InstanceChanged?.Invoke();
         if (persistBetweenScenes)
         {
+            // Level scenes may group PlayerStates under SceneAssets. Unity only
+            // preserves root objects; detach this service, not the whole scene group.
+            if (transform.parent != null) transform.SetParent(null, true);
             DontDestroyOnLoad(gameObject);
         }
+        InstanceChanged?.Invoke();
     }
 
     private void OnDestroy()

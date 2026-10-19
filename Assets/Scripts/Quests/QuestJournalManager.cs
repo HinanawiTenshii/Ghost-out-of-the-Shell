@@ -23,7 +23,8 @@ public enum QuestJournalChangeKind
     Updated,
     Completed,
     Reset,
-    InitialSceneLoad
+    InitialSceneLoad,
+    Failed
 }
 
 public enum QuestJournalEventOperation
@@ -98,6 +99,9 @@ public sealed partial class QuestJournalManager : MonoBehaviour
         public bool tavernRoomPasswordKnown, engineerSafePasswordKnown;
         public bool entertainmentRoomPasswordKnown, warehouseGatePasswordKnown;
         public bool churchRelicPasswordKnown, graveyardCrystalDestroyed;
+        public int failureVersion;
+        public List<SavedFailure> failures = new List<SavedFailure>();
+        public bool baitToolsDelivered, baitBombAcquired, counterfeitGemAcquired, counterfeitProofAcquired;
     }
 
     public SaveState CaptureSaveState()
@@ -133,6 +137,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
         state.warehouseGatePasswordKnown = warehouseGatePasswordKnown;
         state.churchRelicPasswordKnown = churchRelicPasswordKnown;
         state.graveyardCrystalDestroyed = graveyardCrystalDestroyed;
+        CaptureFailureState(state);
         return state;
     }
 
@@ -164,6 +169,8 @@ public sealed partial class QuestJournalManager : MonoBehaviour
         foreach (var e in state.evidence) pendingDetailEvidence[e.id] = new List<string>(e.details);
         foreach (var e in state.updates) pendingUpdateEvidence[e.entryId] = e;
         TrackedEntryId = state.tracked; InitialTrackedEntryId = state.initialTracked;
+        RestoreFailureState(state);
+        RecordQuestInventoryEvidence();
         level2HeroProofStage = Mathf.Clamp(state.level2HeroProofStage, 0, 3);
         pendingLevel2TrialScene = null;
         RestoreLevel2HeroProofStage();
@@ -342,6 +349,9 @@ public sealed partial class QuestJournalManager : MonoBehaviour
             normalizedTitle,
             normalizedDetails,
             normalizedScene));
+        // An impossible prerequisite may have died before this quest was revealed.
+        // Add the visible journal entry, then immediately finish it as failed.
+        if (ApplyRecordedFailure(normalizedId)) return true;
         // A new child should be discoverable even if its parent was folded earlier.
         string parentId = GetParentEntryId(normalizedId);
         while (!string.IsNullOrEmpty(parentId))
@@ -368,6 +378,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
             SummoningCircle.ReportLoadedQuestProgress();
             RefreshSummoningQuest();
         }
+        RecordQuestInventoryEvidence();
         return true;
     }
 
@@ -440,7 +451,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
         string normalizedId = NormalizeId(entryId);
         if (normalizedId == KnownPasswordsEntryId || !ContainsEntry(normalizedId) ||
             !CanTriggerEntry(normalizedId) ||
-            IsEntryCompleted(normalizedId) ||
+            IsEntryFinished(normalizedId) ||
             string.Equals(TrackedEntryId, normalizedId, StringComparison.Ordinal))
         {
             return false;
@@ -520,15 +531,15 @@ public sealed partial class QuestJournalManager : MonoBehaviour
     public bool CompleteEntry(string entryId)
     {
         string normalizedId = NormalizeId(entryId);
-        if (!CanTriggerEntry(normalizedId) || !ContainsEntry(normalizedId) || !completedEntryIds.Add(normalizedId))
+        if (failureEvidence.ContainsKey(normalizedId) || !CanTriggerEntry(normalizedId) || !ContainsEntry(normalizedId) || !completedEntryIds.Add(normalizedId))
             return false;
 
         if (string.Equals(TrackedEntryId, normalizedId, StringComparison.Ordinal))
         {
             string parentId = GetParentEntryId(normalizedId);
-            TrackedEntryId = ContainsEntry(parentId) && !IsEntryCompleted(parentId) ? parentId :
+            TrackedEntryId = ContainsEntry(parentId) && !IsEntryFinished(parentId) ? parentId :
                 ContainsEntry(InitialTrackedEntryId) &&
-                             !IsEntryCompleted(InitialTrackedEntryId)
+                             !IsEntryFinished(InitialTrackedEntryId)
                 ? InitialTrackedEntryId
                 : FindLatestIncompleteEntryId(normalizedId);
         }
@@ -555,6 +566,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
             return false;
 
         string normalizedId = entryId.Trim();
+        if (failureEvidence.ContainsKey(normalizedId)) return false;
         if (!CanTriggerEntry(normalizedId))
             return rememberBeforeParent && pendingCompletionEvidence.Add(normalizedId);
         return ContainsEntry(normalizedId)
@@ -606,7 +618,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
             string id = entries[index].Id;
             if (!string.Equals(id, excludedId, StringComparison.Ordinal) &&
                 CanTriggerEntry(id) &&
-                !IsEntryCompleted(id))
+                !IsEntryFinished(id))
             {
                 return id;
             }
@@ -652,6 +664,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
 
     public void ResetAllEntries()
     {
+        ResetFailureState();
         tavernRoomPasswordKnown = false;
         engineerSafePasswordKnown = false;
         entertainmentRoomPasswordKnown = false;

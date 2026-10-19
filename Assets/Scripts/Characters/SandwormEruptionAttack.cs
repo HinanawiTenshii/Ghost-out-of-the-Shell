@@ -113,6 +113,7 @@ public sealed partial class SandwormEruptionAttack : MonoBehaviour
 
     private void LateUpdate()
     {
+        if (RetroSceneLoadReveal.IsPreparingGameplay) return;
         if (Application.isPlaying) AdvanceAttack(Time.deltaTime);
     }
 

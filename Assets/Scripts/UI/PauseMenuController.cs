@@ -23,6 +23,8 @@ public sealed class PauseMenuController : MonoBehaviour
     private float previousTimeScale = 1f;
     private bool isOpen;
     private bool previousCursorVisible;
+    private Button restartButton;
+    private bool confirmingRestart;
     private CursorLockMode previousCursorLockMode;
 
     public static bool IsPaused { get; private set; }
@@ -106,6 +108,15 @@ public sealed class PauseMenuController : MonoBehaviour
         // CRTScreenEffect handles rebinding persistent canvases to a new camera.
         EnsureRenderPriority();
         SetMenuVisible(true);
+        confirmingRestart = false;
+        if (restartButton != null)
+        {
+            bool available = GameSaveSystem.Instance != null && GameSaveSystem.Instance.CanRestartCurrentLevel;
+            restartButton.interactable = available;
+            var label = restartButton.GetComponentInChildren<Text>();
+            label.text = available ? "重新开始本关" : "重新开始（无入口记录）";
+            label.fontSize = available ? 22 : 18;
+        }
     }
 
     public void CloseMenu()
@@ -167,7 +178,7 @@ public sealed class PauseMenuController : MonoBehaviour
         CreateButton(panelRect, "回到游戏", 188f, true, CloseMenu);
         CreateButton(panelRect, "储存游戏", 84f, true, () => OpenSaveSlots(true));
         CreateButton(panelRect, "读取游戏", -20f, true, () => OpenSaveSlots(false));
-        CreateButton(panelRect, "游戏设置（暂未开放）", -124f, false, null);
+        restartButton = CreateButton(panelRect, "重新开始本关", -124f, true, RestartLevel);
         CreateButton(panelRect, "标题界面", -228f, true, ReturnToTitleScreen);
     }
 
@@ -177,7 +188,18 @@ public sealed class PauseMenuController : MonoBehaviour
         SaveSlotPanel.Open(transform, menuFont, saving, false, () => menuRoot.SetActive(true));
     }
 
-    private void CreateButton(
+    private void RestartLevel()
+    {
+        if (!confirmingRestart)
+        {
+            confirmingRestart = true;
+            restartButton.GetComponentInChildren<Text>().text = "确认重新开始本关？";
+            return;
+        }
+        if (GameSaveSystem.Instance.RestartCurrentLevel()) CloseMenu();
+    }
+
+    private Button CreateButton(
         RectTransform parent,
         string label,
         float verticalPosition,
@@ -233,6 +255,7 @@ public sealed class PauseMenuController : MonoBehaviour
         text.alignment = TextAnchor.MiddleCenter;
         text.color = interactable ? GhostBlue : new Color(0.44f, 0.57f, 0.66f, 1f);
         text.raycastTarget = false;
+        return button;
     }
 
     private static void CreateBorder(RectTransform parent, Color color, float thickness)

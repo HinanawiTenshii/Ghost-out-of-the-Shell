@@ -5,6 +5,39 @@
   "note": "Inventory identity snapshot, not proof of permission. Source IDs refer to the source register; UNKNOWN requires further research.",
   "assets": [
     {
+      "path": "Assets/Resources/Audio/SummoningGather.wav",
+      "sourceId": "S20",
+      "status": "original-procedural",
+      "guid": "4189ff3e78f741e59978eb95ad951d53",
+      "sha256": "74CDE7B86CE6B5A5CDDF25A4C887B17C7833880A3D292F4BF668918B5893BD3C",
+      "bytes": 264644,
+      "durationSeconds": 3.0,
+      "generator": "Tools/GenerateSummoningAudio.py",
+      "note": "Six crystal modes and a rising purple-energy drone; original synthesis, mono PCM16 44100 Hz. RMS 0.115, peak 0.4937. Phase-clock playback follows saves and pauses."
+    },
+    {
+      "path": "Assets/Resources/Audio/SummoningEruption.wav",
+      "sourceId": "S20",
+      "status": "original-procedural",
+      "guid": "77fc832741de40ebbb0f980394fef563",
+      "sha256": "FC26253AA7E36F7C93810479AAE977FF640A568EBFC97C1CC938A82B5DEE9E5F",
+      "bytes": 264644,
+      "durationSeconds": 3.0,
+      "generator": "Tools/GenerateSummoningAudio.py",
+      "note": "Continuous energy rush with low irregular flutter, original synthesis. RMS 0.15, peak 0.3757. Default playback volume 0.55; distance attenuation, no AI attraction."
+    },
+    {
+      "path": "Assets/Resources/Audio/SummoningBurst.wav",
+      "sourceId": "S20",
+      "status": "original-procedural",
+      "guid": "3a720da86aa0448387919260ef6c4f86",
+      "sha256": "83EED4BF101CF76F8FACE0E21202E9BD8F0F93B518EFE0D980FBCF8DE5B57A7A",
+      "bytes": 123524,
+      "durationSeconds": 1.4,
+      "generator": "Tools/GenerateSummoningAudio.py",
+      "note": "One broad release with falling crystalline dust, original synthesis. RMS 0.0986, peak 0.78. Plays with the dispersal/NPC appearance; restores at saved phase rather than replaying."
+    },
+    {
       "path": "Assets/Resources/Audio/ArenaRoundEndBell.wav",
       "sourceId": "S19",
       "status": "original-procedural",

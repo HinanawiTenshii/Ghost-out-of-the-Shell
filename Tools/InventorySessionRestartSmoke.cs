@@ -133,7 +133,10 @@ public static class InventorySessionRestartSmoke
                 new PersistentInventory.RuntimeSlotState { itemId = "gold_coin", quantity = 17 },
                 new PersistentInventory.RuntimeSlotState { itemId = "battery", quantity = 1,
                     itemInstanceId = "restart-battery", hasStoredCharge = true, storedCharge = 2 },
-                new PersistentInventory.RuntimeSlotState { itemId = "glass_bottle", quantity = 3 }
+                new PersistentInventory.RuntimeSlotState { itemId = "glass_bottle", quantity = 3 },
+                new PersistentInventory.RuntimeSlotState(), new PersistentInventory.RuntimeSlotState(),
+                new PersistentInventory.RuntimeSlotState { itemId = "memo", quantity = 1 },
+                new PersistentInventory.RuntimeSlotState { itemId = "gold_coin", quantity = 4 }
             }
         });
     }
@@ -149,6 +152,7 @@ public static class InventorySessionRestartSmoke
         {
             Check(empty, "fresh Play session must not inherit inventory: " + Scenes[stage]);
             Check(bag.SelectedSlotIndex == 0, "fresh selection reset");
+            Check(bag.SlotCount == 5, "fresh session must not inherit expanded capacity");
             var cached = JsonUtility.FromJson<PersistentInventory.RuntimeState>(PlayerPrefs.GetString(CacheKey, "{}"));
             Check(cached.slots != null && cached.slots.All(s => s.quantity == 0), "old automatic cache cleared");
             // Some secondary scenes deliberately have no authored player and

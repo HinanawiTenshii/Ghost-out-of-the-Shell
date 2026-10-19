@@ -41,6 +41,7 @@ public class DoorData : MonoBehaviour
 
     public int Durability => durability;
     public bool IsDestroyed => isDestroyed;
+    public bool IsBreakableGlass => breakMaterial == BreakMaterial.Glass;
 
     private void Awake()
     {
@@ -51,6 +52,7 @@ public class DoorData : MonoBehaviour
             if (attachedVisuals[i] != null)
                 attachedVisualRestPositions[i] = attachedVisuals[i].localPosition;
         EnsureRequirementWindow();
+        if (IsBreakableGlass) MapPointOfInterest.AttachMechanism(this);
     }
 
     public bool IsAttachedVisual(Transform candidate)
@@ -173,6 +175,7 @@ public class DoorData : MonoBehaviour
     {
         StopShake();
         isDestroyed = true;
+        if (IsBreakableGlass) GetComponent<MapPointOfInterest>()?.NotifyDestroyed();
         GetComponentInParent<LockedDoorMapMarker>()?.NotifyLeafDestroyed();
         Vector3 destructionPosition = spriteRenderer != null ? spriteRenderer.bounds.center : transform.position;
         // Destroy is deferred until the end of the frame. Disable the broken

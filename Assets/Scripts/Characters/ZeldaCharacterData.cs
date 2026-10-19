@@ -10,6 +10,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
         public string characterSpecificState;
         public string individualAccessId;
         public string persistentCharacterId;
+        public QuestCriticalCharacterRole questFailureRole;
         public string summonedPrefabName;
         public int health;
         public int currentHealth;
@@ -40,11 +41,13 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
     [SerializeField, Tooltip("为特定角色分配独立的身份资产，并在召唤法阵等机关中引用同一资产。不要给不同角色复用同一身份。")]
     private CharacterPersistentIdentity persistentIdentity;
     private string restoredPersistentCharacterId;
+    internal QuestCriticalCharacterRole QuestFailureRole { get; set; }
     public CharacterPersistentIdentity PersistentIdentity => persistentIdentity;
     internal void ClearPersistentIdentityForSummon()
     {
         persistentIdentity = null;
         restoredPersistentCharacterId = null;
+        QuestFailureRole = QuestCriticalCharacterRole.None;
     }
     public string PersistentCharacterId => !string.IsNullOrEmpty(restoredPersistentCharacterId)
         ? restoredPersistentCharacterId : persistentIdentity != null ? persistentIdentity.StableId : string.Empty;
@@ -129,6 +132,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
     private bool soulDetonationDeath;
     private bool silentGhostPossessionDeath;
     private int controlTransferDamage;
+    private bool lastDamageFromPlayer;
     private int crystalEnergyThirds;
     public int CrystalEnergyThirds => crystalEnergyThirds;
     public int BaseMaxPossessionEnergy => possessionEnergy + spentBasePossessionEnergy + GetControlledGrowthPossessionEnergy();
@@ -406,6 +410,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
             characterType = GetType().AssemblyQualifiedName,
             individualAccessId = IndividualAccessId,
             persistentCharacterId = PersistentCharacterId,
+            questFailureRole = QuestJournalManager.ResolveCriticalRole(this),
             summonedPrefabName = GetComponent<SummonedCharacterOrigin>()?.PrefabName,
             health = health,
             currentHealth = currentHealth,
@@ -436,6 +441,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
         RestoreGrantedCharacterSkill(state.grantedCharacterSkillId);
         if (!string.IsNullOrEmpty(state.individualAccessId)) individualAccessId = state.individualAccessId;
         restoredPersistentCharacterId = state.persistentCharacterId;
+        QuestFailureRole = state.questFailureRole;
         if (!string.IsNullOrEmpty(state.summonedPrefabName))
         {
             var origin = GetComponent<SummonedCharacterOrigin>();
@@ -709,6 +715,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
         resolvedDamage = ArenaChallengeController.LimitDamage(this, resolvedDamage);
         int echoHealth = 0;
         int healthBeforeDamage = currentHealth;
+        lastDamageFromPlayer = LevelRunStatistics.IsPlayerOwned(attacker != null ? attacker : evidenceSource);
         bool echoed = resolvedDamage >= currentHealth && CharacterPotionBuffs.TryPreventLethalDamage(this, out echoHealth);
         currentHealth = echoed ? echoHealth : Mathf.Max(0, currentHealth - resolvedDamage);
         ArenaChallengeController.HealthChanged(this);
@@ -731,6 +738,20 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
         {
             Die();
         }
+    }
+
+    /// <summary>Reports a successful hostile spell without applying damage or consuming a shield charge.</summary>
+    internal void ReportHostileSkill(ZeldaCharacterData caster)
+    {
+        if (caster == null || caster == this || caster.IsDead || IsDead ||
+            ZeldaRuntimeRegistry.GetGameplayScene(caster.gameObject) != ZeldaRuntimeRegistry.GetGameplayScene(gameObject)) return;
+        var player = caster.GetComponent<ZeldaFourWayMover>();
+        if (player == null || !player.isActiveAndEnabled || ZeldaRuntimeRegistry.GetControlledMover() != player) return;
+
+        // Reuse retaliation, eyewitness, protector and Silence Oath rules.
+        // Do not call TakeDamage: even a nominal hit would alter combat state,
+        // shields, damage-linked abilities and arena/ambush damage counters.
+        NotifyAttackEvidence(caster, null, false);
     }
 
     private void NotifyAttackEvidence(ZeldaCharacterData attacker, ZeldaCharacterData evidenceSource, bool shared)
@@ -883,6 +904,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
         }
 
         isDead = true;
+        LevelRunStatistics.RecordDeath(this, lastDamageFromPlayer, controlTransferDamage > 0 && !soulDetonationDeath);
         currentHealth = 0;
         holyShield = default;
         // Ordinary hits already shared their resolved damage. Only a control-transfer
@@ -897,7 +919,9 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
         BroadcastMessage("OnCharacterDied", this, SendMessageOptions.DontRequireReceiver);
         // Keep death/possession/quest notifications, but replace eligible remains
         // with the ritual's purple fragments instead of a second death effect.
-        if (SummoningCircle.TryAbsorbDeath(this))
+        bool absorbedByRitual = SummoningCircle.TryAbsorbDeath(this);
+        QuestJournalManager.GetOrCreate().RecordQuestCharacterDeath(this);
+        if (absorbedByRitual)
         {
             Destroy(gameObject);
             return;

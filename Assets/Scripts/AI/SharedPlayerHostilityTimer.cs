@@ -94,6 +94,7 @@ public sealed class SharedPlayerHostilityTimer : MonoBehaviour
     private void Update() => Advance(Time.deltaTime);
     public void Advance(float deltaTime)
     {
+        if (RetroSceneLoadReveal.IsPreparingGameplay) return;
         if (!GameSaveSystem.IsLoading) restoringSave = false;
         if (deltaTime <= 0f || Time.timeScale <= 0f || GameSaveSystem.IsLoading || CharacterDialogueWindow.BlocksInput ||
             SceneManager.GetActiveScene() != gameObject.scene || Phase == IncidentPhase.Idle) return;

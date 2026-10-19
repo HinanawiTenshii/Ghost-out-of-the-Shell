@@ -151,6 +151,23 @@ public class CameraFollowActiveZeldaMover : MonoBehaviour
         transform.position = target.transform.position + followOffset;
     }
 
+    /// <summary>Prepare the final view while covered, without a post-load pan/zoom.</summary>
+    public void PrepareLoadedSceneView()
+    {
+        SnapToControlledCharacter();
+        if (currentTarget == null) return;
+        if (followCamera == null) followCamera = GetComponent<Camera>();
+        var remote = ClockworkPuppetRuntime.RemoteControlTargetTransform;
+        var data = currentTarget.CharacterData;
+        float size = remote != null ? puppetOrthographicSize :
+            (data != null ? data.GetCameraOrthographicSize(gameObject.scene.path) : 7f) *
+            Mathf.Lerp(1f, possessionFocusSizeMultiplier, currentTarget.PossessionProgress);
+        if (remote != null) transform.position = remote.position + followOffset;
+        temporaryFramingMultiplier = CameraTemporaryFraming.GetMultiplier(gameObject.scene);
+        ResetZoomVelocity();
+        followCamera.orthographicSize = Mathf.Max(.01f, size) * temporaryFramingMultiplier;
+    }
+
     private void FollowActiveTarget()
     {
         ZeldaFourWayMover target = FindActiveControlledCharacter();

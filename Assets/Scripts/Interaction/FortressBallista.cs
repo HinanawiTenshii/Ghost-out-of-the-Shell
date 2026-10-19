@@ -94,7 +94,7 @@ public sealed class FortressBallista : MonoBehaviour
         return closest;
     }
 
-    private void Awake() { geometry = GetComponent<GeometricFortressDecoration>(); }
+    private void Awake() { geometry = GetComponent<GeometricFortressDecoration>(); MapPointOfInterest.AttachMechanism(this); }
     private void OnValidate()
     {
         rearReach = Mathf.Max(.2f,rearReach); rearHalfWidth = Mathf.Max(.1f,rearHalfWidth);

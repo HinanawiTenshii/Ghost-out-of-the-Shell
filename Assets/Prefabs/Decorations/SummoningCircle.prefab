@@ -57,6 +57,11 @@ MonoBehaviour:
   - {fileID: 0}
   summonPrefab: {fileID: 0}
   absorptionDuration: 1.8
+  gatheringDuration: 3
+  eruptionDuration: 3
+  dispersalDuration: 1.4
+  eruptionShake: 0.009
+  ritualVolume: 0.55
 --- !u!114 &1003
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -73,6 +78,9 @@ MonoBehaviour:
   runeColor: {r: 0.62, g: 0.25, b: 0.86, a: 1}
   sortingOrder: -4
   fragmentsPerCharacter: 72
+  crystalBreathDuration: 3
+  crystalGlowIntensity: 1.3
+  crystalHaloSize: 1.8
 --- !u!114 &1004
 MonoBehaviour:
   m_ObjectHideFlags: 0

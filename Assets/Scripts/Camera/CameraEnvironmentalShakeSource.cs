@@ -26,7 +26,7 @@ public abstract class CameraEnvironmentalShakeSource : MonoBehaviour
             if (source == null) { sources.RemoveAt(i); continue; }
             if (!source.isActiveAndEnabled || source.gameObject.scene != camera.gameObject.scene) continue;
             Vector2 offset = source.GetOffset(camera, vision, frustum);
-            // Multiple worms should not multiply camera displacement without bound.
+            // Concurrent scene effects should not multiply displacement without bound.
             if (offset.sqrMagnitude > strongest.sqrMagnitude) strongest = offset;
         }
         return strongest;

@@ -43,7 +43,11 @@ public sealed class ElectricGatePillar : MonoBehaviour
         }
     }
 
-    private void Awake() => ZeldaRequirementWindow.AttachSkillRequirement(this, CharacterSkillRequirements.ElectricGatePanel);
+    private void Awake()
+    {
+        ZeldaRequirementWindow.AttachSkillRequirement(this, CharacterSkillRequirements.ElectricGatePanel);
+        MapPointOfInterest.AttachMechanism(this);
+    }
     private void OnEnable() { ElectricGateNetwork.Register(this); }
     private void OnDisable() { ResetSignal(); ElectricGateNetwork.Unregister(this); HidePrompt(); ElectricGatePanel.CloseFor(this); }
     public bool Allows(ZeldaCharacterData data)

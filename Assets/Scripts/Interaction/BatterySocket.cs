@@ -55,7 +55,7 @@ public sealed class BatterySocket : MonoBehaviour, IConsumableExplosive
         foreach (var socket in Sockets) socket.NotifyMechanismPowerState();
     }
 
-    private void Awake() { Sockets.Add(this); EnsureInitialized(); NotifyMechanismPowerState(); }
+    private void Awake() { Sockets.Add(this); EnsureInitialized(); NotifyMechanismPowerState(); MapPointOfInterest.AttachMechanism(this); }
     private void OnEnable() => Sockets.Add(this);
 
     // Do not deregister on disable: camera suspension must never bypass power requirements.

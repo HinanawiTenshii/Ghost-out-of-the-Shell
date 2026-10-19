@@ -54,7 +54,7 @@ public static class SummoningCircleSmoke
     }
     static IEnumerator Until(Func<bool> condition, string label)
     {
-        double timeout = EditorApplication.timeSinceStartup + 6;
+        double timeout = EditorApplication.timeSinceStartup + 12; // Includes the six-second summoning ritual.
         while (!condition()) { if (EditorApplication.timeSinceStartup > timeout) throw new Exception("timeout: " + label); yield return null; }
         Check(true, label);
     }
@@ -86,6 +86,7 @@ public static class SummoningCircleSmoke
             Check(Mathf.Abs(circle.CrystalPosition(i).magnitude - 2.1f) < .01f, "six tips equally distant " + i);
             Check(!circle.IsCrystalLit(i), "crystal initially dark " + i);
         }
+        CheckActivatedCrystalGlow(circle);
         circle.transform.SetPositionAndRotation(new Vector3(12, -8), Quaternion.Euler(0, 0, 35));
         circle.transform.localScale = new Vector3(2, .6f, 1); circle.AreaOffset = new Vector2(1, 1);
         Check(circle.Contains(circle.transform.TransformPoint(new Vector3(6.9f, 5.9f))), "scaled rotated rectangle accepts interior");
@@ -222,6 +223,43 @@ public static class SummoningCircleSmoke
         Preview();
         Object.Destroy(circle.gameObject); Object.Destroy(playerCircle.gameObject);
         yield return null;
+    }
+    static void CheckActivatedCrystalGlow(SummoningCircle circle)
+    {
+        var visual = circle.GetComponent<SummoningCircleVisual>();
+        var draw = typeof(SummoningCircleVisual).GetMethod("DrawFrame", F);
+        var bloomFilter = circle.transform.Find("Activated Crystal Bloom").GetComponent<MeshFilter>();
+        var bloom = bloomFilter.sharedMesh;
+        var halo = circle.transform.Find("Six Crystal Halos").GetComponent<MeshFilter>().sharedMesh;
+        var gems = circle.transform.Find("Six Offering Crystals").GetComponent<MeshFilter>().sharedMesh;
+        draw.Invoke(visual, new object[] { .75f });
+        Check(bloom.vertexCount == 0 && halo.vertexCount == 0, "dormant crystals have no active halo/bloom");
+        var darkColors = gems.colors;
+        draw.Invoke(visual, new object[] { 2.25f });
+        Check(gems.colors.SequenceEqual(darkColors), "dormant facets do not breathe");
+        circle.ApplyRuntimeState(new SummoningCircle.RuntimeState { litMask = 1 });
+        draw.Invoke(visual, new object[] { .75f });
+        Check(bloom.vertexCount == 8 && halo.vertexCount == 4, "one active crystal has two local bloom lobes and one halo");
+        float peakAlpha = bloom.colors.Sum(c => c.a), peakWidth = bloom.bounds.size.x;
+        float peakFacet = gems.colors.Sum(c => c.r + c.g + c.b);
+        draw.Invoke(visual, new object[] { 2.25f });
+        Check(bloom.colors.Sum(c => c.a) < peakAlpha * .65f && bloom.bounds.size.x < peakWidth, "halo brightness and size breathe visibly");
+        Check(gems.colors.Sum(c => c.r + c.g + c.b) < peakFacet, "lit crystal facets breathe with bloom");
+        Check(bloom.colors.All(c => c.b > c.r && c.r > c.g), "glow retains purple hue");
+        var renderer = bloomFilter.GetComponent<MeshRenderer>();
+        Check(renderer.sortingOrder > circle.transform.Find("Six Offering Crystals").GetComponent<MeshRenderer>().sortingOrder && renderer.sortingOrder < 30000, "bloom above facets but below vision mask");
+        Check(renderer.sharedMaterial.shader == Resources.Load<Shader>("WarmLightGlow") && renderer.sharedMaterial.shader.isSupported, "supported additive shader retained in builds");
+        Check(renderer.sharedMaterial != circle.transform.Find("Offering Fragment Glow").GetComponent<MeshRenderer>().sharedMaterial, "crystal material isolated from offerings");
+        circle.ApplyRuntimeState(new SummoningCircle.RuntimeState { litMask = 63, summoned = true });
+        Check(bloom.vertexCount == 48 && halo.vertexCount == 24, "all six crystals bloom in shared meshes after saved-state restore");
+        int meshId = bloom.GetInstanceID(), materialId = renderer.sharedMaterial.GetInstanceID();
+        for (int i = 0; i < 60; i++) draw.Invoke(visual, new object[] { i * .05f });
+        Check(bloomFilter.sharedMesh.GetInstanceID() == meshId && renderer.sharedMaterial.GetInstanceID() == materialId, "animation reuses mesh and material");
+        circle.gameObject.SetActive(false); circle.gameObject.SetActive(true);
+        Check(circle.transform.Find("Activated Crystal Bloom").GetComponent<MeshFilter>().sharedMesh == bloom && bloom.vertexCount == 48, "reactivation retains charged glow and buffers");
+        Check(circle.GetComponentsInChildren<Light>(true).Length == 0, "no per-crystal dynamic lights");
+        circle.ApplyRuntimeState(default);
+        Check(bloom.vertexCount == 0 && halo.vertexCount == 0, "reset or uncharged save immediately removes all crystal glow");
     }
     static void Preview()
     {

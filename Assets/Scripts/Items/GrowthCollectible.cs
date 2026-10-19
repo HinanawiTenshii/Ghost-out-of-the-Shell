@@ -167,6 +167,7 @@ public sealed class GrowthCollectible : MonoBehaviour
         collected = true;
         SetPromptVisible(false, null);
         growth.AddCollectibles(Mathf.Max(1, collectibleAmount));
+        LevelRunStatistics.RecordSkill(this, collectibleAmount);
         PlayPickupBurst();
         Destroy(gameObject);
         return true;

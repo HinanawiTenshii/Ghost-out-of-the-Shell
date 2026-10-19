@@ -66,7 +66,8 @@ public class AlchemistZeldaCharacterData:ZeldaCharacterData{} public class Palad
 public class PriestZeldaCharacterData:ZeldaCharacterData{} public class WizardZeldaCharacterData:ZeldaCharacterData{}
 public class ZeldaFourWayMover:Component {
  private ZeldaCharacterData characterData=>GetComponent<ZeldaCharacterData>();public Vector2 facingDirection,moveDirection;
- private float attackTimer;private bool itemAttackPose;public int poses;
+ private float attackTimer;private bool itemAttackPose;public int poses, possessionInterruptions;
+ public void InterruptPossessionByAttack(){possessionInterruptions++;}
  public Vector2 FacingDirection=>facingDirection;public bool IsAttacking=>attackTimer>0;public bool IsUsingItemAttack=>itemAttackPose&&IsAttacking;
  private void ApplyFacingVisual(){poses++;}public void SimulateStun(){attackTimer=0;}
 '@
@@ -112,6 +113,7 @@ public static class FiringTests {
     Check(DisposableHandgunAttackVisual.TryFire(u,m,10),"Starts valid shot");var visual=Last();
     Check(m.IsUsingItemAttack&&m.poses==1,"Reuses character raised-hand attack pose");
     Check(DisposableHandgunBullet.shots==shots+1&&Near(DisposableHandgunBullet.muzzle,visual.Muzzle),"One bullet emitted exactly at visible muzzle");
+    Check(m.possessionInterruptions==1,"Successful shot interrupts possession once");
     Check(!DisposableHandgunAttackVisual.TryFire(u,m,10),"Cannot fire or consume next gun during active attack");
     Vector3 delta=visual.Muzzle-visual.transform.position;Check(delta.x*directions[d].x+delta.y*directions[d].y>0,"Parent negative scale cannot reverse authored gun direction");
     for(int t=0;t<3;t++)visual.Tick();Check(DisposableHandgunBullet.shots==shots+1,"Animation does not emit more shots");
@@ -120,6 +122,7 @@ public static class FiringTests {
   }
   var user=User(Vector2.right);var mover=user.GetComponent<ZeldaFourWayMover>();DisposableHandgunBullet.success=false;
   Check(!DisposableHandgunAttackVisual.TryFire(user,mover,10)&&!mover.IsAttacking,"Failed bullet spawn restores pose and reports no consumption");DisposableHandgunBullet.success=true;
+  Check(mover.possessionInterruptions==0,"Failed shot leaves possession untouched");
   foreach(int cancel in new[]{0,1,2,3}){
    user=User(Vector2.right);mover=user.GetComponent<ZeldaFourWayMover>();DisposableHandgunAttackVisual.TryFire(user,mover,10);var v=Last();int shots=DisposableHandgunBullet.shots;
    if(cancel==0)user.IsDead=true;else if(cancel==1)mover.enabled=false;else if(cancel==2)user.IsGhostLike=true;else mover.SimulateStun();
@@ -136,7 +139,7 @@ $count=[FiringTests]::Run()
 $begin=Extract $mover '    public bool TryBeginItemAttack('
 if($begin -match 'Instantiate|hitbox|PlayAttackSound\('){throw 'Item attack must not spawn the melee weapon/hitbox/audio'}
 $smith=Get-Content -Raw "$root/Assets/Scripts/Characters/BlacksmithZeldaCharacterData.cs"
-if(!$smith.Contains('CreateTexture(facingDirection, true, false)') -or !$smith.Contains('if (drawHammer) DrawHammer')){throw 'Blacksmith must replace embedded hammer during item attack'}
+if(!$smith.Contains('CreateTexture(facingDirection, true, false)') -or !$smith.Contains('if (drawHammer) DrawHeldTool')){throw 'Blacksmith must replace embedded hammer during item attack'}
 Write-Output "PASS: $count firing/pose/muzzle/four-view assertions; no melee spawning; blacksmith replacement wired. Unity rendering is stubbed."
 if($RenderPreview){
     Add-Type -AssemblyName System.Drawing

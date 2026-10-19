@@ -13,7 +13,10 @@ public sealed class DialogueQuestProgression : MonoBehaviour
     [SerializeField, InspectorName("接取后开始段落 ID")] private string acceptedNodeId = "waiting";
     [SerializeField, InspectorName("完成后开始段落 ID")] private string completedNodeId = "shop";
     public string QuestId => questId;
-    public bool IsCompleted => QuestJournalManager.Instance != null && QuestJournalManager.Instance.IsEntryCompleted(questId);
+    // Delivery unlocks the merchant's shop; the journal itself finishes upon obtaining a bomb.
+    public bool IsCompleted => QuestJournalManager.Instance != null &&
+        (questId == QuestJournalManager.SandwormBaitQuestId ? QuestJournalManager.Instance.BaitToolsDelivered :
+         QuestJournalManager.Instance.IsEntryCompleted(questId));
     public bool IsAccepted => QuestJournalManager.Instance != null && QuestJournalManager.Instance.ContainsEntry(questId);
     public bool IsConfigured => isActiveAndEnabled && !string.IsNullOrWhiteSpace(questId);
     public bool CanTrigger => IsConfigured && QuestJournalManager.GetOrCreate().CanTriggerEntry(questId, parentQuestId);
@@ -29,6 +32,11 @@ public sealed class DialogueQuestProgression : MonoBehaviour
     {
         if (!CanTrigger || IsCompleted) return;
         var journal = QuestJournalManager.GetOrCreate();
+        if (questId == QuestJournalManager.SandwormBaitQuestId)
+        {
+            journal.RecordBaitToolsDelivered(gameObject.scene.name);
+            return;
+        }
         journal.AddOrUpdateEntry(questId, questTitle, completedDetails, gameObject.scene.name, parentQuestId);
         journal.CompleteEntry(questId);
     }

@@ -729,6 +729,10 @@ PrefabInstance:
       value: SwordGuy (2)
       objectReference: {fileID: 0}
     - target: {fileID: 7832618691216883885, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: skillValue
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883885, guid: faa378082a386c34b8b3df82888c9528, type: 3}
       propertyPath: possessionCost
       value: 4
       objectReference: {fileID: 0}
@@ -1329,6 +1333,10 @@ PrefabInstance:
     - target: {fileID: 7832618691216883880, guid: faa378082a386c34b8b3df82888c9528, type: 3}
       propertyPath: m_Name
       value: SwordGuy (3)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7832618691216883885, guid: faa378082a386c34b8b3df82888c9528, type: 3}
+      propertyPath: skillValue
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 7832618691216883885, guid: faa378082a386c34b8b3df82888c9528, type: 3}
       propertyPath: possessionCost
@@ -3527,7 +3535,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 918620450781230005, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
       propertyPath: documentText
-      value: "\u672C\u5173\u4E3A\u4E34\u65F6\u6559\u5B66\u5173\u5361\n\u57FA\u7840\u64CD\u4F5C\uFF1A\n[W][A][S][D]\u63A7\u5236\u79FB\u52A8\n\u6309[E]\u4E0E\u7269\u54C1\u4EA4\u4E92\n\u6309[F1]\u5FEB\u901F\u4FDD\u5B58\uFF0C\u6309[F2]\u5FEB\u901F\u8BFB\u53D6\n\u6309[Tab]\u6253\u5F00\u4EFB\u52A1\u65E5\u5FD7\u4E0E\u5730\u56FE\n\u6309[Esc]\u6253\u5F00\u6682\u505C\u83DC\u5355"
+      value: "\u672C\u5173\u4E3A\u4E34\u65F6\u6559\u5B66\u5173\u5361\n\u57FA\u7840\u64CD\u4F5C\uFF1A\n[W][A][S][D]\u63A7\u5236\u79FB\u52A8\n\u6309[E]\u4E0E\u7269\u54C1\u4EA4\u4E92\n\u6309[F1]\u5FEB\u901F\u4FDD\u5B58\uFF0C\u6309[F2]\u5FEB\u901F\u8BFB\u53D6\n\u6309[Tab]\u6253\u5F00\u4EFB\u52A1\u65E5\u5FD7\u4E0E\u5730\u56FE\n\u6309[Esc]\u6253\u5F00\u6682\u505C\u83DC\u5355\n[\u5DE6Ctrl]\u4F7F\u7528\u9009\u4E2D\u7684\u6280\u80FD"
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c76db960b6ca4cefa2a91739367713a5, type: 3}
@@ -5179,6 +5187,26 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 6046113066450170003, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
+      propertyPath: m_Color.a
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6046113066450170003, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
+      propertyPath: m_Color.b
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6046113066450170003, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
+      propertyPath: m_Color.g
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6046113066450170003, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
+      propertyPath: m_Color.r
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6046113066450170005, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
+      propertyPath: itemColor.a
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 6046113066450170005, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
       propertyPath: itemColor.b
       value: 0
@@ -5194,26 +5222,6 @@ PrefabInstance:
     - target: {fileID: 6046113066450170006, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
       propertyPath: itemName
       value: "\u65B0\u624B\u5173\u94A5\u5319"
-      objectReference: {fileID: 0}
-    - target: {fileID: 6046113066450170005, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
-      propertyPath: itemColor.a
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 6046113066450170003, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
-      propertyPath: m_Color.r
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 6046113066450170003, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
-      propertyPath: m_Color.g
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 6046113066450170003, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
-      propertyPath: m_Color.b
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 6046113066450170003, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}
-      propertyPath: m_Color.a
-      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 2a4449a0dbc54498902f6eb88f3496f5, type: 3}

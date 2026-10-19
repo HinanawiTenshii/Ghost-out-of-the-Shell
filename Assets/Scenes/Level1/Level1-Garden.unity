@@ -2333,19 +2333,19 @@ MonoBehaviour:
     scenePath: Assets/Scenes/Level1/Level1-Garden.unity
   - sceneAsset: {fileID: 102900000, guid: 576735c7f2c770f4497bf47b2dcff882, type: 3}
     sceneName: Level1-Floor-1
-    sceneSaveId: Level1-Garden
+    sceneSaveId: Level1-Floor-1
     scenePath: Assets/Scenes/Level1/Level1-Floor-1.unity
   - sceneAsset: {fileID: 102900000, guid: 9879426a70df8e3449f5893ae14619ed, type: 3}
     sceneName: Level1-Floor1
-    sceneSaveId: Level1-Garden
+    sceneSaveId: Level1-Floor1
     scenePath: Assets/Scenes/Level1/Level1-Floor1.unity
   - sceneAsset: {fileID: 102900000, guid: 5e4d3d25d11d1d64e8a4eb322bb75560, type: 3}
     sceneName: Level1-Floor2
-    sceneSaveId: Level1-Garden
+    sceneSaveId: Level1-Floor2
     scenePath: Assets/Scenes/Level1/Level1-Floor2.unity
   - sceneAsset: {fileID: 102900000, guid: 9b466dbf46cd1b845aca657850db525b, type: 3}
     sceneName: Level1-Floor3
-    sceneSaveId: Level1-Garden
+    sceneSaveId: Level1-Floor3
     scenePath: Assets/Scenes/Level1/Level1-Floor3.unity
   entrySceneIndex: 0
 --- !u!4 &375574374

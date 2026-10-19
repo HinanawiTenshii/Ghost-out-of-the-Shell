@@ -49,7 +49,8 @@ public sealed class LockedDoorMapMarker : MonoBehaviour
             nextVisibilityCheck = Time.unscaledTime + .15f;
             seen = IsVisibleToPlayer();
         }
-        manager.UpdateLockedDoor(pointId, gameObject.scene.name, lineStart, lineEnd, tint, eligible, seen);
+        manager.UpdateLockedDoor(pointId, gameObject.scene.name, lineStart, lineEnd, tint, eligible, seen,
+            hinge.PasswordLockEnabled, hinge.RequiredUnlockItemDisplayName);
     }
 
     public void NotifyLeafDestroyed()
@@ -57,7 +58,8 @@ public sealed class LockedDoorMapMarker : MonoBehaviour
         broken = true;
         if (!string.IsNullOrEmpty(pointId) && MapPointOfInterestManager.Instance != null)
             MapPointOfInterestManager.Instance.UpdateLockedDoor(pointId, gameObject.scene.name,
-                lineStart, lineEnd, tint, false, false);
+                lineStart, lineEnd, tint, false, false, hinge != null && hinge.PasswordLockEnabled,
+                hinge != null ? hinge.RequiredUnlockItemDisplayName : null);
     }
 
     private bool IsVisibleToPlayer()

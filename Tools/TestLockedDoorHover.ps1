@@ -19,7 +19,8 @@ public static class Mathf {
  public static float Atan2(float y,float x){return (float)Math.Atan2(y,x);}
  public const float Rad2Deg=57.29578f;
 }
-public class MapPointOfInterestRecord {public Vector2 LineStart,LineEnd;}
+public enum MapPointIconShape {LockedDoor,ElectricField}
+public class MapPointOfInterestRecord {public Vector2 LineStart,LineEnd; public MapPointIconShape IconShape;}
 public class DoorHoverFixture {
  public float iconScale=1,zoom=1;public bool hasBounds=true;public Vector2 pan;
  public bool TryWorldToLocal(Vector2 p,out Vector2 result){result=p*zoom+pan;return hasBounds;}

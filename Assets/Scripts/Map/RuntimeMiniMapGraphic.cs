@@ -23,6 +23,9 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
     private int staticPathCount;
     private string geometrySceneName;
     private readonly List<MapPointOfInterestRecord> lockedDoorMarkers = new List<MapPointOfInterestRecord>();
+    private bool pointCacheDirty = true;
+    private string pointCacheScene;
+    private bool drawPointIcons = true;
     private MapPointOfInterestManager subscribedPointManager;
     private readonly List<RuntimeMiniMapTransitionData> transitions =
         new List<RuntimeMiniMapTransitionData>();
@@ -54,7 +57,8 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
         EnsureRenderLayers();
         if (!Application.isPlaying) return;
         subscribedPointManager = MapPointOfInterestManager.GetOrCreate();
-        subscribedPointManager.PointsChanged += SetVerticesDirty;
+        subscribedPointManager.PointsChanged += HandlePointChanges;
+        HandlePointChanges();
     }
 
     protected override void OnDisable()
@@ -62,9 +66,22 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
         if (surfaceLayer != null) surfaceLayer.enabled = false;
         if (wallLayer != null) wallLayer.enabled = false;
         if (markerLayer != null) markerLayer.enabled = false;
-        if (subscribedPointManager != null) subscribedPointManager.PointsChanged -= SetVerticesDirty;
+        if (subscribedPointManager != null) subscribedPointManager.PointsChanged -= HandlePointChanges;
         subscribedPointManager = null;
         base.OnDisable();
+    }
+
+    private void HandlePointChanges() { pointCacheDirty = true; SetVerticesDirty(); }
+    public void SetDrawPointIcons(bool value) { drawPointIcons = value; SetVerticesDirty(); }
+    public float PointIconScale
+    {
+        get
+        {
+            Rect rect = GetPixelAdjustedRect();
+            float scale = Mathf.Min(rect.width * .9f / Mathf.Max(.01f, mapBounds.size.x),
+                rect.height * .9f / Mathf.Max(.01f, mapBounds.size.y)) * zoom;
+            return Mathf.Max(.5f, Mathf.Max(iconScale * .65f, GetTransitionIconScale(scale)));
+        }
     }
 
     public bool TryGetQuestTarget(string questId, out Vector2 position)
@@ -242,7 +259,10 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
         center = size = Vector2.zero; angle = 0f;
         if (door == null || !TryWorldToLocal(door.LineStart, out Vector2 a) ||
             !TryWorldToLocal(door.LineEnd, out Vector2 b)) return false;
-        GetLockedDoorLineGeometry(a, b, iconScale, out center, out Vector2 half, out float width);
+        Vector2 half; float width;
+        if (door.IconShape == MapPointIconShape.ElectricField)
+        { center = (a+b)*.5f; half = (b-a)*.5f; width = 2f * iconScale; }
+        else GetLockedDoorLineGeometry(a, b, iconScale, out center, out half, out width);
         if (half.sqrMagnitude < .0001f) return false;
         // Slightly pad the thin line for a forgiving hover target, without changing its drawing.
         size = new Vector2(half.magnitude * 2f + 4f, Mathf.Max(14f, width + 8f));
@@ -615,11 +635,34 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
         var pointManager = MapPointOfInterestManager.Instance;
         if (pointManager != null)
         {
-            pointManager.CopyVisibleLockedDoors(geometrySceneName, lockedDoorMarkers);
+            if (pointCacheDirty || pointCacheScene != geometrySceneName)
+            {
+                pointManager.CopyVisiblePoints(geometrySceneName, lockedDoorMarkers);
+                pointCacheDirty = false; pointCacheScene = geometrySceneName;
+            }
+            float pointScale = PointIconScale;
             foreach (var door in lockedDoorMarkers)
             {
+                if (!door.VisibleOnMap) continue;
+                if (!door.IsLineMarker)
+                {
+                    if (drawPointIcons)
+                        RuntimeMiniMapPointIconGraphic.DrawIcon(vertexHelper, door.IconShape,
+                            MapPoint(door.WorldPosition, worldCenter, rectCenter, scale),
+                            6.25f * pointScale, door.IconColor, door.Marked);
+                    continue;
+                }
                 Vector2 a = MapPoint(door.LineStart, worldCenter, rectCenter, scale);
                 Vector2 b = MapPoint(door.LineEnd, worldCenter, rectCenter, scale);
+                if (door.IconShape == MapPointIconShape.ElectricField)
+                {
+                    // Proportional current area, with a narrow solid core. Unlike
+                    // door bars it must never extend past the physical pillars.
+                    Color halo = door.IconColor; halo.a = .22f;
+                    AddLine(vertexHelper, a, b, Mathf.Max(2f, ElectricGateRules.Width * scale), halo);
+                    AddLine(vertexHelper, a, b, Mathf.Max(1f, 1.6f * iconScale), door.IconColor);
+                    continue;
+                }
                 GetLockedDoorLineGeometry(a, b, iconScale, out Vector2 center, out Vector2 half, out float width);
                 AddLine(vertexHelper, center-half, center+half, width, door.IconColor);
             }
@@ -1221,13 +1264,8 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
         Color color,
         float scale)
     {
-        // Two filled quads: the dark rim separates the solid square from white
-        // walls. No interior details are lost at overview/HUD resolution, and
-        // the square remains distinct from the player and quest diamonds.
-        AddLine(vertexHelper, center + Vector2.down * (7f * scale),
-            center + Vector2.up * (7f * scale), 14f * scale, new Color32(8, 24, 43, 255));
-        AddLine(vertexHelper, center + Vector2.down * (6f * scale),
-            center + Vector2.up * (6f * scale), 12f * scale, color);
+        RuntimeMiniMapPointIconGraphic.DrawIcon(vertexHelper, MapPointIconShape.SceneTransition,
+            center, 4.375f * scale, color);
     }
 
     private static void AddDiamond(

@@ -14,16 +14,17 @@ public sealed class BuilderCharacterSkillData : NativeCharacterSkillData
         if (icons[rank] != null) return icons[rank];
         var texture = new Texture2D(22, 22, TextureFormat.RGBA32, false) {
             name = "Builder Turret Skill", filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
-        // Front-facing silhouette: muzzle, broad gun housing, turntable and feet.
+        // Low-profile turret: the broad gun housing sits directly on its base,
+        // with no narrow upright neck. Keep the muzzle pointing right.
         for (int y = 0; y < 22; y++) for (int x = 0; x < 22; x++)
         {
-            bool filled = (x >= 8 && x <= 11 && y >= 11 && y <= 18) ||
-                (x >= 7 && x <= 12 && y >= 17 && y <= 19) ||
-                (x >= 5 && x <= 14 && y >= 8 && y <= 12) ||
-                (x >= 8 && x <= 11 && y >= 5 && y <= 7) ||
-                (x >= 3 && x <= 16 && y >= 3 && y <= 5) ||
-                ((x >= 3 && x <= 5 || x >= 14 && x <= 16) && y >= 1 && y <= 2);
-            if (y == 18 && x >= 8 && x <= 11) filled = false;
+            bool filled = (x >= 4 && x <= 12 && y >= 9 && y <= 13) ||
+                (x >= 5 && x <= 11 && y >= 14 && y <= 15) ||
+                (x >= 12 && x <= 18 && y >= 11 && y <= 13) ||
+                (x >= 18 && x <= 20 && y >= 10 && y <= 14) ||
+                (x >= 3 && x <= 14 && y >= 7 && y <= 8) ||
+                ((x >= 3 && x <= 5 || x >= 12 && x <= 14) && y >= 5 && y <= 6);
+            if (y == 12 && x >= 19 && x <= 20) filled = false;
             bool numeral = rank > 0 && y >= 1 && y <= 6 && x >= 17 && x <= 21 &&
                 (y == 1 || y == 6 || (rank == 1 ? x == 19 : x == 18 || x == 20));
             texture.SetPixel(x, y, filled || numeral ? Color.white : Color.clear);

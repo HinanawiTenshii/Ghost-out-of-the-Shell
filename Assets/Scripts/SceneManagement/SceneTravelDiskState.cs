@@ -26,6 +26,7 @@ public sealed partial class SceneTravelStateManager
     }
     [Serializable] public sealed class DiskPlayer
     {
+        public LevelRunStatistics.State levelRun;
         public string path, name;
         public Vector3 position;
         public Vector2 facing;
@@ -84,6 +85,7 @@ public sealed partial class SceneTravelStateManager
         if (mover == null) throw new InvalidOperationException("当前没有可保存的受控角色。");
         var data = mover.GetComponent<ZeldaCharacterData>();
         return new DiskPlayer {
+            levelRun = LevelRunStatistics.Capture(),
             path = mover.gameObject.scene == SceneManager.GetActiveScene() ? BuildPath(mover.transform) : "",
             name = mover.name, position = mover.transform.position, facing = mover.FacingDirection,
             stamina = mover.CurrentStamina, character = data.CaptureRuntimeState(),
@@ -133,6 +135,7 @@ public sealed partial class SceneTravelStateManager
         quickRestartInventoryState = player.inventory;
         hasQuickRestartInventory = true;
         quickRestartGrowthState = player.growth;
+        quickRestartLevelRun = player.levelRun;
         hasQuickRestartGrowth = true;
 
         if (string.IsNullOrEmpty(player.path))

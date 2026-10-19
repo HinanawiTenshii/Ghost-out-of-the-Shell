@@ -150,7 +150,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   cameraOrthographicSize: 7
   playerVisionRadius: 13
-  sceneCameraOverrides: []
+  sceneCameraOverrides:
+  - scenePath: Assets/Scenes/Level1/Level1-Garden.unity
+    orthographicSize: 9
+    visionRadius: 13
+  - scenePath: Assets/Scenes/Level1/Level1-Floor-1.unity
+    orthographicSize: 9
+    visionRadius: 13
+  - scenePath: Assets/Scenes/Level1/Level1-Floor1.unity
+    orthographicSize: 9
+    visionRadius: 13
+  - scenePath: Assets/Scenes/Level1/Level1-Floor2.unity
+    orthographicSize: 9
+    visionRadius: 13
+  - scenePath: Assets/Scenes/Level1/Level1-Floor3.unity
+    orthographicSize: 9
+    visionRadius: 13
   health: 8
   skillValue: 2
   permissionLevel: 2

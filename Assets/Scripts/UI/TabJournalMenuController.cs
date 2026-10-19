@@ -157,6 +157,11 @@ public sealed class TabJournalMenuController : MonoBehaviour
 
     private void Update()
     {
+        if (RuntimeUiVisibility.IsPauseOnlyScene)
+        {
+            if (IsOpen) CloseMenu();
+            return;
+        }
         if (equipmentSelection >= 0)
         {
             if (Input.GetMouseButtonDown(1)) EndEquipmentSelection();
@@ -215,7 +220,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
 
     public void OpenMenu()
     {
-        if (IsOpen || DocumentReader.IsInputBlocked)
+        if (RuntimeUiVisibility.IsPauseOnlyScene || IsOpen || DocumentReader.IsInputBlocked)
         {
             return;
         }
@@ -629,6 +634,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
         RectTransform graphicRect = graphicObject.GetComponent<RectTransform>();
         Stretch(graphicRect);
         miniMapGraphic = graphicObject.GetComponent<RuntimeMiniMapGraphic>();
+        miniMapGraphic.SetDrawPointIcons(false); // Interactive overlay draws these; shared mesh retains line areas.
         miniMapGraphic.raycastTarget = false;
 
         GameObject transitionHoverLayerObject = CreateUiObject(
@@ -1143,7 +1149,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
         {
             MapPointOfInterestRecord point = points[index];
             // Keep the line in the shared map mesh; add only an invisible, rotated hover target.
-            if (point.IconShape == MapPointIconShape.LockedDoor)
+            if (point.IsLineMarker)
             {
                 GameObject hoverObject = CreateUiObject("Locked Door Hover " + point.Id, mapPointLayer,
                     typeof(CanvasRenderer), typeof(Image), typeof(MapPointOfInterestUiInteraction));
@@ -1180,7 +1186,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
                 point.Id,
                 ShowMapPointTooltip,
                 HideMapPointTooltip,
-                point.IconShape == MapPointIconShape.Lever);
+                !point.CanBeMarked);
             mapPointIcons.Add(new MiniMapPointIcon
             {
                 pointId = point.Id,
@@ -1197,6 +1203,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
             return;
         }
 
+        float pointIconScale = miniMapGraphic.PointIconScale;
         for (int index = 0; index < mapPointIcons.Count; index++)
         {
             MiniMapPointIcon icon = mapPointIcons[index];
@@ -1212,7 +1219,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
             bool visible = valid && miniMapGraphic.TryWorldToLocal(
                 point.WorldPosition,
                 out localPosition);
-            if (visible && point.IconShape == MapPointIconShape.LockedDoor)
+            if (visible && point.IsLineMarker)
             {
                 visible = miniMapGraphic.TryGetLockedDoorHoverRect(point,
                     out localPosition, out Vector2 hitSize, out float angle);
@@ -1221,6 +1228,8 @@ public sealed class TabJournalMenuController : MonoBehaviour
             }
             if (icon != null && icon.rect != null)
             {
+                if (valid && !point.IsLineMarker)
+                    icon.rect.sizeDelta = Vector2.one * (point.Marked ? 30f : 25f) * pointIconScale;
                 icon.rect.gameObject.SetActive(visible);
                 if (visible)
                 {
@@ -1246,13 +1255,19 @@ public sealed class TabJournalMenuController : MonoBehaviour
         }
 
         hoveredMapPointId = pointId;
-        bool isLever = point.IconShape == MapPointIconShape.Lever;
-        bool nameOnly = isLever || point.IconShape == MapPointIconShape.LockedDoor;
+        bool keyRequirement = point.IconShape == MapPointIconShape.KeyLockedDoor;
+        bool nameOnly = !point.CanBeMarked && !keyRequirement;
         mapPointTooltipText.text = point.TooltipText;
-        mapPointTooltipRect.sizeDelta = nameOnly ? new Vector2(isLever ? 76f : 136f, 32f) : new Vector2(230f, 84f);
+        mapPointTooltipRect.sizeDelta = nameOnly ? new Vector2(Mathf.Clamp(mapPointTooltipText.preferredWidth + 24f, 76f, 240f), 32f) : new Vector2(230f, 84f);
+        if (keyRequirement)
+        {
+            // Fit both the lock label and a wrapped key name without changing the compact lever tooltip.
+            mapPointTooltipText.rectTransform.ForceUpdateRectTransforms();
+            mapPointTooltipRect.sizeDelta = new Vector2(230f, Mathf.Max(56f, mapPointTooltipText.preferredHeight + 16f));
+        }
         mapPointTooltipText.alignment = nameOnly ? TextAnchor.MiddleCenter : TextAnchor.UpperLeft;
         Vector2 position = iconRect.anchoredPosition +
-            (nameOnly ? new Vector2(isLever ? 55f : 85f, 25f) : new Vector2(126f, 36f));
+            (nameOnly ? new Vector2(mapPointTooltipRect.sizeDelta.x * .5f + 17f, 25f) : new Vector2(126f, 36f));
         PositionMapPointTooltip(position);
     }
 
@@ -1714,8 +1729,9 @@ public sealed class TabJournalMenuController : MonoBehaviour
             labelRect.offsetMin = new Vector2(hierarchy.hasChildren ? 46f : 12f, 5f);
             labelRect.offsetMax = new Vector2(-12f, -5f);
             Text label = view.label;
-            label.text = entry.Title;
-            label.color = accentColor;
+            bool failed = questJournal.IsEntryFailed(entry.Id);
+            label.text = entry.Title + (failed ? "（失败）" : string.Empty);
+            label.color = failed ? new Color(.95f, .38f, .38f, 1f) : accentColor;
             if (hierarchy.hasChildren && view.foldout == null)
                 view.foldout = CreateQuestFoldout(rowRect, entry.Id);
             if (view.foldout != null)
@@ -1870,14 +1886,15 @@ public sealed class TabJournalMenuController : MonoBehaviour
         bool hasEntry = selectedEntry != null && selectedEntry.CanTrack;
         bool isCompleted = hasEntry && questJournal != null &&
             questJournal.IsEntryCompleted(selectedEntry.Id);
+        bool isFailed = hasEntry && questJournal != null && questJournal.IsEntryFailed(selectedEntry.Id);
         bool isTracked = hasEntry && questJournal != null &&
             selectedEntry.Id == questJournal.TrackedEntryId;
-        questTrackButton.interactable = hasEntry && !isTracked && !isCompleted;
-        questTrackButtonText.text = isCompleted
+        questTrackButton.interactable = hasEntry && !isTracked && !isCompleted && !isFailed;
+        questTrackButtonText.text = isFailed ? "任务失败" : isCompleted
             ? "已完成"
             : isTracked ? "正在追踪" : "追踪任务";
-        questTrackButtonText.color = isTracked || isCompleted ? DisabledText : GhostBlue;
-        questTrackButtonBackground.color = isTracked || isCompleted ? DisabledBlue : TabBlue;
+        questTrackButtonText.color = isTracked || isCompleted || isFailed ? DisabledText : GhostBlue;
+        questTrackButtonBackground.color = isTracked || isCompleted || isFailed ? DisabledBlue : TabBlue;
         questTrackButton.gameObject.SetActive(hasEntry);
     }
 
@@ -2661,6 +2678,8 @@ public sealed class SkillPageArt : MaskableGraphic
         !locked && skillBonus ? SkillBonusSprite.texture : !locked && royalCommand ? ZeldaCharacterData.GetRankedCommandIcon(royalCommandLevel).texture : !locked && fearRoar ? FearRoarArea.GetRankedIcon(fearRoarLevel).texture : !locked && strengthBonus ? StrengthBonusSprite.texture : combatExpertise && !locked
         ? ZeldaHealthHeartsUI.GetRankedCombatExpertiseIcon(combatExpertiseLevel).texture : base.mainTexture;
     private RectTransform collectibleOrbit, collectibleGlow;
+    // Optional body replacement; keep the collectible orbit and breathing halo shared.
+    public Sprite collectibleBodySprite;
     private GrowthCollectible.IconAppearance collectibleAppearance;
     private const float CollectibleUiScale = 20f;
     protected override void Awake() { base.Awake(); raycastTarget = false; }
@@ -2692,6 +2711,25 @@ public sealed class SkillPageArt : MaskableGraphic
         collectibleGlow = CollectibleImage("Breathing Glow", transform, Vector2.zero,
             Vector2.one * appearance.glowSize * CollectibleUiScale, appearance.glow,
             new Color(1, 1, 1, appearance.glowOpacity)).rectTransform;
+        if (collectibleBodySprite != null)
+        {
+            CollectibleImage("Collectible Body", transform, Vector2.zero,
+                Vector2.one * 2f * CollectibleUiScale, collectibleBodySprite, Color.white);
+        }
+        else BuildTetrahedron(appearance);
+        collectibleOrbit = new GameObject("Rotating Orbit Points", typeof(RectTransform)).GetComponent<RectTransform>();
+        collectibleOrbit.SetParent(transform, false);
+        for (int i = 0; i < appearance.pointCount; i++)
+        {
+            float angle = i * Mathf.PI * 2f / appearance.pointCount;
+            CollectibleImage("Orbit Point", collectibleOrbit,
+                new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * appearance.radius * CollectibleUiScale,
+                Vector2.one * appearance.pointSize * CollectibleUiScale, appearance.circle, Color.white);
+        }
+    }
+
+    private void BuildTetrahedron(GrowthCollectible.IconAppearance appearance)
+    {
         Vector3[] points = GrowthCollectible.IconVertices;
         float width = appearance.lineWidth * CollectibleUiScale;
         for (int i = 0; i < points.Length; i++)
@@ -2705,15 +2743,6 @@ public sealed class SkillPageArt : MaskableGraphic
                 CollectibleImage("Round Cap", transform, a, Vector2.one * width, appearance.circle, Color.white);
                 CollectibleImage("Round Cap", transform, b, Vector2.one * width, appearance.circle, Color.white);
             }
-        }
-        collectibleOrbit = new GameObject("Rotating Orbit Points", typeof(RectTransform)).GetComponent<RectTransform>();
-        collectibleOrbit.SetParent(transform, false);
-        for (int i = 0; i < appearance.pointCount; i++)
-        {
-            float angle = i * Mathf.PI * 2f / appearance.pointCount;
-            CollectibleImage("Orbit Point", collectibleOrbit,
-                new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * appearance.radius * CollectibleUiScale,
-                Vector2.one * appearance.pointSize * CollectibleUiScale, appearance.circle, Color.white);
         }
     }
     protected override void OnPopulateMesh(VertexHelper vh)

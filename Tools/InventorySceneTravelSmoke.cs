@@ -29,14 +29,16 @@ public static class InventorySceneTravelSmoke
     static string PathFor(string scene) => "Assets/Scenes/" + (scene.StartsWith("Level1") ? "Level1/" : "Level2/") + scene + ".unity";
     static void Check(bool ok, string label) { checks++; if (!ok) throw new Exception(label); }
     public static void Run() => Begin(false);
+    public static void RunExpanded() => Begin(false, true);
     public static void RunBaseline() => Begin(true);
-    static void Begin(bool old)
+    static void Begin(bool old, bool expanded = false)
     {
         Check(Application.dataPath.Replace('\\','/').Contains("/.codex-temp/"), "isolated project required");
         PlayerSettings.productName = "inventory-scene-travel-smoke";
         EditorBuildSettings.scenes = L2.Concat(L1).Distinct().Select(n => new EditorBuildSettingsScene(PathFor(n), true)).ToArray();
         EditorSceneManager.OpenScene(PathFor(L2[0]));
         SessionState.SetBool("InventoryTravelBaseline", old); SessionState.SetBool(nameof(InventorySceneTravelSmoke), true);
+        SessionState.SetBool("InventoryTravelExpanded", expanded);
         EditorApplication.EnterPlaymode();
     }
     static void Tick()
@@ -83,6 +85,13 @@ public static class InventorySceneTravelSmoke
             new PersistentInventory.RuntimeSlotState { itemId = "bomb", quantity = 2 },
             new PersistentInventory.RuntimeSlotState { itemId = "mortar_control_device", quantity = 1, itemInstanceId = "travel-test-controller", itemName = "远程控制装置", itemDescription = "跨场景测试" }
         } };
+        if (SessionState.GetBool("InventoryTravelExpanded", false))
+        {
+            Array.Resize(ref expected.slots, 7);
+            expected.slots[5] = new PersistentInventory.RuntimeSlotState { itemId = "memo", quantity = 1 };
+            expected.slots[6] = new PersistentInventory.RuntimeSlotState { itemId = "gold_coin", quantity = 17 };
+            expected.selectedSlotIndex = 6;
+        }
         PersistentInventory.Instance.ApplyRuntimeState(expected);
         expected = PersistentInventory.Instance.CaptureRuntimeState(); expectedJson = JsonUtility.ToJson(expected);
     }
@@ -108,7 +117,7 @@ public static class InventorySceneTravelSmoke
         {
             Check((PersistentInventory)typeof(ZeldaHealthHeartsUI).GetField("inventory", F).GetValue(hud) == inventory, label + ": HUD bound to live inventory");
             var icons = (Image[])typeof(ZeldaHealthHeartsUI).GetField("inventoryItemIcons", F).GetValue(hud);
-            Check(icons.All(i => i != null && i.gameObject.activeSelf && i.sprite != null), label + ": five item icons visible");
+            Check(icons.Length == expected.slots.Length && icons.All(i => i != null && i.gameObject.activeSelf && i.sprite != null), label + ": all item icons visible including expanded slots");
         }
     }
     static IEnumerator Route(string[] route)

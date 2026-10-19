@@ -69,6 +69,7 @@ public static class PatrolStreamingGroupSmoke
     { float end = Time.time + 3; while (!predicate() && Time.time < end) yield return null; Check(predicate(), label); }
     static IEnumerator Verify()
     {
+        while (RetroSceneLoadReveal.IsBlockingInput) yield return null;
         Time.timeScale = 1;
         var members = new ZeldaPatrolCharacterAi[6];
         for (int i = 0; i < members.Length; i++) members[i] = Make(i);

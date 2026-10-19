@@ -104,6 +104,9 @@ public class DoorHingeInteraction : MonoBehaviour
     public int RequiredUnlockSkill => isLocked && (passwordLockEnabled || HasConfiguredUnlockItem())
         ? CharacterSkillRequirements.DoorUnlock : 0;
     public PickupItemBase RequiredUnlockItem => requiredUnlockItem;
+    // Cached while the configured key still exists; also works after pickup or scene travel.
+    public string RequiredUnlockItemDisplayName => string.IsNullOrWhiteSpace(requiredUnlockItemName)
+        ? "对应钥匙" : requiredUnlockItemName;
     public string RequiredUnlockItemId => requiredUnlockItemId;
     public string RequiredUnlockItemInstanceId => requiredUnlockItemInstanceId;
     public string RequiredUnlockItemInstanceId2 =>
@@ -410,10 +413,7 @@ public class DoorHingeInteraction : MonoBehaviour
             return;
         }
 
-        string itemDisplayName = string.IsNullOrWhiteSpace(requiredUnlockItemName)
-            ? "对应钥匙"
-            : requiredUnlockItemName.Trim();
-        ui.ShowJournalStyleNotificationPopup("需要" + itemDisplayName);
+        ui.ShowJournalStyleNotificationPopup("需要" + RequiredUnlockItemDisplayName);
     }
 
     private void AddLockedInteractionJournalEntry()

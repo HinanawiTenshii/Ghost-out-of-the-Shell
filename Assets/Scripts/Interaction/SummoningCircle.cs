@@ -6,9 +6,10 @@ using UnityEngine.SceneManagement;
 /// <summary>Six distinct, cross-scene character offerings charge a one-shot summoning seal.</summary>
 [DisallowMultipleComponent, RequireComponent(typeof(CameraVisionStreamingExempt), typeof(SummoningCircleVisual))]
 [AddComponentMenu("Interaction/Summoning Circle")]
-public sealed class SummoningCircle : MonoBehaviour
+public sealed class SummoningCircle : CameraEnvironmentalShakeSource
 {
     public const int CrystalCount = 6;
+    public enum RitualStage { Dormant, Gathering, Erupting, Dispersing, Complete }
     [Header("Offering Area / 献祭矩形范围")]
     [SerializeField] private Vector2 areaSize = new Vector2(12, 10);
     [SerializeField] private Vector2 areaOffset;
@@ -17,6 +18,13 @@ public sealed class SummoningCircle : MonoBehaviour
     [Header("Summon / 召唤角色预制体")]
     [SerializeField] private ZeldaCharacterData summonPrefab;
     [SerializeField, Min(.4f)] private float absorptionDuration = 1.8f;
+    [Header("Summoning Ritual / 召唤仪式")]
+    [SerializeField, Min(.5f)] private float gatheringDuration = 3f;
+    [SerializeField, Min(.5f)] private float eruptionDuration = 3f;
+    [SerializeField, Min(.5f)] private float dispersalDuration = 1.4f;
+    [SerializeField, Range(0f, .025f), Tooltip("喷发时的抖动幅度，相对于摄像机 size；仅法阵进入当前摄像机画面时生效。")]
+    private float eruptionShake = .009f;
+    [SerializeField, Range(0f, 1f)] private float ritualVolume = .55f;
     [Header("Optional Quest / 可选任务记录")]
     [SerializeField, Tooltip("留空不影响任务。Level2 仪式使用 level2.summoning，阅读召唤需知后才显示任务。")]
     private string journalQuestId;
@@ -35,6 +43,8 @@ public sealed class SummoningCircle : MonoBehaviour
         public bool summoned;
         public string[] consumedIds;
         public Absorption[] absorptions;
+        public RitualStage ritualStage;
+        public float ritualElapsed;
     }
     private static readonly HashSet<SummoningCircle> Instances = new HashSet<SummoningCircle>();
     private readonly HashSet<string> consumed = new HashSet<string>();
@@ -42,6 +52,24 @@ public sealed class SummoningCircle : MonoBehaviour
     private int litMask;
     private bool summoned;
     private SummoningCircleVisual visual;
+    private RitualStage ritualStage;
+    private float ritualElapsed;
+    private SummoningCircleAudio ritualAudio;
+    public RitualStage Stage => ritualStage;
+    public float StageElapsed => ritualElapsed;
+    public float StageDuration => ritualStage == RitualStage.Gathering ? Mathf.Max(.5f, gatheringDuration) :
+        ritualStage == RitualStage.Erupting ? Mathf.Max(.5f, eruptionDuration) : Mathf.Max(.5f, dispersalDuration);
+    public float StageProgress => Mathf.Clamp01(ritualElapsed / StageDuration);
+    public bool IsRitualActive => ritualStage >= RitualStage.Gathering && ritualStage <= RitualStage.Dispersing;
+    public bool IsRitualFrozen
+    {
+        get
+        {
+            var manager = SceneTravelStateManager.Instance;
+            return Time.timeScale <= 0f || GameSaveSystem.IsLoading || RetroSceneLoadReveal.IsBlockingInput ||
+                (manager != null && (manager.IsSceneTravelRestoreInProgress || manager.IsQuickRestartPending));
+        }
+    }
     public IReadOnlyList<CharacterPersistentIdentity> BoundCharacters => boundCharacters;
     public IReadOnlyList<Absorption> Absorptions => absorptions;
     public ZeldaCharacterData SummonPrefab { get => summonPrefab; set => summonPrefab = value; }
@@ -57,13 +85,16 @@ public sealed class SummoningCircle : MonoBehaviour
     private SummoningCircleVisual Visual => visual != null ? visual : (visual = GetComponent<SummoningCircleVisual>());
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStatics() => Instances.Clear();
-    private void OnEnable() { Instances.Add(this); ReportQuestProgress(); }
-    private void OnDisable() => Instances.Remove(this);
-    private void OnDestroy() => Instances.Remove(this);
+    protected override void OnEnable() { base.OnEnable(); Instances.Add(this); ReportQuestProgress(); }
+    protected override void OnDisable() { base.OnDisable(); Instances.Remove(this); ritualAudio?.Stop(); }
+    private void OnDestroy() { Instances.Remove(this); ritualAudio?.Stop(); }
     private void OnValidate()
     {
         AreaSize = areaSize;
         absorptionDuration = Mathf.Max(.4f, absorptionDuration);
+        gatheringDuration = Mathf.Max(.5f, gatheringDuration);
+        eruptionDuration = Mathf.Max(.5f, eruptionDuration);
+        dispersalDuration = Mathf.Max(.5f, dispersalDuration);
         if (boundCharacters == null || boundCharacters.Length != CrystalCount)
             Array.Resize(ref boundCharacters, CrystalCount);
     }
@@ -131,8 +162,7 @@ public sealed class SummoningCircle : MonoBehaviour
     private void Update()
     {
         // Restore all devices/characters before resuming progress or creating a new NPC.
-        var manager = SceneTravelStateManager.Instance;
-        if (GameSaveSystem.IsLoading || (manager != null && manager.IsSceneTravelRestoreInProgress)) return;
+        if (IsRitualFrozen) { UpdateRitualAudio(); return; }
         int previousMask = litMask;
         for (int i = absorptions.Count - 1; i >= 0; i--)
         {
@@ -144,8 +174,44 @@ public sealed class SummoningCircle : MonoBehaviour
             }
             else absorptions[i] = flight;
         }
-        if (!summoned && litMask == 63 && summonPrefab != null) Summon();
-        else if (litMask != previousMask) ReportQuestProgress();
+        if (litMask != previousMask) ReportQuestProgress();
+        if (!summoned && litMask == 63 && summonPrefab != null && ritualStage == RitualStage.Dormant)
+        { ritualStage = RitualStage.Gathering; ritualElapsed = 0; }
+        else AdvanceRitual(Time.deltaTime);
+        UpdateRitualAudio();
+    }
+    private void AdvanceRitual(float deltaTime)
+    {
+        if (!IsRitualActive) return;
+        // A missing/removed template must not turn a completed visual into a lost summon.
+        if (!summoned && summonPrefab == null) return;
+        ritualElapsed += Mathf.Max(0, deltaTime);
+        while (IsRitualActive && ritualElapsed >= StageDuration)
+        {
+            ritualElapsed -= StageDuration;
+            if (ritualStage == RitualStage.Gathering) ritualStage = RitualStage.Erupting;
+            else if (ritualStage == RitualStage.Erupting)
+            {
+                ritualStage = RitualStage.Dispersing;
+                if (!summoned) Summon(); // Burst and the NPC appear on the same frame, once only.
+            }
+            else { ritualStage = RitualStage.Complete; ritualElapsed = 0; }
+        }
+    }
+    private void UpdateRitualAudio()
+    {
+        if (IsRitualActive && ritualAudio == null) ritualAudio = new SummoningCircleAudio(gameObject);
+        ritualAudio?.Render(this, ritualVolume);
+    }
+    protected override Vector2 GetOffset(Camera camera, CameraCircularVision vision, Plane[] cameraFrustum)
+    {
+        if (ritualStage != RitualStage.Erupting || IsRitualFrozen || eruptionShake <= 0 ||
+            (camera.cullingMask & (1 << gameObject.layer)) == 0 || Visual == null ||
+            !GeometryUtility.TestPlanesAABB(cameraFrustum, Visual.SealBounds)) return Vector2.zero;
+        float envelope = Mathf.Clamp01(Mathf.Min(ritualElapsed / .25f, (StageDuration - ritualElapsed) / .3f));
+        float t = ritualElapsed * 41f;
+        Vector2 wave = new Vector2(Mathf.Sin(t) + .3f * Mathf.Sin(t * 1.73f), Mathf.Sin(t * 1.21f + 1) * .8f);
+        return Vector2.ClampMagnitude(wave, 1) * (eruptionShake * camera.orthographicSize * envelope);
     }
     private void Summon()
     {
@@ -154,7 +220,7 @@ public sealed class SummoningCircle : MonoBehaviour
         var stable = actor.GetComponent<SceneTravelStableId>();
         if (stable == null) stable = actor.AddComponent<SceneTravelStableId>();
         stable.Initialize("summoned:" + Guid.NewGuid().ToString("N"));
-        Visual?.PlaySummonPulse();
+        Visual?.RefreshImmediately();
         ReportQuestProgress();
     }
 
@@ -196,11 +262,20 @@ public sealed class SummoningCircle : MonoBehaviour
     }
     public RuntimeState CaptureRuntimeState() => new RuntimeState
     {
-        litMask = litMask, summoned = summoned, consumedIds = new List<string>(consumed).ToArray(), absorptions = absorptions.ToArray()
+        litMask = litMask, summoned = summoned, consumedIds = new List<string>(consumed).ToArray(), absorptions = absorptions.ToArray(),
+        ritualStage = ritualStage, ritualElapsed = ritualElapsed
     };
     public void ApplyRuntimeState(RuntimeState state)
     {
         litMask = state.litMask & 63; summoned = state.summoned;
+        ritualAudio?.Stop();
+        ritualStage = state.ritualStage;
+        // Old completed saves have no stage fields: never replay or duplicate a summon.
+        if (summoned && ritualStage != RitualStage.Dispersing) ritualStage = RitualStage.Complete;
+        else if (!summoned && (litMask != 63 || ritualStage < RitualStage.Dormant || ritualStage > RitualStage.Erupting))
+            ritualStage = RitualStage.Dormant;
+        ritualElapsed = float.IsNaN(state.ritualElapsed) || float.IsInfinity(state.ritualElapsed) ? 0 :
+            Mathf.Clamp(state.ritualElapsed, 0, StageDuration);
         consumed.Clear();
         foreach (string id in state.consumedIds ?? Array.Empty<string>()) if (!string.IsNullOrEmpty(id)) consumed.Add(id);
         absorptions.Clear(); int occupied = litMask;

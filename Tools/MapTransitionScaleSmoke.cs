@@ -33,18 +33,25 @@ public static class MapTransitionScaleSmoke
             test.RebuildFromSnapshot(data);
             using (var vh = new VertexHelper())
             {
+                int iconVertices;
+                using (var glyph = new VertexHelper())
+                {
+                    RuntimeMiniMapPointIconGraphic.DrawIcon(glyph, MapPointIconShape.SceneTransition, Vector2.zero, 1f, Color.white);
+                    iconVertices = glyph.currentVertCount;
+                }
                 Call(test, "PopulateMarkers", vh);
-                Check(vh.currentVertCount == 16, "40% overview uses two solid quads per exit");
+                Check(vh.currentVertCount == iconVertices * 2, "40% overview uses the shared compact portal glyph");
                 float compactInk = Ink(vh);
-                var v = new UIVertex(); vh.PopulateUIVertex(ref v, 4);
-                Check(v.color.a == 255 && v.color.b > v.color.r, "small solid exits retain opaque readable blue");
+                var v = new UIVertex(); bool opaqueBlue = false;
+                for (int i = 0; i < vh.currentVertCount; i++) { vh.PopulateUIVertex(ref v, i); opaqueBlue |= v.color.a == 255 && v.color.b > v.color.r + 50; }
+                Check(opaqueBlue, "small portal glyph retains opaque readable blue");
                 test.ResetView(); Call(test, "PopulateMarkers", vh);
-                Check(vh.currentVertCount == 16, "all zoom levels keep the same simple solid silhouette");
+                Check(vh.currentVertCount == iconVertices * 2, "all zoom levels reuse cached portal geometry");
                 Check(compactInk < Ink(vh) * .3f, "overview footprint shrinks with zoom");
                 test.SetCameraMarkerVisible(true); Call(test, "PopulateMarkers", vh);
-                Check(vh.currentVertCount == 20, "player marker retained");
+                Check(vh.currentVertCount == iconVertices * 2 + 4, "player marker retained");
                 test.SetTrackedQuestTarget(true, Vector2.one * 100, true); Call(test, "PopulateMarkers", vh);
-                Check(vh.currentVertCount == 32, "quest marker retained with same geometry");
+                Check(vh.currentVertCount == iconVertices * 2 + 16, "quest marker retained with same geometry");
             }
             float previous = 0;
             test.ZoomBy(-100);

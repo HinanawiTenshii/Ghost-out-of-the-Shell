@@ -95,7 +95,7 @@ public sealed partial class CameraVisionObjectStreaming
                 }
             }
             if (inRange) state.lastVisibleTime = now;
-            state.keepLoaded = inRange || now - state.lastVisibleTime < unloadDelay;
+            state.keepLoaded = inRange || (!initialPreparationRunning && now - state.lastVisibleTime < unloadDelay);
             // Freeze before any budgeted SetActive call. Only the end-of-frame
             // readiness barrier releases the patrol clocks, all at once.
             if (!state.keepLoaded || !IsPatrolGroupReady(state)) state.group.SetPaused(this, true);

@@ -628,7 +628,7 @@ public sealed class CRTScreenEffect : MonoBehaviour
 
 /// <summary>Presentation-only F12 toggle; menu/gameplay state continues unchanged.</summary>
 [DefaultExecutionOrder(32001)]
-public sealed class RuntimeUiVisibility : MonoBehaviour
+public sealed partial class RuntimeUiVisibility : MonoBehaviour
 {
     private static RuntimeUiVisibility instance;
     private static readonly HashSet<Canvas> canvases = new HashSet<Canvas>();
@@ -651,18 +651,22 @@ public sealed class RuntimeUiVisibility : MonoBehaviour
     {
         if (!Application.isPlaying || canvas == null) return;
         canvases.Add(canvas);
-        if (instance != null && instance.hidden) instance.HideCanvas(canvas);
+        if (instance == null) return;
+        if (IsPauseOnlyScene) instance.ApplySceneCanvasPolicy(canvas);
+        else if (instance.hidden) instance.HideCanvas(canvas);
     }
 
     private void OnEnable()
     {
         SceneManager.sceneLoaded += SceneLoaded;
+        SceneManager.activeSceneChanged += ActiveSceneChanged;
         Camera.onPreCull += BeforeCamera;
         Camera.onPostRender += AfterCamera;
     }
 
     private void SceneLoaded(Scene scene, LoadSceneMode mode)
     {
+        RefreshScenePolicy();
         canvases.RemoveWhere(c => c == null);
         // Scene-boundary discovery only; runtime CRT canvases register as they are configured.
         foreach (var canvas in FindObjectsOfType<Canvas>(true)) Register(canvas);
@@ -671,12 +675,17 @@ public sealed class RuntimeUiVisibility : MonoBehaviour
     private void Update()
     {
         RestoreGroups();
-        if (Input.GetKeyDown(KeyCode.F12)) hidden = !hidden;
+        if (!IsPauseOnlyScene && Input.GetKeyDown(KeyCode.F12)) hidden = !hidden;
     }
 
     private void LateUpdate()
     {
         UpdateCursorVisibility();
+        if (IsPauseOnlyScene)
+        {
+            foreach (var canvas in canvases) if (canvas != null) ApplySceneCanvasPolicy(canvas);
+            return;
+        }
         if (!hidden) return;
         foreach (var canvas in canvases) if (canvas != null) HideCanvas(canvas);
     }
@@ -695,9 +704,9 @@ public sealed class RuntimeUiVisibility : MonoBehaviour
         // on a controlled mover: it can temporarily disappear during possession.
         string sceneName = SceneManager.GetActiveScene().name;
         bool titleScene = sceneName.Replace(" ", "").Equals("TitleScreen", System.StringComparison.OrdinalIgnoreCase);
-        // Interactive world panels also own the pointer while open. Without
-        // these checks this LateUpdate overrides their Open() cursor request.
-        bool show = titleScene || PauseMenuController.IsPaused || TabJournalMenuController.IsOpen || SaveSlotPanel.IsOpen ||
+        // Interactive panels, including settlement over a paused gameplay scene,
+        // own the pointer. Otherwise LateUpdate hides it after their Open request.
+        bool show = titleScene || LevelSettlementScreen.IsOpen || PauseMenuController.IsPaused || TabJournalMenuController.IsOpen || SaveSlotPanel.IsOpen ||
             DoorPasswordPanel.IsOpen || ElectricGatePanel.IsOpen || CharacterDialogueWindow.BlocksInput || TurretZeldaCharacterData.PlayerNeedsCursor;
         if (Cursor.visible != show) Cursor.visible = show;
         // Hide only the visual cursor; mouse aiming and right-click inspection
@@ -713,7 +722,9 @@ public sealed class RuntimeUiVisibility : MonoBehaviour
 
     private void BeforeCamera(Camera camera)
     {
-        if (!hidden || camera == null) return;
+        // LastScene must keep the pause menu and transition curtain renderable,
+        // even when the player used the screenshot HUD toggle before arriving.
+        if (!hidden || IsPauseOnlyScene || camera == null) return;
         int uiLayer = LayerMask.NameToLayer("UI");
         if (uiLayer < 0) return;
         if (!cameraMasks.ContainsKey(camera)) cameraMasks.Add(camera, camera.cullingMask);
@@ -732,11 +743,13 @@ public sealed class RuntimeUiVisibility : MonoBehaviour
     private void OnDisable()
     {
         SceneManager.sceneLoaded -= SceneLoaded;
+        SceneManager.activeSceneChanged -= ActiveSceneChanged;
         Cursor.visible = true;
         Cursor.lockState = CursorLockMode.None;
         Camera.onPreCull -= BeforeCamera;
         Camera.onPostRender -= AfterCamera;
         RestoreGroups();
+        RestoreSceneGroups();
         foreach (var entry in cameraMasks) if (entry.Key != null) entry.Key.cullingMask = entry.Value;
         cameraMasks.Clear();
     }

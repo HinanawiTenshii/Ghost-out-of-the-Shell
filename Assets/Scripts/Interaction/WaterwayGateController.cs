@@ -66,7 +66,11 @@ public sealed class WaterwayGateController : MonoBehaviour
         SetOpen(!linkedGate.IsOpenRequested);
     }
 
-    private void Awake() => ZeldaRequirementWindow.AttachSkillRequirement(this, CharacterSkillRequirements.WaterwayGate);
+    private void Awake()
+    {
+        ZeldaRequirementWindow.AttachSkillRequirement(this, CharacterSkillRequirements.WaterwayGate);
+        MapPointOfInterest.AttachMechanism(this);
+    }
 
     private void OnEnable()
     {

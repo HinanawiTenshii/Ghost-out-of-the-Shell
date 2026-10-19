@@ -78,6 +78,10 @@ public class ZeldaFourWayMover : MonoBehaviour
     private CardboardBoxWearState activeCardboardBox;
     private readonly RaycastHit2D[] movementHits = new RaycastHit2D[8];
     private readonly Collider2D[] controlSwitchHits = new Collider2D[32];
+    // Allocate only for movers that actually attempt possession, not every NPC.
+    private RaycastHit2D[] possessionSightHits;
+    private Collider2D[] possessionSightOverlaps;
+    private ContactFilter2D possessionSightFilter;
     private readonly Dictionary<Sprite, Vector2> possessionVisualSizeCache =
         new Dictionary<Sprite, Vector2>();
 
@@ -279,7 +283,8 @@ public class ZeldaFourWayMover : MonoBehaviour
         bool hasPossessionTarget = !DocumentReader.IsInputBlocked
             && characterData != null
             && !characterData.IsDead
-            && IsPotentialControlSwitchTarget(candidate);
+            && IsPotentialControlSwitchTarget(candidate)
+            && HasClearPossessionPath(candidate);
 
         if (!hasPossessionTarget)
         {
@@ -470,6 +475,13 @@ public class ZeldaFourWayMover : MonoBehaviour
             return;
         }
 
+        // Resolve attacks before advancing the channel, including its final
+        // frame. Otherwise possession could complete before the click is read.
+        if (characterData.CanAttack && !characterData.IsGhostForm && Input.GetMouseButtonDown(0) && !IsAttacking)
+        {
+            TryPerformAttack(facingDirection);
+        }
+
         if (UpdateControlSwitchProgress(Time.deltaTime))
         {
             StopSprintingAndRefreshStaminaBar();
@@ -479,11 +491,6 @@ public class ZeldaFourWayMover : MonoBehaviour
         if (activeCardboardBox != null && Input.GetKeyDown(sprintKey))
         {
             activeCardboardBox.RequestExit();
-        }
-
-        if (characterData.CanAttack && !characterData.IsGhostForm && Input.GetMouseButtonDown(0) && !IsAttacking)
-        {
-            TryPerformAttack(facingDirection);
         }
 
         if (IsAttacking)
@@ -760,6 +767,7 @@ public class ZeldaFourWayMover : MonoBehaviour
             return false;
         }
 
+        InterruptPossessionByAttack();
         Vector2 attackDirection = ToNearestCardinalDirection(facingDirection);
         Quaternion attackRotation = Quaternion.FromToRotation(Vector3.up, attackDirection);
         Vector3 rotatedSpawnOffset = attackRotation * characterData.AttackSpawnOffset;
@@ -821,7 +829,12 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     private bool UpdateControlSwitchProgress(float deltaTime)
     {
-        if (!Input.GetKey(KeyCode.F))
+        return AdvanceControlSwitchProgress(deltaTime, Input.GetKey(KeyCode.F));
+    }
+
+    private bool AdvanceControlSwitchProgress(float deltaTime, bool possessionHeld)
+    {
+        if (!possessionHeld)
         {
             ResetControlSwitchProgress();
             possessionAttemptRejected = false;
@@ -830,6 +843,14 @@ public class ZeldaFourWayMover : MonoBehaviour
 
         if (possessionAttemptRejected)
         {
+            return false;
+        }
+
+        // Do not start a new channel in the middle of a melee swing. Ordinary
+        // pickup/use gestures share the pose timer but are not combat attacks.
+        if (IsAttacking && !IsUsingItemAttack)
+        {
+            ResetControlSwitchProgress();
             return false;
         }
 
@@ -921,7 +942,7 @@ public class ZeldaFourWayMover : MonoBehaviour
         ZeldaCharacterData targetData = target.GetComponent<ZeldaCharacterData>();
 
         target.ReceiveControl(facingDirection);
-        PlayerGrowthAttributes.Instance?.RecordPossessedCharacter(target.GetComponent<ZeldaCharacterData>());
+        PlayerGrowthAttributes.GetOrCreate().RecordPossessedCharacter(targetData);
         SoulMarkRuntime.ClearAfterDirectPossession(target);
         NotifyAiWitnessesOfPossession(target);
         moveDirection = Vector2.zero;
@@ -954,6 +975,16 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     public void InterruptPossessionByDamage()
     {
+        InterruptPossession();
+    }
+
+    public void InterruptPossessionByAttack()
+    {
+        InterruptPossession();
+    }
+
+    private void InterruptPossession()
+    {
         if (!IsPossessionInProgress)
         {
             return;
@@ -961,7 +992,7 @@ public class ZeldaFourWayMover : MonoBehaviour
 
         ResetControlSwitchProgress();
         // Require F to be released before another attempt can begin, otherwise
-        // holding the key would restart possession immediately after the hit.
+        // holding the key would restart possession immediately after the action.
         possessionAttemptRejected = true;
     }
 
@@ -1289,7 +1320,7 @@ public class ZeldaFourWayMover : MonoBehaviour
             }
 
             float distance = Vector2.Distance(transform.position, candidate.transform.position);
-            if (distance < closestDistance)
+            if (distance < closestDistance && HasClearPossessionPath(candidate))
             {
                 closestDistance = distance;
                 closestTarget = candidate;
@@ -1346,7 +1377,7 @@ public class ZeldaFourWayMover : MonoBehaviour
             }
 
             float distance = offset.sqrMagnitude;
-            if (distance < closestDistance * closestDistance)
+            if (distance < closestDistance * closestDistance && HasClearPossessionPath(candidate))
             {
                 closestDistance = Mathf.Sqrt(distance);
                 closestTarget = candidate;
@@ -1455,9 +1486,66 @@ public class ZeldaFourWayMover : MonoBehaviour
             localSize.y * Mathf.Abs(scale.y));
     }
 
+    private bool HasClearPossessionPath(ZeldaFourWayMover candidate)
+    {
+        if (candidate == null) return false;
+        if (possessionSightHits == null)
+        {
+            possessionSightHits = new RaycastHit2D[32];
+            possessionSightOverlaps = new Collider2D[16];
+            possessionSightFilter = new ContactFilter2D { useTriggers = true };
+            // Same wall layers as player vision. Do not inherit a ghost's
+            // movement collision rules or let non-wall furniture block possession.
+            possessionSightFilter.SetLayerMask(LayerMask.GetMask("Blocks", "Hidden Blocks"));
+        }
+
+        Vector2 origin = bodyCollider != null
+            ? (Vector2)bodyCollider.transform.TransformPoint(bodyCollider.offset) : (Vector2)transform.position;
+        Vector2 destination = candidate.bodyCollider != null
+            ? (Vector2)candidate.bodyCollider.transform.TransformPoint(candidate.bodyCollider.offset)
+            : (Vector2)candidate.transform.position;
+        // Unity 2021's global switch can suppress trigger hits even with an
+        // explicit filter. Wall triggers must block too. This synchronous query
+        // invokes no gameplay callbacks and always restores the project setting.
+        bool previousHitTriggers = Physics2D.queriesHitTriggers;
+        try
+        {
+            if (!previousHitTriggers) Physics2D.queriesHitTriggers = true;
+            int count = Physics2D.Linecast(origin, destination, possessionSightFilter, possessionSightHits);
+            // An incomplete hit list must not accidentally authorize a transfer.
+            if (count == possessionSightHits.Length) return false;
+            for (int i = 0; i < count; i++)
+                if (IsPossessionWall(possessionSightHits[i].collider)) return false;
+
+            // Explicitly cover endpoints inside a thin wall, including when the
+            // project's Physics2D.queriesStartInColliders setting is disabled.
+            return !IsPossessionPointBlocked(origin) && !IsPossessionPointBlocked(destination);
+        }
+        finally
+        {
+            if (!previousHitTriggers) Physics2D.queriesHitTriggers = false;
+        }
+    }
+
+    private bool IsPossessionPointBlocked(Vector2 point)
+    {
+        int count = Physics2D.OverlapPoint(point, possessionSightFilter, possessionSightOverlaps);
+        if (count == possessionSightOverlaps.Length) return true;
+        for (int i = 0; i < count; i++)
+            if (IsPossessionWall(possessionSightOverlaps[i])) return true;
+        return false;
+    }
+
+    private bool IsPossessionWall(Collider2D hit)
+    {
+        return hit != null && hit.enabled && hit.gameObject.activeInHierarchy &&
+            ZeldaRuntimeRegistry.GetGameplayScene(hit.gameObject) == ZeldaRuntimeRegistry.GetGameplayScene(gameObject) &&
+            hit.GetComponentInParent<ZeldaCharacterData>() == null;
+    }
+
     private bool IsValidControlSwitchTarget(ZeldaFourWayMover candidate)
     {
-        if (!IsPotentialControlSwitchTarget(candidate))
+        if (!IsPotentialControlSwitchTarget(candidate) || !HasClearPossessionPath(candidate))
         {
             return false;
         }
@@ -1481,7 +1569,8 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     private bool IsPotentialControlSwitchTarget(ZeldaFourWayMover candidate)
     {
-        if (candidate == null || candidate == this || candidate.enabled)
+        if (candidate == null || candidate == this || candidate.enabled || !candidate.gameObject.activeInHierarchy ||
+            ZeldaRuntimeRegistry.GetGameplayScene(candidate.gameObject) != ZeldaRuntimeRegistry.GetGameplayScene(gameObject))
         {
             return false;
         }
@@ -1644,6 +1733,9 @@ public sealed class SoulMarkRuntime : MonoBehaviour
         instance.markerBlinkTime = 0f;
         instance.marker.transform.localScale = Vector3.one * 0.48f;
         instance.LateUpdate();
+        // Notify only after the energy payment and mark installation succeed.
+        // Retaliation must not invalidate this already-established destination.
+        candidate.CharacterData.ReportHostileSkill(data);
     }
 
     private void ValidateMark()
@@ -1693,7 +1785,7 @@ public sealed class SoulMarkRuntime : MonoBehaviour
             destination.gameObject.SetActive(true);
             destination.ReceiveControl(Vector2.down);
             var targetData = destination.GetComponent<ZeldaCharacterData>();
-            PlayerGrowthAttributes.Instance?.RecordPossessedCharacter(targetData);
+            PlayerGrowthAttributes.GetOrCreate().RecordPossessedCharacter(targetData);
             targetData.ClearCurrentPossessionEnergy();
             QuestJournalManager.GetOrCreate().RecordControlledBehemoth(destination);
         }

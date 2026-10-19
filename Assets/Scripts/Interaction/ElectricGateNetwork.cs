@@ -124,7 +124,7 @@ public sealed class ElectricGateNetwork : MonoBehaviour
         }
         obsolete.Clear();
         foreach (var pair in fields) if (!wanted.Contains(pair.Key)) obsolete.Add(pair.Key);
-        foreach (string key in obsolete) { fields[key].Dispose(); fields.Remove(key); }
+        foreach (string key in obsolete) { fields[key].Dispose(true); fields.Remove(key); }
     }
     private void FixedUpdate()
     {
@@ -193,6 +193,8 @@ public sealed class ElectricGateNetwork : MonoBehaviour
         private readonly ElectricGateAudio audio;
         private ElectricGateRules.SignalState signal;
         private bool previouslyPassable;
+        private string mapPointId;
+        private float nextMapVisibilityCheck;
         public Field(ElectricGatePillar a, ElectricGatePillar b, Material material, Material particleMaterial)
         {
             A = a; B = b;
@@ -330,6 +332,24 @@ public sealed class ElectricGateNetwork : MonoBehaviour
             if (A == null || B == null || !A.isActiveAndEnabled || !B.isActiveAndEnabled) return;
             var state = A.Powered && B.Powered ? signal : ElectricGateRules.SignalState.Off;
             A.ReportSignal(state); B.ReportSignal(state);
+            UpdateMapMarker(state != ElectricGateRules.SignalState.Off);
+        }
+        private void UpdateMapMarker(bool powered)
+        {
+            if (mapPointId == null)
+            {
+                string a = SceneTravelStateManager.GetMapObjectId(A.transform), b = SceneTravelStateManager.GetMapObjectId(B.transform);
+                mapPointId = A.gameObject.scene.name + ":electric-field:" +
+                    (string.CompareOrdinal(a,b) < 0 ? a + "|" + b : b + "|" + a);
+            }
+            var manager = MapPointOfInterestManager.GetOrCreate();
+            bool seen = false;
+            if (powered && !manager.IsDiscovered(mapPointId) && Time.unscaledTime >= nextMapVisibilityCheck)
+            {
+                nextMapVisibilityCheck = Time.unscaledTime + .2f;
+                seen = MapPointOfInterest.IsElectricFieldVisible(A, Start, End);
+            }
+            manager.UpdateElectricField(mapPointId, A.gameObject.scene.name, Start, End, powered, seen);
         }
         private void Strike(ZeldaCharacterData data, Vector2 old, Vector2 current)
         {
@@ -394,6 +414,14 @@ public sealed class ElectricGateNetwork : MonoBehaviour
             for (int i = 0; i < arcUntil.Length; i++) arcUntil[i] = 0f;
             foreach (var arc in arcs) if (arc != null) arc.enabled = false;
         }
-        public void Dispose() { CancelStrikes(); if (root != null) { root.SetActive(false); Object.Destroy(root); } }
+        public void Dispose(bool removedByPairing = false)
+        {
+            // Scene unload retains discovered geometry. A real link change in a
+            // live scene (e.g. closing a blocking door) removes only that link.
+            if (removedByPairing && A != null && B != null && A.isActiveAndEnabled && B.isActiveAndEnabled &&
+                A.gameObject.scene.isLoaded && mapPointId != null && MapPointOfInterestManager.Instance != null)
+                MapPointOfInterestManager.Instance.SetPointVisible(mapPointId, false);
+            CancelStrikes(); if (root != null) { root.SetActive(false); Object.Destroy(root); }
+        }
     }
 }

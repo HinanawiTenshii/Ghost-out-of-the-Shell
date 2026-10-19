@@ -51,6 +51,12 @@ public sealed class ActiveZeldaCharacterDataSource : MonoBehaviour
         Instance = this;
         if (persistBetweenScenes)
         {
+            // Level scenes may group services under SceneAssets. Preserve only
+            // this service: Unity cannot persist a child GameObject.
+            if (transform.parent != null)
+            {
+                transform.SetParent(null, true);
+            }
             DontDestroyOnLoad(gameObject);
         }
 
