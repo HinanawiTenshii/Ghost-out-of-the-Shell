@@ -32,11 +32,13 @@ public sealed partial class RuntimeMiniMapPointIconGraphic
                 Box(h,c,r,-.24f,-.48f,.13f,.13f,tint); Box(h,c,r,.24f,-.48f,.13f,.13f,tint);
                 return true;
             case MapPointIconShape.SceneTransition:
-                Box(h,c,r,-.65f,0,.18f,1.25f,tint);
-                Box(h,c,r,-.12f,1.08f,.65f,.17f,tint);
-                Box(h,c,r,-.12f,-1.08f,.65f,.17f,tint);
-                Box(h,c,r,.2f,0,.65f,.22f,tint);
-                AddPolygon(h,c,new[]{new Vector2(.6f,.65f)*r,new Vector2(1.3f,0)*r,new Vector2(.6f,-.65f)*r},tint);
+                // Compact doorway and solid outward arrow. Leave clear space
+                // around the symbol so it cannot merge with the diamond rim.
+                Box(h,c,r,-.68f,0,.14f,.78f,tint);
+                Box(h,c,r,-.29f,.72f,.53f,.14f,tint);
+                Box(h,c,r,-.29f,-.72f,.53f,.14f,tint);
+                Box(h,c,r,.15f,0,.46f,.2f,tint);
+                AddPolygon(h,c,new[]{new Vector2(.42f,.5f)*r,new Vector2(1f,0)*r,new Vector2(.42f,-.5f)*r},tint);
                 return true;
             case MapPointIconShape.Lever:
                 Box(h,c,r,0,-.67f,.9f,.24f,tint);

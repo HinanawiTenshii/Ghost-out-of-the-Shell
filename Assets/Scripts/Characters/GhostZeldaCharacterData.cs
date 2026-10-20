@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class GhostZeldaCharacterData : ZeldaCharacterData
+public partial class GhostZeldaCharacterData : ZeldaCharacterData
 {
     private const float ParticleEmissionInterval = 0.065f;
     private const float ParticleSpawnRadius = 0.21f;
@@ -9,10 +9,6 @@ public class GhostZeldaCharacterData : ZeldaCharacterData
     [SerializeField] private Color movingTint = new Color(0.9f, 1f, 1f, 0.86f);
     public Color ConsciousnessParticleTint => idleTint;
 
-    private static Sprite ghostDownSprite;
-    private static Sprite ghostUpSprite;
-    private static Sprite ghostLeftSprite;
-    private static Sprite ghostRightSprite;
     private ParticleSystem ghostParticles;
     private Material ghostParticleMaterial;
     private float particleEmissionTimer;
@@ -46,95 +42,9 @@ public class GhostZeldaCharacterData : ZeldaCharacterData
             return;
         }
 
-        CreateDirectionSprites();
-
-        Vector2 visualDirection = ToNearestCardinalDirection(facingDirection);
-        if (visualDirection == Vector2.up)
-        {
-            spriteRenderer.sprite = ghostUpSprite;
-        }
-        else if (visualDirection == Vector2.left)
-        {
-            spriteRenderer.sprite = ghostLeftSprite;
-        }
-        else if (visualDirection == Vector2.right)
-        {
-            spriteRenderer.sprite = ghostRightSprite;
-        }
-        else
-        {
-            spriteRenderer.sprite = ghostDownSprite;
-        }
-
+        spriteRenderer.sprite = SelectGhostSprite(facingDirection, isMoving, Time.time);
         Color baseColor = isMoving ? movingTint : idleTint;
         spriteRenderer.color = GetDamageFeedbackTint(baseColor);
-    }
-
-    private static void CreateDirectionSprites()
-    {
-        if (ghostDownSprite != null)
-        {
-            return;
-        }
-
-        ghostDownSprite = CreateGhostSprite(Vector2.down);
-        ghostUpSprite = CreateGhostSprite(Vector2.up);
-        ghostLeftSprite = CreateGhostSprite(Vector2.left);
-        ghostRightSprite = CreateGhostSprite(Vector2.right);
-    }
-
-    private static Sprite CreateGhostSprite(Vector2 facing)
-    {
-        const int size = 16;
-        Texture2D texture = new Texture2D(size, size);
-        texture.filterMode = FilterMode.Point;
-
-        Color clear = new Color(1f, 1f, 1f, 0f);
-        Color body = new Color(0.82f, 0.98f, 1f, 0.88f);
-        Color shade = new Color(0.46f, 0.78f, 0.96f, 0.7f);
-        Color eye = new Color(0.07f, 0.16f, 0.24f, 0.95f);
-
-        FillRect(texture, 0, 0, size, size, clear);
-        // Keep the original 16-pixel canvas and prefab scale, but use stepped rows
-        // to give the ghost a compact, nearly circular pixel silhouette.
-        FillRect(texture, 6, 3, 4, 1, body);
-        FillRect(texture, 4, 4, 8, 1, body);
-        FillRect(texture, 3, 5, 10, 1, body);
-        FillRect(texture, 2, 6, 12, 5, body);
-        FillRect(texture, 3, 11, 10, 1, body);
-        FillRect(texture, 4, 12, 8, 1, body);
-        FillRect(texture, 6, 13, 4, 1, body);
-
-        // Preserve the existing blue shade while following the new rounded edge.
-        FillRect(texture, 6, 3, 3, 1, shade);
-        FillRect(texture, 4, 4, 2, 1, shade);
-        texture.SetPixel(3, 5, shade);
-        FillRect(texture, 2, 6, 1, 5, shade);
-        texture.SetPixel(3, 11, shade);
-
-        if (facing == Vector2.up)
-        {
-            FillRect(texture, 6, 11, 1, 1, eye);
-            FillRect(texture, 9, 11, 1, 1, eye);
-        }
-        else if (facing == Vector2.left)
-        {
-            FillRect(texture, 5, 9, 1, 2, eye);
-            FillRect(texture, 8, 9, 1, 1, eye);
-        }
-        else if (facing == Vector2.right)
-        {
-            FillRect(texture, 10, 9, 1, 2, eye);
-            FillRect(texture, 7, 9, 1, 1, eye);
-        }
-        else
-        {
-            FillRect(texture, 6, 9, 1, 2, eye);
-            FillRect(texture, 9, 9, 1, 2, eye);
-        }
-
-        texture.Apply();
-        return Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.25f), 16f);
     }
 
     private static Vector2 ToNearestCardinalDirection(Vector2 direction)
@@ -305,17 +215,6 @@ public class GhostZeldaCharacterData : ZeldaCharacterData
         if (ghostParticleMaterial != null)
         {
             Destroy(ghostParticleMaterial);
-        }
-    }
-
-    private static void FillRect(Texture2D texture, int startX, int startY, int width, int height, Color color)
-    {
-        for (int y = startY; y < startY + height; y++)
-        {
-            for (int x = startX; x < startX + width; x++)
-            {
-                texture.SetPixel(x, y, color);
-            }
         }
     }
 }

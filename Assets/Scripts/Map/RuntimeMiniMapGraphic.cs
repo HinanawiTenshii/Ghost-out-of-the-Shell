@@ -15,6 +15,7 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
     private const float DefaultZoom = 2.5f;
     private const float MinimumZoom = 1f;
     private const float MaximumZoom = 5f;
+    private const float PointGlyphRadius = 6.25f;
     private readonly List<Vector2[]> blockPaths = new List<Vector2[]>();
     private readonly List<Vector2> filledWallTriangles = new List<Vector2>();
     private readonly List<RuntimeMiniMapBridgeData> bridgeLayouts = new List<RuntimeMiniMapBridgeData>();
@@ -80,7 +81,7 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
             Rect rect = GetPixelAdjustedRect();
             float scale = Mathf.Min(rect.width * .9f / Mathf.Max(.01f, mapBounds.size.x),
                 rect.height * .9f / Mathf.Max(.01f, mapBounds.size.y)) * zoom;
-            return Mathf.Max(.5f, Mathf.Max(iconScale * .65f, GetTransitionIconScale(scale)));
+            return Mathf.Max(.5f, Mathf.Max(iconScale * .65f, GetMapDetailIconScale(scale)));
         }
     }
 
@@ -649,7 +650,7 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
                     if (drawPointIcons)
                         RuntimeMiniMapPointIconGraphic.DrawIcon(vertexHelper, door.IconShape,
                             MapPoint(door.WorldPosition, worldCenter, rectCenter, scale),
-                            6.25f * pointScale, door.IconColor, door.Marked);
+                            PointGlyphRadius * pointScale, door.IconColor, door.Marked);
                     continue;
                 }
                 Vector2 a = MapPoint(door.LineStart, worldCenter, rectCenter, scale);
@@ -668,7 +669,8 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
             }
         }
 
-        float transitionScale = GetTransitionIconScale(scale);
+        // Exits share the ordinary POI size, including its readable zoom floor.
+        float transitionScale = PointIconScale;
         for (int index = 0; index < transitions.Count; index++)
         {
             RuntimeMiniMapTransitionData transition = transitions[index];
@@ -1247,12 +1249,10 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
         ViewChanged?.Invoke();
     }
 
-    private float GetTransitionIconScale(float worldToMapScale)
+    private float GetMapDetailIconScale(float worldToMapScale)
     {
-        // HUD uses maximum zoom but has a tiny viewport: zoom alone is not a
-        // measure of readable map detail. Limit exits to roughly four world
-        // units as well, with a small legibility floor. Keep the same density
-        // response as before, but use a much simpler and smaller solid symbol.
+        // Shared density response. PointIconScale adds the legibility floor for
+        // every POI, including exits in the tiny maximum-zoom HUD viewport.
         float zoomRatio = Mathf.Clamp(zoom / DefaultZoom, 0.5f, 1f);
         float densityRatio = Mathf.Clamp(worldToMapScale * 4f / (28f * iconScale), 0.45f, 1f);
         return iconScale * Mathf.Min(zoomRatio, densityRatio);
@@ -1265,7 +1265,7 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
         float scale)
     {
         RuntimeMiniMapPointIconGraphic.DrawIcon(vertexHelper, MapPointIconShape.SceneTransition,
-            center, 4.375f * scale, color);
+            center, PointGlyphRadius * scale, color);
     }
 
     private static void AddDiamond(

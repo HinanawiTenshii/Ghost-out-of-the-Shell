@@ -1053,8 +1053,8 @@ public sealed class TabJournalMenuController : MonoBehaviour
                 typeof(Image), typeof(MapPointOfInterestUiInteraction));
             RectTransform hoverRect = hoverObject.GetComponent<RectTransform>();
             hoverRect.anchorMin = hoverRect.anchorMax = hoverRect.pivot = new Vector2(0.5f, 0.5f);
-            // Keep a usable hit area at minimum zoom without enlarging the drawing.
-            hoverRect.sizeDelta = new Vector2(18f, 18f);
+            // Match the ordinary POI hitbox and the shared map glyph scale.
+            hoverRect.sizeDelta = Vector2.one * 25f * miniMapGraphic.PointIconScale;
             Image hitTarget = hoverObject.GetComponent<Image>();
             hitTarget.color = Color.clear;
             hitTarget.raycastTarget = true;
@@ -1074,11 +1074,13 @@ public sealed class TabJournalMenuController : MonoBehaviour
     private void UpdateMiniMapTransitionPositions()
     {
         if (miniMapGraphic == null || mapTransitionHoverLayer == null) return;
+        Vector2 hitSize = Vector2.one * 25f * miniMapGraphic.PointIconScale;
         IReadOnlyList<RuntimeMiniMapTransitionData> transitions = miniMapGraphic.Transitions;
         for (int index = 0; index < mapTransitionHovers.Count; index++)
         {
             MiniMapTransitionHover hover = mapTransitionHovers[index];
             if (hover == null || hover.rect == null) continue;
+            if (hover.rect.sizeDelta != hitSize) hover.rect.sizeDelta = hitSize;
             bool valid = hover.transitionIndex >= 0 && hover.transitionIndex < transitions.Count;
             Vector2 localPosition = Vector2.zero;
             bool visible = valid && miniMapGraphic.TryWorldToLocal(

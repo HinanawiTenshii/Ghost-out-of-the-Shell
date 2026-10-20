@@ -657,20 +657,14 @@ public sealed partial class RuntimeMiniMapPointIconGraphic : MaskableGraphic
         Vector2 center, float radius, Color color)
     {
         Color background = new Color32(15, 33, 60, 245);
-        if (shape == MapPointIconShape.SceneTransition)
-        {
-            AddQuad(vertexHelper, center, radius * 1.6f, background);
-            // No decorative border on exits: keep their footprint very small.
-        }
-        else
-        {
-            AddDiamond(vertexHelper, center, radius * 1.6f, color);
-            AddDiamond(vertexHelper, center, radius * 1.38f, background);
-        }
+        // Exits use the same badge and inset as all other points of interest.
+        // Their smaller map footprint is controlled by RuntimeMiniMapGraphic.
+        AddDiamond(vertexHelper, center, radius * 1.6f, color);
+        AddDiamond(vertexHelper, center, radius * 1.38f, background);
         // Keep the door-leaf tint on the badge rim, but keep key/keypad symbols
         // cyan so even dark-coloured doors have readable lock information.
         Color glyphColor = MapPointOfInterestRecord.IsDoorIcon(shape) ? (Color)new Color32(91,211,241,255) : color;
-        if (DrawMechanismGlyph(vertexHelper, shape, center, radius * (shape == MapPointIconShape.SceneTransition ? .9f : .72f), glyphColor)) return;
+        if (DrawMechanismGlyph(vertexHelper, shape, center, radius * .72f, glyphColor)) return;
 
         switch (shape)
         {

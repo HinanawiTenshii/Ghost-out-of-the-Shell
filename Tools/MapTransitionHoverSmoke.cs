@@ -86,6 +86,8 @@ public static class MapTransitionHoverSmoke
             map.ZoomBy(zoom - map.Zoom); Call(menu, "UpdateMiniMapTransitionPositions"); Canvas.ForceUpdateCanvases();
             Check(!tooltip.activeSelf, "no automatic tooltip at zoom " + zoom);
             var rect = (RectTransform)targets[0].transform;
+            Check(rect.sizeDelta == Vector2.one * 25f * map.PointIconScale,
+                "transition hitbox follows ordinary POI size at zoom " + zoom);
             pointer.position = RectTransformUtility.WorldToScreenPoint(canvas.worldCamera, rect.position);
             var results = new List<RaycastResult>(); EventSystem.current.RaycastAll(pointer, results);
             Check(results.Count > 0 && results[0].gameObject == targets[0].gameObject, "small exit is the top raycast target at " + zoom);
@@ -125,6 +127,9 @@ public static class MapTransitionHoverSmoke
         foreach (var candidate in pointLayer.GetComponentsInChildren<MapPointOfInterestUiInteraction>())
             if (candidate.name.EndsWith(lever.PointId)) leverUi = candidate;
         Check(leverUi != null, "lever hover target remains present");
+        Call(menu, "UpdateMiniMapTransitionPositions");
+        Check(((RectTransform)leverUi.transform).sizeDelta == ((RectTransform)targets[0].transform).sizeDelta,
+            "exit and real lever use identical hitbox dimensions");
         leverUi.OnPointerEnter(pointer); targets[1].OnPointerExit(pointer);
         Check(tooltip.activeSelf && text.text == "拉杆", "lever still shows its existing info, old transition exit is inert");
         Check(tooltipRect.sizeDelta == new Vector2(76,32), "lever dimensions unchanged");

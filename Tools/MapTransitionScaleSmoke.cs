@@ -22,6 +22,7 @@ public static class MapTransitionScaleSmoke
         {
             Check(Application.dataPath.Replace('\\', '/').Contains("/.codex-temp/"), "isolated only");
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            CheckSharedTransitionBadge();
             var canvas = new GameObject("Map preview", typeof(RectTransform), typeof(Canvas)).GetComponent<Canvas>();
             canvas.renderMode = RenderMode.WorldSpace;
             canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(1400, 1000);
@@ -47,7 +48,7 @@ public static class MapTransitionScaleSmoke
                 Check(opaqueBlue, "small portal glyph retains opaque readable blue");
                 test.ResetView(); Call(test, "PopulateMarkers", vh);
                 Check(vh.currentVertCount == iconVertices * 2, "all zoom levels reuse cached portal geometry");
-                Check(compactInk < Ink(vh) * .3f, "overview footprint shrinks with zoom");
+                Check(compactInk < Ink(vh), "overview footprint shrinks with shared POI zoom floor");
                 test.SetCameraMarkerVisible(true); Call(test, "PopulateMarkers", vh);
                 Check(vh.currentVertCount == iconVertices * 2 + 4, "player marker retained");
                 test.SetTrackedQuestTarget(true, Vector2.one * 100, true); Call(test, "PopulateMarkers", vh);
@@ -57,14 +58,17 @@ public static class MapTransitionScaleSmoke
             test.ZoomBy(-100);
             for (int i = 0; i < 17; i++)
             {
-                float size = (float)Call(test, "GetTransitionIconScale", test.Zoom * 4.5f);
+                float size = test.PointIconScale;
                 Check(size >= previous && size <= 1f, "zoom sizing monotonic and capped " + i);
+                CheckSameSizeAsPoi(test);
                 previous = size; test.ZoomBy(.25f);
             }
             test.SetIconScale(.45f); test.SetZoomToMaximum();
-            float hud = (float)Call(test, "GetTransitionIconScale", 1.2f);
-            Check(hud < .45f * .5f && hud >= .45f * .45f, "tiny HUD shrinks exits despite using maximum zoom");
-            Check((float)Call(test, "GetTransitionIconScale", 0f) > 0, "extremely large map retains a legible size floor");
+            float hud = test.PointIconScale;
+            Check(Mathf.Approximately(hud, .5f), "HUD exits retain the same readable minimum as POIs");
+            CheckSameSizeAsPoi(test);
+            test.rectTransform.sizeDelta = Vector2.one * 96;
+            CheckSameSizeAsPoi(test);
             Object.DestroyImmediate(test.transform.parent.gameObject); Object.DestroyImmediate(data);
             var snapshot = Resources.Load<RuntimeMiniMapSceneData>("MiniMaps/Level2-Floor1");
             Check(snapshot != null && snapshot.Transitions.Length > 10, "actual dense Floor1 snapshot loaded");
@@ -74,12 +78,14 @@ public static class MapTransitionScaleSmoke
                 Label(canvas.transform, new Vector2(x, 459), column == 0 ? "线框图标 · 40% 总览" : "实心图标 · 40% 总览");
                 var map = CreateMap(canvas.transform, new Vector2(x, 136), new Vector2(650, 580), 1, 1);
                 map.RebuildFromSnapshot(snapshot);
+                if (column == 1) CheckSameSizeAsPoi(map);
                 Check(map.Transitions.Count == snapshot.Transitions.Length, "no exit positions hidden or merged");
                 if (column == 0) Legacy(map, 1);
                 Label(canvas.transform, new Vector2(x + 115, -310), column == 0 ? "线框小地图" : "实心小地图");
                 var mini = CreateMap(canvas.transform, new Vector2(x - 165, -310), Vector2.one * 96, 5, .45f);
                 mini.transform.parent.localScale = Vector3.one * 2.4f;
                 mini.RebuildFromSnapshot(snapshot); mini.CenterOnWorldPosition(new Vector2(-45, -20));
+                if (column == 1) CheckSameSizeAsPoi(mini);
                 if (column == 0) Legacy(mini, .45f);
             }
             Render(canvas);
@@ -96,6 +102,47 @@ public static class MapTransitionScaleSmoke
             area += Mathf.Abs(a.x*b.y - a.y*b.x) * .5f * vertices[i].color.a / 255f;
         }
         return area;
+    }
+    static void CheckSharedTransitionBadge()
+    {
+        using (var exit = new VertexHelper())
+        using (var lever = new VertexHelper())
+        {
+            var tint = new Color32(65,175,235,255);
+            RuntimeMiniMapPointIconGraphic.DrawIcon(exit, MapPointIconShape.SceneTransition, Vector2.zero, 1, tint);
+            RuntimeMiniMapPointIconGraphic.DrawIcon(lever, MapPointIconShape.Lever, Vector2.zero, 1, tint);
+            Check(exit.currentVertCount == 34, "compact doorway uses only 34 cached vertices");
+            // Two five-vertex fans: matching rim, background, opacity and inset.
+            for (int i=0;i<10;i++)
+            {
+                var a = new UIVertex(); var b = new UIVertex();
+                exit.PopulateUIVertex(ref a,i); lever.PopulateUIVertex(ref b,i);
+                Check(a.position == b.position && a.color.Equals(b.color), "shared diamond badge vertex " + i);
+            }
+            for (int i=10;i<exit.currentVertCount;i++)
+            {
+                var v = new UIVertex(); exit.PopulateUIVertex(ref v,i);
+                Check(Mathf.Abs(v.position.x)+Mathf.Abs(v.position.y)<1.25f, "glyph does not touch diamond rim " + i);
+            }
+        }
+    }
+    static void CheckSameSizeAsPoi(RuntimeMiniMapGraphic map)
+    {
+        using (var actual = new VertexHelper())
+        using (var expected = new VertexHelper())
+        {
+            Call(map, "PopulateMarkers", actual);
+            map.TryWorldToLocal(map.Transitions[0].position, out var center);
+            RuntimeMiniMapPointIconGraphic.DrawIcon(expected, MapPointIconShape.Lever,
+                center, 6.25f * map.PointIconScale, Color.white);
+            for (int i=0;i<10;i++)
+            {
+                var a = new UIVertex(); var b = new UIVertex();
+                actual.PopulateUIVertex(ref a,i); expected.PopulateUIVertex(ref b,i);
+                Check((a.position-b.position).sqrMagnitude < .0001f,
+                    "exit badge matches actual POI size at zoom " + map.Zoom + " vertex " + i);
+            }
+        }
     }
     static RuntimeMiniMapGraphic CreateMap(Transform parent, Vector2 position, Vector2 size, float zoom, float icons)
     {
@@ -140,9 +187,9 @@ public sealed class MapTransitionLegacyPreview : MaskableGraphic
     protected override void OnPopulateMesh(VertexHelper vh)
     {
         vh.Clear(); if (Map == null) return;
-        var scaleMethod = typeof(RuntimeMiniMapGraphic).GetMethod("GetTransitionIconScale", BindingFlags.Instance | BindingFlags.NonPublic);
         Map.TryWorldToLocal(Vector2.zero, out var origin); Map.TryWorldToLocal(Vector2.right, out var unit);
-        float scale = (float)scaleMethod.Invoke(Map, new object[] { Vector2.Distance(origin, unit) });
+        float scale = Icons * Mathf.Min(Mathf.Clamp(Map.Zoom/2.5f,.5f,1f),
+            Mathf.Clamp(Vector2.Distance(origin,unit)*4f/(28f*Icons),.45f,1f));
         bool compact = scale / Icons < .7f;
         Vector2[] lines = compact ? new[] {
             new Vector2(-8,-12), new Vector2(-8,12), new Vector2(-8,12), new Vector2(5,12),
