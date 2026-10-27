@@ -23,6 +23,7 @@ public sealed partial class PersistentInventory
             CharacterPotionBuffs.NotifyAction(user);
             NotifyChanged();
             ZeldaHealthHeartsUI.Instance?.ShowNotificationPopup("物品栏容量 +1");
+            GameSaveSystem.RequestAutoSave("memo_used", true);
             return true;
         }
         finally { itemExchangeInProgress = false; }

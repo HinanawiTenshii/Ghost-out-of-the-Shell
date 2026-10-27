@@ -81,6 +81,9 @@ public class DoorHingeInteraction : MonoBehaviour
     private bool hasLastVisionBlockerBounds;
 
     public bool IsLocked => isLocked;
+    // Permanent lock progression, not ordinary opening/closing or an arena round seal.
+    public bool HasProgressionLock => passwordLockEnabled || HasConfiguredUnlockItem() ||
+        !string.IsNullOrWhiteSpace(lockedJournalEntryId);
     public static IReadOnlyCollection<DoorHingeInteraction> WorldDoors => ActiveDoors;
     public bool IsOpen => isOpen;
     /// <summary>Read-only endpoint matrices for the map; never rotates the real door.</summary>
@@ -568,6 +571,7 @@ public class DoorHingeInteraction : MonoBehaviour
 
     public void SetLocked(bool locked)
     {
+        bool unlocked = isLocked && !locked;
         isLocked = locked;
         GetComponent<LockedDoorMapMarker>()?.RefreshLockState();
         if (isLocked && aiPassageActive)
@@ -578,6 +582,7 @@ public class DoorHingeInteraction : MonoBehaviour
         {
             QuestJournalManager.GetOrCreate().EvaluateKnownCompletionConditions();
         }
+        if (unlocked) RequestUnlockAutoSave();
     }
 
     public void ApplyPersistentState(bool locked, bool open)
@@ -625,7 +630,13 @@ public class DoorHingeInteraction : MonoBehaviour
         isLocked = false;
         GetComponent<LockedDoorMapMarker>()?.RefreshLockState();
         QuestJournalManager.GetOrCreate().EvaluateKnownCompletionConditions();
+        RequestUnlockAutoSave();
         return true;
+    }
+
+    private void RequestUnlockAutoSave()
+    {
+        if (HasProgressionLock) GameSaveSystem.RequestAutoSave("progression_door_unlocked", true);
     }
 
     private string FindMatchingUnlockItemInstanceId(
@@ -1042,6 +1053,7 @@ public class DoorHingeInteraction : MonoBehaviour
             lockedInteractionAcknowledged = false;
             ToggleDoor();
             QuestJournalManager.GetOrCreate().EvaluateKnownCompletionConditions();
+            RequestUnlockAutoSave();
         }
         if (ui != null)
         {

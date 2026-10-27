@@ -144,6 +144,14 @@ public sealed partial class QuestJournalManager : MonoBehaviour
     public void ApplySaveState(SaveState state)
     {
         if (state == null) return;
+        bool wasRestoring = restoringAutoSaveProgress;
+        restoringAutoSaveProgress = true;
+        try { ApplySaveStateWithoutAutoSave(state); }
+        finally { restoringAutoSaveProgress = wasRestoring; }
+    }
+
+    private void ApplySaveStateWithoutAutoSave(SaveState state)
+    {
         entries.Clear(); initializedScenes.Clear(); completedEntryIds.Clear();
         pendingCompletionEvidence.Clear(); pendingDetailEvidence.Clear(); pendingUpdateEvidence.Clear();
         RestoreDialogueActors(state.dialogueActors);
@@ -226,6 +234,18 @@ public sealed partial class QuestJournalManager : MonoBehaviour
         new Dictionary<string, QuestJournalEventChange>();
     private readonly HashSet<string> pendingCompletionEvidence =
         new HashSet<string>();
+    private bool restoringAutoSaveProgress;
+
+    // Semantic progress only: JournalChanged also fires for tracking/folding,
+    // resets and restore refreshes, none of which should overwrite a checkpoint.
+    private void RequestQuestAutoSave(string entryId, string reason)
+    {
+        if (restoringAutoSaveProgress || GameSaveSystem.IsLoading ||
+            (SceneTravelStateManager.Instance != null && SceneTravelStateManager.Instance.IsSceneTravelRestoreInProgress) ||
+            (!string.IsNullOrEmpty(entryId) && failureEvidence.ContainsKey(entryId)) ||
+            (entryId == ArenaQuestId && (arenaQuestStage == ArenaQuestStage.Defeated || arenaQuestStage == ArenaQuestStage.WinnerDied))) return;
+        GameSaveSystem.RequestAutoSave(reason + ":" + entryId, true);
+    }
 
     public static QuestJournalManager Instance { get; private set; }
     public IReadOnlyList<Entry> Entries => entries;
@@ -330,6 +350,8 @@ public sealed partial class QuestJournalManager : MonoBehaviour
                 continue;
             }
 
+            bool progressChanged = entries[index].Title != normalizedTitle ||
+                entries[index].Details != UpgradeLegacyQuestDetails(normalizedId, normalizedDetails);
             entries[index].Update(
                 normalizedId,
                 normalizedTitle,
@@ -341,6 +363,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
             {
                 CompleteEntry(normalizedId);
             }
+            if (progressChanged) RequestQuestAutoSave(normalizedId, "quest_updated");
             return false;
         }
 
@@ -379,6 +402,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
             RefreshSummoningQuest();
         }
         RecordQuestInventoryEvidence();
+        RequestQuestAutoSave(normalizedId, "quest_accepted");
         return true;
     }
 
@@ -547,6 +571,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
         JournalChanged?.Invoke();
         TrackedQuestChanged?.Invoke();
         JournalEntriesChanged?.Invoke(QuestJournalChangeKind.Completed);
+        RequestQuestAutoSave(normalizedId, "quest_completed");
         return true;
     }
 
@@ -567,11 +592,12 @@ public sealed partial class QuestJournalManager : MonoBehaviour
 
         string normalizedId = entryId.Trim();
         if (failureEvidence.ContainsKey(normalizedId)) return false;
-        if (!CanTriggerEntry(normalizedId))
-            return rememberBeforeParent && pendingCompletionEvidence.Add(normalizedId);
-        return ContainsEntry(normalizedId)
-            ? CompleteEntry(normalizedId)
-            : pendingCompletionEvidence.Add(normalizedId);
+        bool canTrigger = CanTriggerEntry(normalizedId);
+        if (!canTrigger && !rememberBeforeParent) return false;
+        if (canTrigger && ContainsEntry(normalizedId)) return CompleteEntry(normalizedId);
+        if (!pendingCompletionEvidence.Add(normalizedId)) return false;
+        RequestQuestAutoSave(normalizedId, "quest_completion_evidence");
+        return true;
     }
 
     public void EvaluateKnownCompletionConditions()
@@ -656,6 +682,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
             entry.Update(entry.Id, entry.Title, updatedDetails, entry.SourceScene);
             JournalChanged?.Invoke();
             JournalEntriesChanged?.Invoke(QuestJournalChangeKind.Updated);
+            RequestQuestAutoSave(normalizedId, "quest_detail");
             return true;
         }
 
@@ -722,6 +749,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
             }
             JournalChanged?.Invoke();
             JournalEntriesChanged?.Invoke(QuestJournalChangeKind.InitialSceneLoad);
+            RequestQuestAutoSave(null, "quest_initial_objectives");
         }
     }
 
@@ -885,6 +913,7 @@ public sealed partial class QuestJournalManager : MonoBehaviour
             return false;
 
         detailsList.Add(normalizedDetails);
+        RequestQuestAutoSave(normalizedId, "quest_detail_evidence");
         return true;
     }
 
@@ -893,7 +922,12 @@ public sealed partial class QuestJournalManager : MonoBehaviour
         if (string.IsNullOrWhiteSpace(change.entryId))
             return false;
 
-        pendingUpdateEvidence[change.entryId.Trim()] = change;
+        string normalizedId = change.entryId.Trim();
+        if (pendingUpdateEvidence.TryGetValue(normalizedId, out var previous) &&
+            previous.title == change.title && previous.details == change.details &&
+            previous.parentEntryId == change.parentEntryId && previous.operation == change.operation) return false;
+        pendingUpdateEvidence[normalizedId] = change;
+        RequestQuestAutoSave(normalizedId, "quest_update_evidence");
         return true;
     }
 

@@ -34,7 +34,7 @@ public sealed partial class GameSaveSystem : MonoBehaviour
     }
     [Serializable] private sealed class Envelope { public string payload, checksum; }
 
-    public const int SlotCount = 7;
+    public const int SlotCount = 9;
     public static GameSaveSystem Instance { get; private set; }
     public static bool IsLoading => Instance != null && Instance.loading;
     public static bool IsPreparingSceneSave => Instance != null && Instance.preparingSceneSave;
@@ -46,6 +46,7 @@ public sealed partial class GameSaveSystem : MonoBehaviour
     private SaveGameCatalog catalog;
     private bool loading, writing;
     private SaveData pendingLoad;
+    private SaveData pendingEntranceSnapshot;
     private bool arenaLayoutLoad;
     private int sceneGeneration;
 
@@ -73,6 +74,8 @@ public sealed partial class GameSaveSystem : MonoBehaviour
     }
     private void Update()
     {
+        TickAutoSave();
+        TickAutoSaveCompletionNotification();
         if (loading || DocumentReader.IsInputBlocked || Time.timeScale <= 0f) return;
         if (IsTitle(SceneManager.GetActiveScene().name) || ZeldaRuntimeRegistry.GetControlledMover() == null) return;
         if (Input.GetKeyDown(KeyCode.F1)) Save(1);
@@ -101,9 +104,20 @@ public sealed partial class GameSaveSystem : MonoBehaviour
             yield return null;
         }
         if (generation != sceneGeneration || scene != SceneManager.GetActiveScene() || loading) yield break;
-        // Save captures the world once and also records first-visit state.
-        // Finish while fully covered, before player input resumes.
-        if (ZeldaRuntimeRegistry.GetControlledMover() != null && !IsTitle(scene.name)) SaveCore(0, false, true);
+        // Edition starting growth belongs in the immutable Level2 entrance too.
+        ExhibitionEdition.PrepareLevelEntry(scene.name);
+        // Capture an immutable, pristine logical-level entrance under the cover.
+        // Floor travel does not replace it, and waits for safety before rotating auto.
+        // Authored entrances may intentionally begin as a ghost (Tutorial/Level0).
+        if (ZeldaRuntimeRegistry.GetControlledMover() != null && !IsTitle(scene.name) && !RuntimeUiVisibility.IsPauseOnlyScene &&
+            !DevlogDemoSceneSettings.SuppressesAutomaticSaves(scene))
+        {
+            if (!sessionBound || !string.Equals(sessionLevelId, LevelIdForScene(scene.name), StringComparison.OrdinalIgnoreCase))
+            {
+                if (!SaveCore(0, false, true)) RequestAutoSave("重试入口存档", true);
+            }
+            else RequestAutoSave("场景切换完成", true);
+        }
         }
         finally
         {
@@ -113,6 +127,8 @@ public sealed partial class GameSaveSystem : MonoBehaviour
     private static bool IsTitle(string scene) => scene.Replace(" ", "").Equals("TitleScreen", StringComparison.OrdinalIgnoreCase);
     private void BeginNewGame(int profileSlot)
     {
+        pendingEntranceSnapshot = null;
+        ResetAutoSaveSession();
         activeProfile = NewProfile(profileSlot);
         sessionBound = true;
         restoreFailed = false;
@@ -157,12 +173,17 @@ public sealed partial class GameSaveSystem : MonoBehaviour
 
     public bool Save(int slot, bool notify = true)
     {
+        if (slot == 0 && !CanCommitAutomaticSave())
+        {
+            RequestAutoSave("请求自动保存", true);
+            return false;
+        }
         using (SceneLoadMetrics.Measure("Save.Total")) return SaveCore(slot, notify);
     }
 
     private bool SaveCore(int slot, bool notify, bool captureEntry = false)
     {
-        if (slot < 0 || slot >= SlotCount || loading || writing || restoreFailed ||
+        if ((slot != 0 && slot != 1 && !IsManualSlot(slot)) || loading || writing || restoreFailed ||
             (preparingSceneSave && !captureEntry)) return false;
         var manager = SceneTravelStateManager.GetOrCreate();
         if (manager.IsSceneTravelRestoreInProgress || manager.IsQuickRestartPending ||
@@ -182,6 +203,13 @@ public sealed partial class GameSaveSystem : MonoBehaviour
                 if (emptySlot < 0) { Message("三个进度栏已满，请从标题界面选择栏位开始新游戏。"); return false; }
                 BeginNewGame(emptySlot);
             }
+            // Retry the captured entrance, never recapture a later gameplay
+            // position as the logical-level start after a temporary IO failure.
+            if (pendingEntranceSnapshot != null)
+            {
+                EnsureLevelVisit(pendingEntranceSnapshot, true);
+                pendingEntranceSnapshot = null;
+            }
             var world = manager.CaptureDiskWorld();
             var player = manager.CaptureDiskPlayer();
             var scene = SceneManager.GetActiveScene().name;
@@ -198,17 +226,25 @@ public sealed partial class GameSaveSystem : MonoBehaviour
                 mapPoints = MapPointOfInterestManager.GetOrCreate().CaptureSaveState(), outcomes = outcomes,
                 levelEntries = CopyEntries(activeProfile.entries)
             };
+            if (captureEntry && !string.Equals(sessionLevelId, LevelIdForScene(scene), StringComparison.OrdinalIgnoreCase))
+                pendingEntranceSnapshot = data;
             EnsureLevelVisit(data, captureEntry);
+            pendingEntranceSnapshot = null;
             data.visitedLevels = CreateCompactVisits();
             data.levelEntries = CopyEntries(activeProfile.entries);
-            WriteData(SlotPath(slot), data);
+            if (slot == 0) CommitAutomaticSave(data);
+            else WriteData(SlotPath(slot), data);
             visits = data.visitedLevels;
             CommitProfile(data, slot);
-            if (notify) Message("游戏已保存");
+            AutoSaveCommitted();
+            // Every automatic entry/event save reports success, even when its
+            // caller suppresses manual-save messages. Never notify on request.
+            autoSaveCompletionPending = slot == 0;
+            if (slot != 0 && notify) Message("游戏已保存");
             Changed?.Invoke();
             return true;
         }
-        catch (Exception ex) { Debug.LogException(ex); Message("存档失败：" + ex.Message); return false; }
+        catch (Exception ex) { autoSaveCompletionPending = false; Debug.LogException(ex); Message("存档失败：" + ex.Message); return false; }
         finally { writing = false; }
     }
 
@@ -251,7 +287,7 @@ public sealed partial class GameSaveSystem : MonoBehaviour
     }
     public bool DeleteManualSave(int slot)
     {
-        if (slot < 2 || slot >= SlotCount || loading || writing || activeProfile == null) return false;
+        if (!IsManualSlot(slot) || loading || writing || activeProfile == null) return false;
         try
         {
             string path = SlotPath(slot);
@@ -277,7 +313,7 @@ public sealed partial class GameSaveSystem : MonoBehaviour
         if (data == null) { Message("该栏位没有可读取的存档"); return false; }
         if (!Application.CanStreamedLevelBeLoaded(data.scene)) { Message("存档场景未包含在构建中"); return false; }
         var target = activeProfile;
-        return RetroSceneLoadReveal.BeginTransition(data.scene, () => LoadCovered(data, target));
+        return RetroSceneLoadReveal.BeginTransition(data.scene, () => LoadCovered(data, target, slot));
     }
 
     /// <summary>Use the normal covered loader, replacing only arena poses/doors.
@@ -311,8 +347,11 @@ public sealed partial class GameSaveSystem : MonoBehaviour
         });
     }
 
-    private bool LoadCovered(SaveData data, ProfileData target = null)
+    private bool LoadCovered(SaveData data, ProfileData target = null, int sourceSlot = -1, string sourceCheckpointId = null)
     {
+        BeginRestoreResumeReference(sourceSlot, sourceCheckpointId);
+        pendingEntranceSnapshot = null;
+        ResetAutoSaveSession();
         loading = true;
         pendingLoad = data;
         pendingProfile = target ?? activeProfile;
@@ -331,6 +370,7 @@ public sealed partial class GameSaveSystem : MonoBehaviour
     private void RestoreCompleted()
     {
         if (!loading || pendingLoad == null) return;
+        bool restoredArenaLayout = arenaLayoutLoad;
         if (!SceneTravelStateManager.GetOrCreate().LastQuickRestartRestoreSucceeded)
         {
             pendingLoad = null; pendingProfile = null; loading = false; arenaLayoutLoad = false; restoreFailed = true;
@@ -361,17 +401,23 @@ public sealed partial class GameSaveSystem : MonoBehaviour
                     if (item.ItemId != data.player.wornBoxId) continue;
                     var worn = mover.gameObject.AddComponent<CardboardBoxWearState>();
                     worn.Configure(item, mover);
-                    SavedScalarFields.Apply(worn, data.player.wornBoxFields);
+                    worn.RestoreSavedFields(data.player.wornBoxFields);
                     break;
                 }
             }
-            if (!arenaLayoutLoad) Message("游戏已读取");
+            if (!arenaLayoutLoad)
+            {
+                CommitRestoredResumeReference(data);
+                Message("游戏已读取");
+            }
         }
         catch (Exception ex) { restoreFailed = true; Debug.LogException(ex); Message("存档恢复失败，已停止自动保存。"); }
         finally { pendingLoad = null; pendingProfile = null; loading = false; arenaLayoutLoad = false; Changed?.Invoke(); }
         ArenaChallengeController.FinalizeSceneRestoration();
-        // Loading a slot is also a scene transition; update auto only after restoration.
-        Save(0, false);
+        // Reading a save is not new progress: never evict rollback history just
+        // because the same slot is loaded repeatedly. Arena layout changes are progress.
+        ResetAutoSaveSession();
+        if (restoredArenaLayout && !restoreFailed) RequestAutoSave("竞技场布局已就绪", true);
     }
     internal void CancelPendingSceneLoad()
     {

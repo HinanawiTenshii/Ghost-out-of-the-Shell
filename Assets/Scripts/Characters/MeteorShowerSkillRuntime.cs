@@ -120,7 +120,12 @@ public sealed class MeteorShowerSkillRuntime : MonoBehaviour
         skillAudio?.AddLanding(point, at);
     }
     private void Update() => Advance(Time.deltaTime);
-    private void OnDisable() => skillAudio?.Stop();
+    private void OnEnable() => AutoSaveTransientActivity.Register(this);
+    private void OnDisable()
+    {
+        AutoSaveTransientActivity.Unregister(this);
+        skillAudio?.Stop();
+    }
     private void OnDestroy() => skillAudio?.Stop();
     private bool InvalidOwner => owner == null || owner.IsDead || owner.IsGhostLike || GameSaveSystem.IsLoading ||
         ZeldaRuntimeRegistry.GetGameplayScene(owner.gameObject) != gameObject.scene;

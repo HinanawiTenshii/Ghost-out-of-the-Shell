@@ -22,8 +22,10 @@ public sealed partial class QuestJournalManager
     public void RecordSandwormMortarInstallation()
     {
         // A physical installation fact is not an early child-quest trigger.
+        bool changed = !sandwormMortarInstalled;
         sandwormMortarInstalled = true;
         FinishSandwormMortarIfAccepted();
+        if (changed) RequestQuestAutoSave(SandwormMortarQuestId, "quest_mortar_installed");
     }
 
     private void FinishSandwormMortarIfAccepted()

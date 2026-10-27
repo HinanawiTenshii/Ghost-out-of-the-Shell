@@ -21,6 +21,9 @@ public sealed class DisposableHandgunBullet : MonoBehaviour
     private bool anonymousHit = true;
     private static Sprite bulletSprite;
 
+    private void OnEnable() => AutoSaveTransientActivity.Register(this);
+    private void OnDisable() => AutoSaveTransientActivity.Unregister(this);
+
     public static bool Fire(ZeldaCharacterData user, Vector2 facing, float speed)
     {
         return user != null && FireFromMuzzle(user, facing, speed, user.transform.position);

@@ -15,6 +15,11 @@ public sealed partial class GameSaveSystem
         public int version = 2, lastSlot;
         public string id, campaignId, name, scene, levelName, savedAt;
         public long updatedUtcTicks;
+        // A successful load selects a continuation branch without rewriting or
+        // rotating its snapshot. Missing fields in legacy v2 profiles mean none.
+        public long resumeUtcTicks, resumeSavedUtcTicks;
+        public int resumeSlot;
+        public string resumeCheckpointId;
         public List<LevelVisit> entries = new List<LevelVisit>();
     }
     [Serializable] public sealed class LevelOutcome
@@ -46,7 +51,29 @@ public sealed partial class GameSaveSystem
         if (!IsProfileId(id)) throw new InvalidDataException("无效的进度栏。");
         return Path.Combine(ProfilesDirectory, id);
     }
-    private static string SlotName(int slot) => slot == 0 ? "auto.json" : slot == 1 ? "quick.json" : "manual-" + (slot - 1) + ".json";
+    // Keep the original quick/manual numbers stable. Automatic history never
+    // borrows a manual filename, including during repair and profile deletion.
+    private static readonly int[] KnownSaveSlots = { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
+    public static bool IsManualSlot(int slot) => slot >= 2 && slot <= 6;
+    public static bool IsAutomaticSlot(int slot) => slot == 0 || slot == 7 || slot == 8;
+    public static string SlotLabel(int slot)
+    {
+        if (slot == 0) return "自动存档 · 最新";
+        if (slot == 7) return "自动存档 · 上一次";
+        if (slot == 8) return "自动存档 · 更早";
+        if (slot == 1) return "快速存档";
+        if (IsManualSlot(slot)) return "手动存档 " + (slot - 1);
+        throw new ArgumentOutOfRangeException(nameof(slot));
+    }
+    private static string SlotName(int slot)
+    {
+        if (slot == 0) return "auto.json";
+        if (slot == 7) return "auto-previous-1.json";
+        if (slot == 8) return "auto-previous-2.json";
+        if (slot == 1) return "quick.json";
+        if (IsManualSlot(slot)) return "manual-" + (slot - 1) + ".json";
+        throw new ArgumentOutOfRangeException(nameof(slot));
+    }
     private static string ProfileSlotPath(string id, int slot) => Path.Combine(ProfileFolder(id), SlotName(slot));
     private static string CheckpointPath(string id)
     {
@@ -106,7 +133,11 @@ public sealed partial class GameSaveSystem
     }
     private static void UpdateProfile(ProfileData profile, SaveData data, int slot)
     {
-        if (profile.campaignId != data.campaignId) profile.entries = new List<LevelVisit>();
+        if (profile.campaignId != data.campaignId)
+        {
+            profile.entries = new List<LevelVisit>();
+            ClearResumeReference(profile);
+        }
         profile.campaignId = data.campaignId;
         profile.entries = profile.entries ?? new List<LevelVisit>();
         MergeEntries(profile.entries, data.levelEntries);
@@ -116,10 +147,11 @@ public sealed partial class GameSaveSystem
     private void CommitProfile(SaveData data, int slot)
     {
         UpdateProfile(activeProfile, data, slot);
+        ClearResumeReference(activeProfile);
         WriteData(Path.Combine(ProfileFolder(activeProfile.id), "profile.json"), activeProfile);
         // A newly committed campaign invalidates ALL old manual/quick saves in
         // that slot. The campaign ID also protects reads if file deletion fails.
-        for (int i = 0; i < SlotCount; i++)
+        foreach (int i in KnownSaveSlots)
         {
             if (i == slot) continue;
             string path = ProfileSlotPath(activeProfile.id, i);
@@ -134,7 +166,7 @@ public sealed partial class GameSaveSystem
     private static SaveData FindLatest(ProfileData profile, out int slot, bool anyCampaign = false)
     {
         SaveData latest = null; slot = -1;
-        for (int i = 0; i < SlotCount; i++)
+        foreach (int i in KnownSaveSlots)
         {
             var data = ReadData(ProfileSlotPath(profile.id, i));
             if (data == null || data.profileId != profile.id || !ValidId(data.campaignId) ||
@@ -149,7 +181,7 @@ public sealed partial class GameSaveSystem
         var latest = FindLatest(profile, out int slot, true);
         if (latest == null) return false;
         UpdateProfile(profile, latest, slot);
-        for (int i = 0; i < SlotCount; i++)
+        foreach (int i in KnownSaveSlots)
         {
             var data = ReadData(ProfileSlotPath(profile.id, i));
             if (BelongsTo(data, profile)) MergeEntries(profile.entries, data.levelEntries);
@@ -174,10 +206,11 @@ public sealed partial class GameSaveSystem
                     if (!RepairProfileIndex(profile)) continue;
                 }
                 profile.entries = profile.entries ?? new List<LevelVisit>();
-                bool stale = profile.lastSlot < 0 || profile.lastSlot >= SlotCount ||
+                bool stale = Array.IndexOf(KnownSaveSlots, profile.lastSlot) < 0 ||
                     !File.Exists(ProfileSlotPath(id, profile.lastSlot));
-                for (int slot = 0; slot < SlotCount && !stale; slot++)
+                foreach (int slot in KnownSaveSlots)
                 {
+                    if (stale) break;
                     string slotPath = ProfileSlotPath(id, slot);
                     stale = File.Exists(slotPath) && File.GetLastWriteTimeUtc(slotPath) > File.GetLastWriteTimeUtc(path);
                 }
@@ -250,7 +283,7 @@ public sealed partial class GameSaveSystem
         var profile = File.Exists(manifest) ? ReadChecked<ProfileData>(manifest) : null;
         if (profile != null && profile.id == id && ValidId(profile.campaignId))
         { campaigns.Add(profile.campaignId); collect(profile.entries); }
-        for (int slot = 0; slot < SlotCount; slot++)
+        foreach (int slot in KnownSaveSlots)
         {
             string path = Path.Combine(directory, SlotName(slot));
             var data = File.Exists(path) ? ReadChecked<SaveData>(path) : null;
@@ -273,7 +306,7 @@ public sealed partial class GameSaveSystem
             }
             foreach (string checkpoint in checkpoints) DeleteSaveFile(CheckpointPath(checkpoint));
         }
-        for (int slot = 0; slot < SlotCount; slot++) DeleteSaveFile(Path.Combine(directory, SlotName(slot)));
+        foreach (int slot in KnownSaveSlots) DeleteSaveFile(Path.Combine(directory, SlotName(slot)));
         DeleteSaveFile(manifest);
         if (Directory.GetFileSystemEntries(directory).Length == 0) Directory.Delete(directory);
     }
@@ -291,29 +324,36 @@ public sealed partial class GameSaveSystem
     {
         if (loading || writing || !IsTitle(SceneManager.GetActiveScene().name)) return false;
         ProfileData target = null; SaveData latest = null;
+        int selectedSlot = -1;
+        string selectedCheckpointId = null;
+        long selectedOrder = long.MinValue;
         foreach (var profile in ListProfiles())
         {
-            var data = FindLatest(profile, out _);
+            var data = ResolveContinueTarget(profile, out int slot, out string checkpointId, out long order);
             if (data == null || !Application.CanStreamedLevelBeLoaded(data.scene) ||
-                (latest != null && data.savedUtcTicks <= latest.savedUtcTicks)) continue;
+                (latest != null && order <= selectedOrder)) continue;
             target = profile; latest = data;
+            selectedSlot = slot; selectedCheckpointId = checkpointId; selectedOrder = order;
         }
         if (latest == null) { Message("没有可继续的游戏进度。"); return false; }
         var selected = target;
-        return RetroSceneLoadReveal.BeginTransition(latest.scene, () => LoadCovered(latest, selected));
+        return RetroSceneLoadReveal.BeginTransition(latest.scene,
+            () => LoadCovered(latest, selected, selectedSlot, selectedCheckpointId));
     }
     public bool HasContinuableProgress => ListProfiles().Exists(profile =>
     {
-        var data = FindLatest(profile, out _);
+        var data = ResolveContinueTarget(profile, out _, out _, out _);
         return data != null && Application.CanStreamedLevelBeLoaded(data.scene);
     });
     // Kept for gameplay callers; the title's Continue button uses ContinueLatest.
     public bool ContinueProfile()
     {
         if (activeProfile == null || loading || writing) return false;
-        var latest = FindLatest(activeProfile, out int slot);
+        var latest = ResolveContinueTarget(activeProfile, out int slot, out string checkpointId, out _);
         if (latest == null) { Message("该进度没有可读取的存档。"); return false; }
-        return Load(slot);
+        if (!Application.CanStreamedLevelBeLoaded(latest.scene)) { Message("存档场景未包含在构建中"); return false; }
+        var target = activeProfile;
+        return RetroSceneLoadReveal.BeginTransition(latest.scene, () => LoadCovered(latest, target, slot, checkpointId));
     }
     public List<LevelVisit> ReplayEntries => activeProfile != null ? CopyEntries(activeProfile.entries) : new List<LevelVisit>();
     public static bool HasCheckpoint(LevelVisit entry) => entry != null && ValidId(entry.checkpointId) && File.Exists(CheckpointPath(entry.checkpointId));
@@ -355,7 +395,7 @@ public sealed partial class GameSaveSystem
             !Application.CanStreamedLevelBeLoaded(data.scene))
         { Message("关卡入口记录损坏或与当前版本不兼容。"); return false; }
         var target = activeProfile;
-        return RetroSceneLoadReveal.BeginTransition(data.scene, () => LoadCovered(data, target));
+        return RetroSceneLoadReveal.BeginTransition(data.scene, () => LoadCovered(data, target, -1, entry.checkpointId));
     }
 
     public bool StartNewGame(int profileSlot)
@@ -400,7 +440,7 @@ public sealed partial class GameSaveSystem
     {
         try
         {
-            for (int slot = 0; slot < SlotCount; slot++) DeleteSaveFile(Path.Combine(SaveDirectory, SlotName(slot)));
+            foreach (int slot in KnownSaveSlots) DeleteSaveFile(Path.Combine(SaveDirectory, SlotName(slot)));
             if (!Directory.Exists(ProfilesDirectory)) return;
             foreach (string directory in Directory.GetDirectories(ProfilesDirectory))
             {
@@ -416,7 +456,7 @@ public sealed partial class GameSaveSystem
                 if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0) continue;
                 string root = Path.GetFullPath(ProfilesDirectory) + Path.DirectorySeparatorChar;
                 if (!Path.GetFullPath(directory).StartsWith(root, StringComparison.OrdinalIgnoreCase)) continue;
-                for (int slot = 0; slot < SlotCount; slot++) DeleteSaveFile(Path.Combine(directory, SlotName(slot)));
+                foreach (int slot in KnownSaveSlots) DeleteSaveFile(Path.Combine(directory, SlotName(slot)));
                 DeleteSaveFile(Path.Combine(directory, "profile.json"));
                 if (Directory.GetFileSystemEntries(directory).Length == 0) Directory.Delete(directory);
             }

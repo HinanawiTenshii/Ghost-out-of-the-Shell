@@ -66,6 +66,21 @@ public sealed class ArenaChallengeController : MonoBehaviour
             (arena.state.phase == Phase.Result || arena.state.pendingLayout || arena.transitionRequested)) return true; return false; }
     }
 
+    // Stable preparation layouts are valid recovery points. Never snapshot a
+    // result countdown, participant teleport, or a partially restored layout.
+    internal static bool BlocksAutomaticSave
+    {
+        get
+        {
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            foreach (var arena in active)
+                if (arena != null && arena.gameObject.scene == scene && (arena.state.phase == Phase.Fighting || arena.state.phase == Phase.Result ||
+                    arena.state.pendingLayout || arena.state.returning || arena.transitionRequested)) return true;
+            return false;
+        }
+    }
+    private bool requestedRegistrationCheckpoint;
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStatics() => active.Clear();
     private void Awake()
@@ -82,6 +97,14 @@ public sealed class ArenaChallengeController : MonoBehaviour
 
     public string DialogueNode(ZeldaFourWayMover actor)
     {
+        if (!requestedRegistrationCheckpoint && !GameSaveSystem.IsLoading && !CharacterPotionBuffs.IsRestoringWorld &&
+            CanRegister(actor, out _))
+        {
+            requestedRegistrationCheckpoint = true;
+            // Request before registration mutates the arena; the central queue
+            // waits for dialogue closure and never saves inside this query.
+            GameSaveSystem.RequestAutoSave("arena_registration_checkpoint", true);
+        }
         bool winner = actor != null && actor.CharacterData != null && actor.CharacterData.IndividualAccessId == state.winnerId;
         if (state.claimed) return winner ? "arena_claimed" : "arena_closed";
         if (ChallengeActive) return "arena_prepare";
@@ -152,7 +175,11 @@ public sealed class ArenaChallengeController : MonoBehaviour
         state.claimed = true; // Commit before inventory notifications can save.
         if (PersistentInventory.Instance.TryAddUniqueItem(reward.ItemId, Guid.NewGuid().ToString("N"),
             1, reward.MaxStackSize, reward.ItemName, reward.ItemDescription))
-        { QuestJournalManager.GetOrCreate().RecordArenaQuestProgress(state); return true; }
+        {
+            QuestJournalManager.GetOrCreate().RecordArenaQuestProgress(state);
+            GameSaveSystem.RequestAutoSave("arena_reward_claimed", true);
+            return true;
+        }
         state.claimed = false; return false;
     }
 

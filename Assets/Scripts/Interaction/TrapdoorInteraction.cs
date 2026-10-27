@@ -44,7 +44,7 @@ public sealed class TrapdoorInteraction : MonoBehaviour
             ((Vector2)(mover.transform.position - transform.position)).sqrMagnitude > interactionDistance * interactionDistance)
             return null;
         // A nearby hatch on the other side of a wall is not reachable.
-        if (Physics2D.Linecast(mover.transform.position, transform.position, LayerMask.GetMask("Blocks")).collider != null)
+        if (!ZeldaInteractionObstruction.HasClearPath(this, mover, transform.position))
             return null;
         return mover;
     }

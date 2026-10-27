@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 using Object = UnityEngine.Object;
 
 [InitializeOnLoad]
@@ -71,15 +72,33 @@ public static class FortressProofQuestSmoke
         AssetDatabase.SaveAssetIfDirty(snapshot);
         Debug.Log("FORTRESS_PROOF_MAP_TARGET " + target.ToString("F6") + " revision=" + snapshot.SourceRevision);
 
+        var town = EditorSceneManager.OpenScene("Assets/Scenes/Level2/Level2-Floor1.unity", OpenSceneMode.Additive);
+        var sign = Object.FindObjectsOfType<SignpostInteraction>(true).Single(s => s.name == "关于试炼证明");
+        Check(Get<bool>(sign, "singleNotice") && Get<bool>(sign, "addJournalEntryOnOpen") &&
+            Get<string>(sign, "journalEntryId") == Id, "Floor1 existing notice is an alternate reading trigger");
+        Check(Get<string>(sign, "journalEntryTitle") == QuestJournalManager.FortressProofQuestTitle &&
+            Get<string>(sign, "journalEntryDetails") == QuestJournalManager.FortressProofDescription &&
+            string.IsNullOrEmpty(Get<string>(sign, "journalParentEntryId")), "both sources share quest data and prerequisites");
+        string signText = Get<string>(sign, "noticeText");
+        Check(signText.Contains("祭坛") && signText.Contains("要塞二楼") && signText.Contains("守卫者骑士长") &&
+            signText.Contains("极高权限") && signText.Contains("守卫严密"), "notice communicates altar, storage, access and guards");
+        Check(Vector2.Distance(sign.transform.position, new Vector2(-93.23f, 68.83f)) < .001f &&
+            sign.GetComponent<GeometricSignpostDecoration>() != null, "existing notice location and appearance retained");
+        var ordinarySign = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Decorations/ReadableNoticeSign.prefab")
+            .GetComponent<SignpostInteraction>();
+        Check(!Get<bool>(ordinarySign, "addJournalEntryOnOpen"), "unconfigured signs do not start quests");
+
         var fixture = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
         SceneManager.SetActiveScene(fixture);
         var docCopy = Object.Instantiate(notice.gameObject); docCopy.name = "要塞情报"; docCopy.transform.position = Vector3.zero;
+        var signCopy = Object.Instantiate(sign.gameObject); signCopy.name = "关于试炼证明"; signCopy.transform.position = Vector3.zero;
         var proofCopy = Object.Instantiate(proof.gameObject); proofCopy.name = "Fortress proof fixture";
         // The original item is nested under a translated scene root. Detaching
         // a prefab-instance clone must preserve its world position explicitly.
         proofCopy.transform.position = proof.transform.position;
         PrefabUtility.RecordPrefabInstancePropertyModifications(proofCopy.transform);
         EditorSceneManager.CloseScene(scene, true);
+        EditorSceneManager.CloseScene(town, true);
         SessionState.SetInt(Key + ".checks", checks); SessionState.SetBool(Key, true);
         EditorApplication.EnterPlaymode();
     }
@@ -102,6 +121,8 @@ public static class FortressProofQuestSmoke
         catch (Exception e) { suite = null; Debug.LogException(e); EditorApplication.Exit(1); }
     }
     static void Close(DocumentReader doc) { Call(doc, "CloseDocument"); Time.timeScale = 0; }
+    static void Close(SignpostInteraction sign) { Call(sign, "CloseWindow"); Time.timeScale = 0; }
+    static bool MarkerVisible(Component source) => Get<GameObject>(source.GetComponent<QuestJournalInteractionMarker>(), "markerRoot").activeSelf;
     static void CloseItem() { ItemDescriptionWindow.GetOrCreate().CloseWindow(); Time.timeScale = 0; }
     static void Hud(QuestJournalManager journal, bool complete)
     {
@@ -113,6 +134,7 @@ public static class FortressProofQuestSmoke
     static IEnumerator Verify()
     {
         var doc = Object.FindObjectOfType<DocumentReader>();
+        var sign = Object.FindObjectOfType<SignpostInteraction>();
         var proof = Object.FindObjectOfType<TrialProofPickupItem>();
         var completion = Get<QuestJournalEventChange[]>(proof, "journalChangesOnPickup");
         var journal = QuestJournalManager.GetOrCreate(); journal.ResetAllEntries();
@@ -126,6 +148,12 @@ public static class FortressProofQuestSmoke
         yield return null; yield return null;
         while (DocumentReader.IsInputBlocked) yield return null;
         Time.timeScale = 0; Physics2D.SyncTransforms();
+        Check(MarkerVisible(sign) && MarkerVisible(doc), "both unread sources show world quest hints");
+        var signMarker = Get<GameObject>(sign.GetComponent<QuestJournalInteractionMarker>(), "markerRoot");
+        Check(signMarker.transform.position.y > sign.transform.position.y + .5f &&
+            signMarker.GetComponentInChildren<SpriteRenderer>() != null, "notice hint is the shared world glyph above the sign");
+        Check(signMarker.GetComponentsInChildren<SpriteRenderer>().Min(r => r.bounds.min.y) >
+            sign.GetComponentInChildren<MeshRenderer>().bounds.max.y, "quest hint does not overlap the notice board");
         Check(!journal.ContainsEntry(Id), "loading document does not accept quest");
         Call(doc, "OpenDocument");
         Check(DocumentReader.IsDocumentOpen && journal.ContainsEntry(Id) && journal.TrackedEntryId == Id &&
@@ -134,6 +162,25 @@ public static class FortressProofQuestSmoke
         yield return null; yield return null;
         Call(doc, "OpenDocument"); Close(doc);
         Check(journal.Entries.Count(e => e.Id == Id) == 1, "rereading does not duplicate quest");
+        yield return null; yield return null;
+        var existing = Save(journal);
+        Call(sign, "OpenWindow");
+        Check(SignpostInteraction.BlocksInput && Get<GameObject>(sign, "windowObject").activeSelf,
+            "alternate source retains normal notice reading window");
+        var label = Get<Text>(sign, "noticeContent"); Canvas.ForceUpdateCanvases();
+        Check(label.text == Get<string>(sign, "noticeText") && label.color == ZeldaUiPalette.Primary,
+            "full revised notice uses original cyan text style");
+        // Measure explicitly: batch mode may not rebuild an overlay canvas in
+        // the same editor-update tick, leaving its cached best-fit size at zero.
+        var layout = label.GetGenerationSettings(label.rectTransform.rect.size);
+        layout.scaleFactor = 1f; layout.fontSize = 16; layout.resizeTextForBestFit = false;
+        float textHeight = new TextGenerator().GetPreferredHeight(label.text, layout);
+        Check(textHeight <= label.rectTransform.rect.height,
+            "revised copy fits notice card at 16px: " + textHeight + "/" + label.rectTransform.rect.height);
+        Check(JsonUtility.ToJson(existing) == JsonUtility.ToJson(Save(journal)),
+            "reading sign after intelligence does not change quest state");
+        Close(sign);
+        Check(!MarkerVisible(sign) && !MarkerVisible(doc), "reading either source hides both quest hints");
 
         var state = Save(journal);
         state.entries.Single(e => e.id == Id).title = "要塞中的证明";
@@ -178,6 +225,24 @@ public static class FortressProofQuestSmoke
         Set(doc, "journalEntryWasAdded", false); Call(doc, "OpenDocument"); Close(doc);
         Check(journal.IsEntryCompleted(Id) && journal.Entries.Count(e => e.Id == Id) == 1, "reread after restore cannot restart completed quest");
 
+        yield return null; yield return null;
+        Call(sign, "OpenWindow"); Close(sign);
+        Check(journal.IsEntryCompleted(Id) && !MarkerVisible(sign), "alternate notice preserves restored completed quest");
+
+        journal.ResetAllEntries();
+        yield return null; yield return null;
+        Check(MarkerVisible(sign) && MarkerVisible(doc), "fresh or pre-quest save restores both reading hints");
+        Call(sign, "OpenWindow"); Close(sign);
+        Check(journal.ContainsEntry(Id) && journal.TrackedEntryId == Id && !journal.IsEntryCompleted(Id),
+            "reading Floor1 notice first accepts and tracks existing fortress quest");
+        Check(journal.CanTriggerEntry(QuestJournalManager.KnightAmbushQuestId, Id), "notice enables existing child quest");
+        state = Save(journal); journal.ResetAllEntries(); journal.ApplySaveState(state);
+        Check(!MarkerVisible(sign) && !MarkerVisible(doc), "notice-triggered acceptance survives save and suppresses both hints");
+        yield return null; yield return null;
+        Set(doc, "journalEntryWasAdded", false); Call(doc, "OpenDocument"); Close(doc);
+        Check(journal.Entries.Count(e => e.Id == Id) == 1 && journal.TrackedEntryId == Id,
+            "intelligence after notice reuses the same quest without duplicate tracking");
+
         journal.ResetAllEntries(); inv.ClearAll();
         var early = Object.Instantiate(Resources.Load<TrialProofPickupItem>("PickupItems/TrialProofPickupItem"));
         Set(early, "journalChangesOnPickup", completion);
@@ -187,6 +252,11 @@ public static class FortressProofQuestSmoke
         yield return null; yield return null;
         Set(doc, "journalEntryWasAdded", false); Call(doc, "OpenDocument"); Close(doc);
         Check(journal.ContainsEntry(Id) && journal.IsEntryCompleted(Id), "reading after early pickup and save immediately completes quest");
+        journal.ResetAllEntries(); journal.ApplySaveState(state);
+        yield return null; yield return null;
+        Call(sign, "OpenWindow"); Close(sign);
+        Check(journal.ContainsEntry(Id) && journal.IsEntryCompleted(Id) && !MarkerVisible(sign),
+            "alternate notice also honors saved proof acquired before quest acceptance");
     }
 }
 

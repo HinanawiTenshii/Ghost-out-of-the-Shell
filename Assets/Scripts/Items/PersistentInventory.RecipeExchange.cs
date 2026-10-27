@@ -93,6 +93,8 @@ public sealed partial class PersistentInventory
             onCommitted?.Invoke();
             NotifyChanged();
             if (destination >= 0) SelectSlot(destination);
+            GameSaveSystem.RequestAutoSave("recipe_exchange:" + (id ?? "hand_in"),
+                output != null && output.IsAutoSaveMilestonePickup);
             return true;
         }
         finally { itemExchangeInProgress = false; }

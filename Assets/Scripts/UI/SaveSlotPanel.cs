@@ -13,6 +13,7 @@ public sealed class SaveSlotPanel : MonoBehaviour
     private Text status;
     private bool useTitleLayout;
     private int confirmingDeleteSlot = -1;
+    private static readonly int[] DisplaySlots = { 0, 7, 8, 1, 2, 3, 4, 5, 6 };
 
     public static void Open(Transform parent, Font font, bool saving, bool titleLayout, Action onClose)
     {
@@ -103,56 +104,109 @@ public sealed class SaveSlotPanel : MonoBehaviour
     private void RefreshSlots()
     {
         var old = list.Find("Rows");
+        float scrollPosition = old != null && old.GetComponent<ScrollRect>() != null
+            ? old.GetComponent<ScrollRect>().verticalNormalizedPosition : 1f;
         if (old != null) { old.gameObject.SetActive(false); Destroy(old.gameObject); }
         if (useTitleLayout)
         {
-            RefreshTitleSlots();
+            RefreshTitleSlots(scrollPosition);
             return;
         }
 
-        var rows = Rect("Rows", list, Vector2.zero, list.sizeDelta);
-        float width = list.sizeDelta.x - 36;
-        // Separate auto, quick and manual groups, with five slots in the last group.
+        var rows = CreateScrollableRows(77f * DisplaySlots.Length, scrollPosition);
+        float width = rows.sizeDelta.x;
+        // Three automatic moments, one quick slot, and the original five manual
+        // slots. Keep each group's border and use clipping instead of shrinking.
         for (int group = 0; group < 3; group++)
         {
-            var frame = Rect("Group " + group, rows, new Vector2(0, group == 0 ? 236 : group == 1 ? 158 : -73),
-                new Vector2(width, group < 2 ? 72 : 382));
+            int start = group == 0 ? 0 : group == 1 ? 3 : 4;
+            int count = group == 0 ? 3 : group == 1 ? 1 : 5;
+            var frame = TopRect("Group " + group, rows, -(start + count * 0.5f) * 77f,
+                new Vector2(width - 2f, count * 77f - 8f));
             Border(frame);
         }
-        for (int slot = 0; slot < GameSaveSystem.SlotCount; slot++)
+        for (int displayIndex = 0; displayIndex < DisplaySlots.Length; displayIndex++)
         {
+            int slot = DisplaySlots[displayIndex];
             int index = slot;
             var data = GameSaveSystem.Instance.Read(slot);
-            var row = Rect("Slot " + slot, rows, new Vector2(0, 236 - slot * 77), new Vector2(width - 16, 64));
-            if (slot >= 2 && confirmingDeleteSlot == slot)
+            var row = TopRect("Slot " + slot, rows, -(displayIndex + 0.5f) * 77f, new Vector2(width - 16, 64));
+            if (GameSaveSystem.IsManualSlot(slot) && confirmingDeleteSlot == slot)
             {
                 BuildDeleteConfirmation(row, index);
                 continue;
             }
-            if (slot >= 2 && data != null)
+            if (GameSaveSystem.IsManualSlot(slot) && data != null)
             {
                 BuildManualSlot(row, index, data);
                 continue;
             }
-            bool enabled = saveMode ? slot >= 2 : data != null;
+            bool enabled = saveMode ? GameSaveSystem.IsManualSlot(slot) : data != null;
             MakeButton(row, enabled, () => ActivateSlot(index));
-            if (slot >= 2)
+            if (GameSaveSystem.IsManualSlot(slot))
             {
                 Border(row);
             }
-            string kind = slot == 0 ? "自动存档" : slot == 1 ? "快速存档" : "手动存档 " + (slot - 1);
-            Label(row, data != null ? data.name : kind + "（空）", new Vector2(0, 21), new Vector2(width - 30, 20), 15);
+            string kind = GameSaveSystem.SlotLabel(slot);
+            Label(row, kind + (data == null ? "（空）" : ""), new Vector2(0, 21), new Vector2(width - 30, 20), 15);
             Line(row, 11, width - 18);
             Label(row, data != null ? data.levelName : kind, new Vector2(0, 0), new Vector2(width - 30, 19), 14);
             Line(row, -10, width * 0.65f);
             Label(row, data != null ? data.savedAt : "—", new Vector2(0, -22), new Vector2(width - 30, 18), 12);
         }
+        RestoreScrollPosition(rows, scrollPosition);
+    }
+
+    private RectTransform CreateScrollableRows(float contentHeight, float scrollPosition)
+    {
+        var scrollRoot = Rect("Rows", list, new Vector2(0f, useTitleLayout ? 17f : 4f),
+            new Vector2(list.sizeDelta.x - (useTitleLayout ? 0f : 36f), useTitleLayout ? 410f : 524f));
+        var viewport = Rect("Viewport", scrollRoot, new Vector2(-7f, 0f),
+            new Vector2(scrollRoot.sizeDelta.x - 14f, scrollRoot.sizeDelta.y));
+        viewport.gameObject.AddComponent<Image>().color = Color.clear;
+        viewport.gameObject.AddComponent<RectMask2D>();
+        var content = TopRect("Content", viewport, 0f, new Vector2(viewport.sizeDelta.x, contentHeight));
+        content.pivot = new Vector2(0.5f, 1f);
+        var scroll = scrollRoot.gameObject.AddComponent<ScrollRect>();
+        scroll.viewport = viewport; scroll.content = content;
+        scroll.horizontal = false; scroll.vertical = true;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 30f;
+
+        var track = Rect("Scrollbar", scrollRoot, new Vector2(scrollRoot.sizeDelta.x * 0.5f - 3f, 0f),
+            new Vector2(6f, scrollRoot.sizeDelta.y));
+        track.gameObject.AddComponent<Image>().color = new Color(0.12f, 0.25f, 0.32f, 0.4f);
+        var handle = Rect("Handle", track, Vector2.zero, Vector2.zero);
+        handle.anchorMin = Vector2.zero; handle.anchorMax = Vector2.one;
+        var handleImage = handle.gameObject.AddComponent<Image>();
+        handleImage.color = ZeldaUiPalette.Ghost;
+        var scrollbar = track.gameObject.AddComponent<Scrollbar>();
+        scrollbar.handleRect = handle; scrollbar.targetGraphic = handleImage;
+        scrollbar.direction = Scrollbar.Direction.BottomToTop;
+        scroll.verticalScrollbar = scrollbar;
+        scroll.verticalNormalizedPosition = scrollPosition;
+        return content;
+    }
+
+    private static RectTransform TopRect(string name, Transform parent, float y, Vector2 size)
+    {
+        var rect = Rect(name, parent, Vector2.zero, size);
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
+        rect.anchoredPosition = new Vector2(0f, y);
+        return rect;
+    }
+
+    private static void RestoreScrollPosition(RectTransform content, float position)
+    {
+        Canvas.ForceUpdateCanvases();
+        content.GetComponentInParent<ScrollRect>().verticalNormalizedPosition = position;
     }
 
     private void ActivateSlot(int slot)
     {
         if (saveMode)
         {
+            if (!GameSaveSystem.IsManualSlot(slot)) return;
             GameSaveSystem.Instance.Save(slot);
             confirmingDeleteSlot = -1;
             RefreshSlots();
@@ -237,23 +291,19 @@ public sealed class SaveSlotPanel : MonoBehaviour
         Label(no, "否", Vector2.zero, no.sizeDelta, 16);
     }
 
-    private void RefreshTitleSlots()
+    private void RefreshTitleSlots(float scrollPosition)
     {
-        var rows = Rect("Rows", list, Vector2.zero, list.sizeDelta);
-        for (int slot = 0; slot < GameSaveSystem.SlotCount; slot++)
+        var rows = CreateScrollableRows(72f * DisplaySlots.Length, scrollPosition);
+        for (int displayIndex = 0; displayIndex < DisplaySlots.Length; displayIndex++)
         {
+            int slot = DisplaySlots[displayIndex];
             int index = slot;
             var data = GameSaveSystem.Instance.Read(slot);
-            string emptyName = slot == 0
-                ? "自动存档（空）"
-                : slot == 1
-                    ? "快速存档（空）"
-                    : "手动存档 " + (slot - 1) + "（空）";
             CreateTitleButton(
                 rows,
                 "Slot " + slot,
-                data != null ? data.name : emptyName,
-                new Vector2(0f, 198f - slot * 58f),
+                "",
+                Vector2.zero,
                 data != null,
                 () =>
                 {
@@ -266,7 +316,20 @@ public sealed class SaveSlotPanel : MonoBehaviour
                         status.text = GameSaveSystem.Instance.LastMessage;
                     }
                 });
+            var row = (RectTransform)rows.Find("Slot " + slot);
+            row.sizeDelta = new Vector2(rows.sizeDelta.x, 68f);
+            row.anchorMin = row.anchorMax = new Vector2(0.5f, 1f);
+            row.anchoredPosition = new Vector2(0f, -(displayIndex + 0.5f) * 72f);
+            var header = Label(row, GameSaveSystem.SlotLabel(slot) + (data == null ? "（空）" : ""),
+                new Vector2(0f, 20f), new Vector2(row.sizeDelta.x - 24f, 24f), 19, TextAnchor.MiddleLeft);
+            if (data == null) header.color = new Color(0.18f, 0.28f, 0.35f, 1f);
+            else
+            {
+                Label(row, data.levelName, Vector2.zero, new Vector2(row.sizeDelta.x - 24f, 20f), 15, TextAnchor.MiddleLeft);
+                Label(row, data.savedAt, new Vector2(0f, -20f), new Vector2(row.sizeDelta.x - 24f, 18f), 13, TextAnchor.MiddleLeft);
+            }
         }
+        RestoreScrollPosition(rows, scrollPosition);
     }
 
     private void CreateTitleButton(

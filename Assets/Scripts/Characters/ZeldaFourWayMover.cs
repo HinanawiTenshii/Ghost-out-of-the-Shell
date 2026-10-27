@@ -82,6 +82,8 @@ public class ZeldaFourWayMover : MonoBehaviour
     private RaycastHit2D[] possessionSightHits;
     private Collider2D[] possessionSightOverlaps;
     private ContactFilter2D possessionSightFilter;
+    private static int possessionWallTriggerLayers;
+    private static bool possessionWallTriggerLayersInitialized;
     private readonly Dictionary<Sprite, Vector2> possessionVisualSizeCache =
         new Dictionary<Sprite, Vector2>();
 
@@ -93,6 +95,17 @@ public class ZeldaFourWayMover : MonoBehaviour
         ? characterData : (characterData = GetComponent<ZeldaCharacterData>());
     public bool IsMoving => moveDirection.sqrMagnitude > 0f;
     public bool IsAttacking => attackTimer > 0f;
+    // Physical interaction rays originate at the collider center, not the sprite pivot.
+    public Vector2 InteractionBodyCenter
+    {
+        get
+        {
+            var box = bodyCollider != null ? bodyCollider : GetComponent<BoxCollider2D>();
+            return box != null ? (Vector2)box.transform.TransformPoint(box.offset) : (Vector2)transform.position;
+        }
+    }
+    public bool MeetsPossessionEnergyRequirement(ZeldaCharacterData candidate) =>
+        candidate != null && CharacterData != null && CharacterData.MaxPossessionEnergy >= candidate.PossessionCost;
     private bool itemAttackPose;
     public bool IsUsingItemAttack => itemAttackPose && IsAttacking;
 
@@ -136,18 +149,19 @@ public class ZeldaFourWayMover : MonoBehaviour
     public CardboardBoxWearState ActiveCardboardBox => activeCardboardBox;
     public bool IsWearingCardboardBox => activeCardboardBox != null;
     public float CurrentStamina => currentStamina;
+    public float MaximumStamina => Mathf.Max(0.1f, maximumStamina) * ExhibitionEdition.StaminaMultiplier;
     public void RestoreSavedMovement(Vector2 facing, float stamina)
     {
         facingDirection = facing.sqrMagnitude > 0f ? facing.normalized : Vector2.down;
-        currentStamina = Mathf.Clamp(stamina, 0f, maximumStamina);
+        currentStamina = Mathf.Clamp(stamina, 0f, MaximumStamina);
         moveDirection = Vector2.zero;
         var body = GetComponent<Rigidbody2D>();
         if (body != null) body.velocity = Vector2.zero;
         ApplyFacingVisual();
     }
     public float StaminaNormalized =>
-        maximumStamina > 0f
-            ? Mathf.Clamp01(currentStamina / maximumStamina)
+        MaximumStamina > 0f
+            ? Mathf.Clamp01(currentStamina / MaximumStamina)
             : 0f;
     public bool IsStaminaBarVisible => ShouldDisplayStaminaBar();
     public bool IsPossessionInProgress => pendingControlTarget != null && controlSwitchHoldTimer > 0f;
@@ -178,7 +192,7 @@ public class ZeldaFourWayMover : MonoBehaviour
         spriteRenderer.sortingOrder = 1;
         CreatePossessionProgressBar();
         CreateStaminaProgressBar();
-        currentStamina = Mathf.Max(0.1f, maximumStamina);
+        currentStamina = MaximumStamina;
         ApplyFacingVisual();
     }
 
@@ -926,6 +940,7 @@ public class ZeldaFourWayMover : MonoBehaviour
         if (!characterData.IsGhostLike)
         {
             duration += Mathf.Max(0f, nonGhostPossessionDurationBonus);
+            duration = Mathf.Max(.05f, duration - ExhibitionEdition.BodyPossessionReduction);
         }
 
         return duration;
@@ -952,6 +967,9 @@ public class ZeldaFourWayMover : MonoBehaviour
 
         QuestJournalManager.GetOrCreate().RecordControlledBehemoth(target);
         characterData.DestroyAfterSuccessfulPossession();
+        // Includes early levels and characters without a learnable skill.
+        // Witness hostility is already committed; the scheduler waits for safety.
+        GameSaveSystem.RequestAutoSave("附身完成");
         return true;
     }
 
@@ -1087,7 +1105,7 @@ public class ZeldaFourWayMover : MonoBehaviour
 
         if (isGhost)
         {
-            currentStamina = Mathf.Max(0.1f, maximumStamina);
+            currentStamina = MaximumStamina;
             staminaRecoveryTimer = 0f;
             staminaExhausted = false;
             RefreshStaminaProgressBar();
@@ -1105,14 +1123,14 @@ public class ZeldaFourWayMover : MonoBehaviour
         if (staminaRecoveryTimer >= Mathf.Max(0f, staminaRecoveryDelay))
         {
             currentStamina = Mathf.Min(
-                Mathf.Max(0.1f, maximumStamina),
+                MaximumStamina,
                 currentStamina +
                 Mathf.Max(0.01f, staminaRecoveryPerSecond) *
                 Mathf.Max(0f, deltaTime));
         }
 
         float resumeStamina =
-            Mathf.Max(0.1f, maximumStamina) *
+            MaximumStamina *
             Mathf.Clamp01(exhaustedResumeThreshold);
         if (staminaExhausted && currentStamina >= resumeStamina)
         {
@@ -1133,7 +1151,7 @@ public class ZeldaFourWayMover : MonoBehaviour
         }
 
         if (characterData.IsGhostForm) return true;
-        float staminaMaximum = Mathf.Max(0.1f, maximumStamina);
+        float staminaMaximum = MaximumStamina;
         return currentStamina < staminaMaximum - 0.001f;
     }
 
@@ -1494,9 +1512,9 @@ public class ZeldaFourWayMover : MonoBehaviour
             possessionSightHits = new RaycastHit2D[32];
             possessionSightOverlaps = new Collider2D[16];
             possessionSightFilter = new ContactFilter2D { useTriggers = true };
-            // Same wall layers as player vision. Do not inherit a ghost's
-            // movement collision rules or let non-wall furniture block possession.
-            possessionSightFilter.SetLayerMask(LayerMask.GetMask("Blocks", "Hidden Blocks"));
+            // Possession cannot pass through solid furniture, glass or other
+            // obstacles, regardless of their layer or the ghost's movement mask.
+            possessionSightFilter.SetLayerMask(Physics2D.AllLayers);
         }
 
         Vector2 origin = bodyCollider != null
@@ -1511,13 +1529,19 @@ public class ZeldaFourWayMover : MonoBehaviour
         try
         {
             if (!previousHitTriggers) Physics2D.queriesHitTriggers = true;
-            int count = Physics2D.Linecast(origin, destination, possessionSightFilter, possessionSightHits);
-            // An incomplete hit list must not accidentally authorize a transfer.
-            if (count == possessionSightHits.Length) return false;
-            for (int i = 0; i < count; i++)
-                if (IsPossessionWall(possessionSightHits[i].collider)) return false;
+            while (true)
+            {
+                int count = Physics2D.Linecast(origin, destination, possessionSightFilter, possessionSightHits);
+                for (int i = 0; i < count; i++)
+                    if (IsPossessionObstacle(possessionSightHits[i].collider)) return false;
+                if (count < possessionSightHits.Length) break;
+                // All-layer queries include interaction triggers and bodies.
+                // Grow/reuse the buffer on saturation: ignored hits must neither
+                // hide a real obstacle nor block an otherwise clear transfer.
+                Array.Resize(ref possessionSightHits, possessionSightHits.Length * 2);
+            }
 
-            // Explicitly cover endpoints inside a thin wall, including when the
+            // Explicitly cover endpoints inside a thin obstacle, including when the
             // project's Physics2D.queriesStartInColliders setting is disabled.
             return !IsPossessionPointBlocked(origin) && !IsPossessionPointBlocked(destination);
         }
@@ -1529,18 +1553,38 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     private bool IsPossessionPointBlocked(Vector2 point)
     {
-        int count = Physics2D.OverlapPoint(point, possessionSightFilter, possessionSightOverlaps);
-        if (count == possessionSightOverlaps.Length) return true;
-        for (int i = 0; i < count; i++)
-            if (IsPossessionWall(possessionSightOverlaps[i])) return true;
-        return false;
+        while (true)
+        {
+            int count = Physics2D.OverlapPoint(point, possessionSightFilter, possessionSightOverlaps);
+            for (int i = 0; i < count; i++)
+                if (IsPossessionObstacle(possessionSightOverlaps[i])) return true;
+            if (count < possessionSightOverlaps.Length) return false;
+            Array.Resize(ref possessionSightOverlaps, possessionSightOverlaps.Length * 2);
+        }
     }
 
-    private bool IsPossessionWall(Collider2D hit)
+    // Shared with the advisory ghost-recovery capture. Streaming-owned inactive
+    // obstacles remain logically present there, so activation is checked by the caller.
+    internal static bool ColliderBlocksPossession(Collider2D hit)
     {
-        return hit != null && hit.enabled && hit.gameObject.activeInHierarchy &&
-            ZeldaRuntimeRegistry.GetGameplayScene(hit.gameObject) == ZeldaRuntimeRegistry.GetGameplayScene(gameObject) &&
-            hit.GetComponentInParent<ZeldaCharacterData>() == null;
+        if (hit == null || !hit.enabled ||
+            (hit.attachedRigidbody != null && !hit.attachedRigidbody.simulated) ||
+            hit.GetComponentInParent<ZeldaCharacterData>(true) != null) return false;
+        // Preserve explicitly authored wall-trigger barriers, but do not let
+        // ordinary interaction, detection or effect trigger volumes occlude.
+        if (!hit.isTrigger) return true;
+        if (!possessionWallTriggerLayersInitialized)
+        {
+            possessionWallTriggerLayers = LayerMask.GetMask("Blocks", "Hidden Blocks");
+            possessionWallTriggerLayersInitialized = true;
+        }
+        return (possessionWallTriggerLayers & (1 << hit.gameObject.layer)) != 0;
+    }
+
+    private bool IsPossessionObstacle(Collider2D hit)
+    {
+        return ColliderBlocksPossession(hit) && hit.gameObject.activeInHierarchy &&
+            ZeldaRuntimeRegistry.GetGameplayScene(hit.gameObject) == ZeldaRuntimeRegistry.GetGameplayScene(gameObject);
     }
 
     private bool IsValidControlSwitchTarget(ZeldaFourWayMover candidate)
@@ -1559,7 +1603,7 @@ public class ZeldaFourWayMover : MonoBehaviour
         }
 
         ZeldaCharacterData candidateData = candidate.GetComponent<ZeldaCharacterData>();
-        if (characterData.MaxPossessionEnergy < candidateData.PossessionCost)
+        if (!MeetsPossessionEnergyRequirement(candidateData))
         {
             return false;
         }

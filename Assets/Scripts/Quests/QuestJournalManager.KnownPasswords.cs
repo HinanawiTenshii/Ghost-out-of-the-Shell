@@ -17,6 +17,7 @@ public sealed partial class QuestJournalManager
         if (tavernRoomPasswordKnown) return;
         tavernRoomPasswordKnown = true;
         JournalChanged?.Invoke();
+        RequestQuestAutoSave(KnownPasswordsEntryId, "password_tavern");
     }
 
     public void UnlockEngineerSafePassword()
@@ -24,6 +25,7 @@ public sealed partial class QuestJournalManager
         if (engineerSafePasswordKnown) return;
         engineerSafePasswordKnown = true;
         JournalChanged?.Invoke();
+        RequestQuestAutoSave(KnownPasswordsEntryId, "password_engineer");
     }
 
     public void UnlockEntertainmentRoomPassword()
@@ -31,6 +33,7 @@ public sealed partial class QuestJournalManager
         if (entertainmentRoomPasswordKnown) return;
         entertainmentRoomPasswordKnown = true;
         JournalChanged?.Invoke();
+        RequestQuestAutoSave(KnownPasswordsEntryId, "password_entertainment");
     }
 
     public void UnlockWarehouseGatePassword()
@@ -38,6 +41,7 @@ public sealed partial class QuestJournalManager
         if (warehouseGatePasswordKnown) return;
         warehouseGatePasswordKnown = true;
         JournalChanged?.Invoke();
+        RequestQuestAutoSave(KnownPasswordsEntryId, "password_warehouse");
     }
 
     public void UnlockChurchRelicPassword()
@@ -45,6 +49,7 @@ public sealed partial class QuestJournalManager
         if (churchRelicPasswordKnown) return;
         churchRelicPasswordKnown = true;
         JournalChanged?.Invoke();
+        RequestQuestAutoSave(KnownPasswordsEntryId, "password_church_relic");
     }
 
     private Entry GetKnownPasswordsEntry()

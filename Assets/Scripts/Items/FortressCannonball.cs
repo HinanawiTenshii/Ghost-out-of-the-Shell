@@ -24,6 +24,10 @@ public sealed class FortressCannonball : MonoBehaviour
     private Material material;
     private static BombPickupItem defaultBomb;
     private static AudioClip explosionSound;
+
+    private void OnEnable() => AutoSaveTransientActivity.Register(this);
+    private void OnDisable() => AutoSaveTransientActivity.Unregister(this);
+
     public static bool Fire(FortressCannon source,ZeldaCharacterData user,Vector3 muzzle,Vector2 facing,float velocity)
     {
         if(source==null || user==null || user.IsDead || user.IsGhostLike || facing.sqrMagnitude<.001f ||

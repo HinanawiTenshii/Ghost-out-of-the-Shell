@@ -170,6 +170,7 @@ public sealed class GrowthCollectible : MonoBehaviour
         LevelRunStatistics.RecordSkill(this, collectibleAmount);
         PlayPickupBurst();
         Destroy(gameObject);
+        GameSaveSystem.RequestAutoSave("data_collected", true);
         return true;
     }
 

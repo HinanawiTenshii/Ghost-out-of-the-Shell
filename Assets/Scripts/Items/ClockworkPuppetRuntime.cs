@@ -812,6 +812,9 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
         pryProgressBar.Hide();
     }
 
+    private Vector2 PuppetInteractionOrigin => bodyCollider != null
+        ? (Vector2)bodyCollider.transform.TransformPoint(bodyCollider.offset) : (Vector2)transform.position;
+
     private DoorHingeInteraction FindNearestManualDoor(
         out float closestDistance)
     {
@@ -831,7 +834,8 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
             float allowedDistance = door.IsLocked
                 ? Mathf.Max(lockedDoorPryDistance, manualInteractionDistance)
                 : manualInteractionDistance;
-            if (distance <= allowedDistance && distance < closestDistance)
+            if (distance <= allowedDistance && distance < closestDistance &&
+                ZeldaInteractionObstruction.HasClearPath(door, transform, PuppetInteractionOrigin, door.transform.position))
             {
                 closestDistance = distance;
                 closest = door;
@@ -855,7 +859,8 @@ public sealed class ClockworkPuppetRuntime : MonoBehaviour
                 bodyCollider,
                 transform.position);
             if (distance <= manualInteractionDistance &&
-                distance < closestDistance)
+                distance < closestDistance &&
+                ZeldaInteractionObstruction.HasClearPath(lever, transform, PuppetInteractionOrigin, lever.transform.position))
             {
                 closestDistance = distance;
                 closest = lever;

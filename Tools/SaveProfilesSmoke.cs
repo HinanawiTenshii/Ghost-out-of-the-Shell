@@ -177,7 +177,7 @@ public static class SaveProfilesSmoke
         yield return Ready("Level1-Garden");
         Check(PlayerGrowthAttributes.Instance.CollectibleCount==garden.player.growth.collectibleCount && PersistentInventory.Instance.Slots.All(s=>s.IsEmpty), "restart restores entry growth and inventory");
         Check(!journal.ContainsEntry("profile.fixture") && LevelRunStatistics.Current.deaths==garden.player.levelRun.deaths, "restart restores entry quests and counters");
-        Check(!saves.Read(0).world.Contains("Level1-Floor1"), "restart removes later floor cache");
+        Check(!SceneTravelStateManager.GetOrCreate().CaptureDiskWorld().Contains("Level1-Floor1"), "restart removes later floor cache without rotating auto history");
         yield return Title();
         Check(saves.StartNewGame(1), "create second fixed slot");
         yield return Ready("TutorialLevel");
@@ -345,7 +345,8 @@ public static class SaveProfilesSmoke
             Check(!saves.DeleteProfile(saves.ActiveProfileId),"gameplay cannot delete a progress slot");
             entries[index]=saves.ReplayEntries[0].checkpointId;
             Growth(10+index);
-            for(int slot=1;slot<GameSaveSystem.SlotCount;slot++)Check(saves.Save(slot),"fixture saves "+index+" / "+slot);
+            for(int slot=1;slot<GameSaveSystem.SlotCount;slot++)
+                if(slot==1||GameSaveSystem.IsManualSlot(slot))Check(saves.Save(slot),"fixture saves "+index+" / "+slot);
             yield return Title();
         }
         var a="slot-1";var b="slot-2";var c="slot-3";

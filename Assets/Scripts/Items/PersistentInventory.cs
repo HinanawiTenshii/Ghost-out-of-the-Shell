@@ -1278,6 +1278,9 @@ public sealed partial class PersistentInventory : MonoBehaviour
 
     private void NotifyChanged()
     {
+        // Low-priority periodic fallback only; complete purchases/quest items
+        // separately request a checkpoint after their entire transaction commits.
+        GameSaveSystem.MarkAutoSaveProgress();
         QuestJournalManager.Instance?.RecordQuestInventoryEvidence();
         InventoryChanged?.Invoke();
         Save();

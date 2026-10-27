@@ -77,7 +77,12 @@ public sealed class HolyLightSkillRuntime : MonoBehaviour
     }
 
     private void Update() => Advance(Time.deltaTime);
-    private void OnDisable() => skillAudio?.Stop();
+    private void OnEnable() => AutoSaveTransientActivity.Register(this);
+    private void OnDisable()
+    {
+        AutoSaveTransientActivity.Unregister(this);
+        skillAudio?.Stop();
+    }
     private void Advance(float delta)
     {
         if (delta <= 0f)

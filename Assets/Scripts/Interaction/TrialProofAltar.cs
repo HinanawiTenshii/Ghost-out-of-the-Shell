@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>One-time trial-proof offering. Inventory and completion commit together before save callbacks.</summary>
@@ -6,6 +7,23 @@ using UnityEngine;
 [AddComponentMenu("Interaction/Trial Proof Altar (试炼祭坛)")]
 public sealed class TrialProofAltar : MonoBehaviour
 {
+    private static readonly HashSet<TrialProofAltar> ActiveAltars = new HashSet<TrialProofAltar>();
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetActiveAltars() => ActiveAltars.Clear();
+
+    internal static bool BlocksAutomaticSave
+    {
+        get
+        {
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            foreach (var altar in ActiveAltars)
+                if (altar != null && altar.gameObject.scene == scene &&
+                    (altar.submitting || (altar.linkedDoor != null && altar.linkedDoor.IsMoving)))
+                    return true;
+            return false;
+        }
+    }
+
     [Serializable] public struct RuntimeState { public bool offered; public string offeredItemId; }
 
     [Header("Offering / 供奉")]
@@ -68,6 +86,7 @@ public sealed class TrialProofAltar : MonoBehaviour
     private void Awake() { RememberDoorState(); visual = GetComponent<TrialProofAltarVisual>(); }
     private void OnEnable()
     {
+        ActiveAltars.Add(this);
         if (offered) RestoreLinkedDoor();
         RefreshVisual();
     }
@@ -131,6 +150,7 @@ public sealed class TrialProofAltar : MonoBehaviour
             });
             if (!consumed) { mover.EndItemAttack(); reason = "未能供奉，请稍后再试"; return false; }
             reason = "你已证明了自己";
+            GameSaveSystem.RequestAutoSave("trial_proof_offered", true);
             return true;
         }
         finally { submitting = false; }
@@ -199,7 +219,7 @@ public sealed class TrialProofAltar : MonoBehaviour
     {
         if (prompt != null && prompt.gameObject.activeSelf != value) prompt.gameObject.SetActive(value);
     }
-    private void OnDisable() => ShowPrompt(false);
+    private void OnDisable() { ActiveAltars.Remove(this); ShowPrompt(false); }
     private void OnDestroy()
     {
         if (prompt != null) Destroy(prompt.gameObject);

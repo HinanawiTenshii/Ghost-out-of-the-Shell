@@ -180,6 +180,7 @@ public sealed class PauseMenuController : MonoBehaviour
         CreateButton(panelRect, "读取游戏", -20f, true, () => OpenSaveSlots(false));
         restartButton = CreateButton(panelRect, "重新开始本关", -124f, true, RestartLevel);
         CreateButton(panelRect, "标题界面", -228f, true, ReturnToTitleScreen);
+        ExhibitionEdition.AddMenuCaption(rootRect, menuFont);
     }
 
     private void OpenSaveSlots(bool saving)

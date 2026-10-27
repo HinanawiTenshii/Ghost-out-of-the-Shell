@@ -61,6 +61,16 @@ public sealed class SummoningCircle : CameraEnvironmentalShakeSource
         ritualStage == RitualStage.Erupting ? Mathf.Max(.5f, eruptionDuration) : Mathf.Max(.5f, dispersalDuration);
     public float StageProgress => Mathf.Clamp01(ritualElapsed / StageDuration);
     public bool IsRitualActive => ritualStage >= RitualStage.Gathering && ritualStage <= RitualStage.Dispersing;
+    public static bool HasActiveRitual(Scene scene)
+    {
+        if (!scene.IsValid() || !scene.isLoaded) return false;
+        // Reuse the lifecycle registry: dormant and completed seals never block
+        // automatic saves, and no per-frame scene-wide object search is needed.
+        foreach (var circle in Instances)
+            if (circle != null && circle.isActiveAndEnabled && circle.IsRitualActive &&
+                ZeldaRuntimeRegistry.GetGameplayScene(circle.gameObject) == scene) return true;
+        return false;
+    }
     public bool IsRitualFrozen
     {
         get

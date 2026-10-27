@@ -16,6 +16,7 @@ public sealed partial class QuestJournalManager
         if (graveyardCrystalDestroyed) return;
         graveyardCrystalDestroyed = true;
         RefreshGravekeeperQuest();
+        RequestQuestAutoSave(GravekeeperQuestId, "quest_crystal_destroyed");
     }
 
     private void RefreshGravekeeperQuest()

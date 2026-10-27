@@ -21,6 +21,9 @@ public sealed class ThrownGlassBottle : MonoBehaviour
     private Sprite flightSprite;
     private Texture2D flightTexture;
 
+    private void OnEnable() => AutoSaveTransientActivity.Register(this);
+    private void OnDisable() => AutoSaveTransientActivity.Unregister(this);
+
     public static bool Throw(ZeldaCharacterData user, Vector2 facing, float speed, float radius, GameObject source)
     {
         if (user == null || user.IsDead || user.IsGhostLike || facing.sqrMagnitude < .001f ||

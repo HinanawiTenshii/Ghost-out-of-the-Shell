@@ -87,6 +87,7 @@ public sealed partial class SandwormEruptionAttack : MonoBehaviour
     private float rejectedLandingCooldown;
     private PlacedBomb trackedDecoy;
     private bool trackingDecoy;
+    private bool requestedApproachCheckpoint;
     public PlacedBomb DecoyTarget => trackedDecoy;
     private float Scale => Mathf.Max(.01f, Mathf.Max(Mathf.Abs(transform.lossyScale.x), Mathf.Abs(transform.lossyScale.y)));
 
@@ -146,6 +147,7 @@ public sealed partial class SandwormEruptionAttack : MonoBehaviour
         AdvanceImpactVisuals(deltaTime);
         if (Phase == AttackPhase.Roaming)
         {
+            RequestApproachCheckpoint();
             retryTimer -= deltaTime;
             if (retryTimer > 0f || (RoamingProgress < roamingLegsPerAttack && FindDecoyTarget() == null)) return;
             retryTimer = lockRetryInterval;
@@ -287,6 +289,21 @@ public sealed partial class SandwormEruptionAttack : MonoBehaviour
         var player = ZeldaRuntimeRegistry.GetControlledMover();
         return player != null && player.isActiveAndEnabled &&
             ZeldaRuntimeRegistry.GetGameplayScene(player.gameObject) == gameObject.scene ? player : null;
+    }
+
+    private void RequestApproachCheckpoint()
+    {
+        if (requestedApproachCheckpoint || GameSaveSystem.IsLoading || CharacterPotionBuffs.IsRestoringWorld) return;
+        var player = GetTrackedPlayer();
+        if (player == null || player.CharacterData == null || player.CharacterData.IsDead || player.CharacterData.IsGhostLike) return;
+        // Give the safety window time to settle even at the standard 2x sprint:
+        // about eight seconds of approach, including potion/terrain speed buffs.
+        float approachMargin = Mathf.Max(16f, player.CharacterData.MoveSpeed * 16f);
+        if (!movement.IsNearEncounterBoundary(player.transform.position, approachMargin)) return;
+        requestedApproachCheckpoint = true;
+        // Outside the configured attack area, before warnings or attack paths
+        // are created. Scene re-entry may create a fresh approach checkpoint.
+        GameSaveSystem.RequestAutoSave("sandworm_approach_checkpoint", true);
     }
 
     private void UpdateTrackedTarget(float deltaTime)

@@ -41,6 +41,7 @@ public sealed class SilenceSealRelicPickupItem : PickupItemBase
             NotifyPickedUp();
         }
         finally { Destroy(gameObject); }
+        GameSaveSystem.RequestAutoSave("relic_skill_granted:" + SilenceOathRuntime.SkillId, true);
         return true;
     }
 }

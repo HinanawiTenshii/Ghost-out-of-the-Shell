@@ -505,6 +505,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         public Vector2 alarmPosition;
         public int sharedPlayerPhase;
         public float sharedPlayerRemaining;
+        public float sharedSearchPauseRemaining;
         public Vector2 sharedPlayerLastSeen;
         public bool sharedReturnAfterStun;
     }
@@ -516,6 +517,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
             sharedPlayerRemaining = sharedPlayerTimer != null ? sharedPlayerTimer.Remaining : 0f,
             sharedPlayerLastSeen = sharedPlayerTimer != null ? sharedPlayerTimer.LastSeenPosition : lastKnownTargetPosition,
             sharedReturnAfterStun = sharedReturnAfterStun,
+            sharedSearchPauseRemaining = UsesSharedSearchMovement ? sharedSearchPauseRemaining : 0f,
             state = currentState, facing = facingDirection, home = initialScenePosition,
             stateBeforeStun = stateBeforeStun, stunRemaining = stunRemaining,
             royalCommandRemaining = royalCommandRemaining,
@@ -1052,6 +1054,23 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
     {
         return candidate != null && targetMover == candidate && currentState == ZeldaAiState.Hostile &&
                (regularHostile || hostileUntilTargetDeath);
+    }
+
+    // Shared timers alone miss skeletons, automatons and sentries. A stunned
+    // enemy is still a threat; don't turn a brief stun into a "safe" checkpoint.
+    internal bool BlocksAutomaticSaveFor(ZeldaFourWayMover player)
+    {
+        if (!isActiveAndEnabled || characterData == null || characterData.IsDead || mover == player ||
+            (mover != null && mover.enabled)) return false;
+        var arena = ArenaChallengeController.ForAi(this);
+        if (arena != null && !arena.CombatRunning) return false;
+        var awareness = IsStunned ? stateBeforeStun : currentState;
+        if (awareness != ZeldaAiState.Hostile && awareness != ZeldaAiState.Alert &&
+            awareness != ZeldaAiState.Suspicious && awareness != ZeldaAiState.Search) return false;
+        if (targetMover == player) return true;
+        // Environmental/anonymous-shot searches may deliberately clear the target.
+        return awareness == ZeldaAiState.Search && (isDoorIncidentInvestigation || anonymousHandgunInvestigation) &&
+            ((Vector2)transform.position - (Vector2)player.transform.position).sqrMagnitude <= 225f;
     }
 
     private int echoRecoveryFrame = -1;
@@ -1715,7 +1734,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
 
     protected virtual void TickAlert(float deltaTime)
     {
-        if (activePermissionArea == null || targetMover == null)
+        if (targetMover == null)
         {
             moveDirection = Vector2.zero;
             SetFacingDirection(lastKnownTargetPosition - rb.position);
@@ -1803,11 +1822,20 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
             return;
         }
 
+        if (TickSharedSearchPause(deltaTime)) return;
+
         Vector2 toWaypoint = searchWaypoint - rb.position;
         UpdateSearchWaypointProgress(toWaypoint, deltaTime);
         if (toWaypoint.sqrMagnitude <= searchWaypointTolerance * searchWaypointTolerance ||
             searchWaypointTimer >= searchWaypointChangeInterval)
         {
+            if (UsesSharedSearchMovement)
+            {
+                // Arrival, a blocked route, or no sufficiently distant safe
+                // candidate: wait before resampling, never retry every frame.
+                BeginSharedSearchPause();
+                return;
+            }
             ChooseNextSearchWaypoint();
             toWaypoint = searchWaypoint - rb.position;
         }
@@ -2353,6 +2381,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         if (IsIgnoringPlayer && (newState == ZeldaAiState.Suspicious || newState == ZeldaAiState.Alert || newState == ZeldaAiState.Hostile)) return;
         if (IsStunned) return;
         OnSilenceOathStateChanged(newState);
+        if (newState != ZeldaAiState.Search && newState != ZeldaAiState.Stunned) sharedSearchPauseRemaining = 0f;
         if (newState != ZeldaAiState.Search) investigationReactionRemaining = 0f;
         if (currentState == newState)
         {
@@ -2684,7 +2713,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
             return;
         }
 
-        if (activePermissionArea != null && currentState == ZeldaAiState.Alert)
+        if (currentState == ZeldaAiState.Alert)
         {
             CardboardBoxWearState targetBox = targetMover != null
                 ? targetMover.ActiveCardboardBox
@@ -2696,14 +2725,30 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
                 return;
             }
 
-            if (!IsTargetAlive() || !activePermissionArea.Contains(targetMover.transform.position))
+            if (!IsTargetAlive())
             {
                 BeginRecovery();
                 return;
             }
 
+            // A warning belongs to the ongoing violation, not the area object
+            // where it began. Resolve the highest current restriction (including
+            // public-space defaults) without restarting its accumulated time.
+            PermissionArea currentArea = FindHighestPermissionArea(targetMover.transform.position);
+            int currentRequiredPermission = currentArea != null
+                ? Mathf.Max(PermissionArea.DefaultPermissionLevel, currentArea.PermissionLevel)
+                : PermissionArea.DefaultPermissionLevel;
+            int currentPermissionDifference = currentRequiredPermission - targetMover.CharacterData.PermissionLevel;
+            if (currentPermissionDifference < Mathf.Max(1, MinimumPermissionViolationDifference))
+            {
+                BeginRecovery();
+                return;
+            }
+
+            activePermissionArea = currentArea;
+            lastKnownTargetPosition = targetMover.transform.position;
             warningTimer += deltaTime;
-            if (warningTimer >= warningEscalationTime)
+            if (currentPermissionDifference >= 2 || warningTimer >= warningEscalationTime)
             {
                 hostileUntilTargetDeath = false;
                 retaliationHostile = false;
@@ -2932,6 +2977,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
 
     private void BeginSearch()
     {
+        sharedSearchPauseRemaining = 0f;
         investigationReactionRemaining = 0f;
         hostileUntilTargetDeath = false;
         retaliationHostile = false;
@@ -3004,12 +3050,16 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
             ChooseNextInvestigationWaypoint();
             return;
         }
+        // Include arrival tolerance so stopping just short of the destination
+        // still produces at least the configured movement distance.
+        float minimumStep = UsesSharedSearchMovement
+            ? Mathf.Max(.1f, sharedSearchMinimumMoveDistance) + searchWaypointTolerance : 0f;
         for (int attempt = 0; attempt < searchWaypointSamplingAttempts; attempt++)
         {
             Vector2 candidate =
                 searchCenter + Random.insideUnitCircle * searchRadius;
 
-            if (!IsSearchWaypointClear(candidate))
+            if ((candidate - rb.position).sqrMagnitude < minimumStep * minimumStep || !IsSearchWaypointClear(candidate))
             {
                 continue;
             }
@@ -6141,6 +6191,8 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
         hostileAttackStartRangeMultiplier = Mathf.Max(1f, hostileAttackStartRangeMultiplier);
         missedAttackPursuitDuration = Mathf.Max(0.05f, missedAttackPursuitDuration);
         searchRadius = Mathf.Max(0.1f, searchRadius);
+        sharedSearchWaypointPauseDuration = Mathf.Max(.1f, sharedSearchWaypointPauseDuration);
+        sharedSearchMinimumMoveDistance = Mathf.Max(.1f, sharedSearchMinimumMoveDistance);
         searchWaypointTolerance = Mathf.Max(0.01f, searchWaypointTolerance);
         searchWaypointChangeInterval = Mathf.Max(0.1f, searchWaypointChangeInterval);
         searchWaypointObstacleClearance =

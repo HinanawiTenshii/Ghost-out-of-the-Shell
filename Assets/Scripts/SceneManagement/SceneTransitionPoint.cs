@@ -20,7 +20,7 @@ public class SceneTransitionPoint : MonoBehaviour
     private Material interactionPromptMaterial;
     private BoxCollider2D triggerCollider;
 
-    public string TargetSceneName => targetSceneName;
+    public string TargetSceneName => ExhibitionEdition.ResolveDestination(gameObject.scene.name, targetSceneName);
     public Vector2 TriggerSize => triggerSize;
     public Vector2 TriggerOffset => triggerOffset;
 
@@ -204,22 +204,23 @@ public class SceneTransitionPoint : MonoBehaviour
 
     private void LoadTargetScene()
     {
-        if (string.IsNullOrWhiteSpace(targetSceneName))
+        string destination = TargetSceneName?.Trim();
+        if (string.IsNullOrWhiteSpace(destination))
         {
             Debug.LogWarning("SceneTransitionPoint needs a target scene name.", this);
             return;
         }
 
-        if (LevelSettlementScreen.TryOpen(targetSceneName.Trim())) return;
-        RetroSceneLoadReveal.BeginTransition(targetSceneName.Trim(), () =>
+        if (LevelSettlementScreen.TryOpen(destination)) return;
+        RetroSceneLoadReveal.BeginTransition(destination, () =>
         {
             Level2HeroQuestTarget questTarget = GetComponent<Level2HeroQuestTarget>();
             SceneTravelStateManager.GetOrCreate().ResetAllSceneStates();
             QuestJournalManager journal = QuestJournalManager.GetOrCreate();
             if (questTarget != null && questTarget.IsTrialEntrance)
-                journal.ExpectLevel2TrialArrival(targetSceneName.Trim());
+                journal.ExpectLevel2TrialArrival(destination);
             PersistentInventory.Instance?.PreserveCapacityForNextSceneLoad();
-            try { RetroSceneLoadReveal.LoadSceneAsync(targetSceneName.Trim()); }
+            try { RetroSceneLoadReveal.LoadSceneAsync(destination); }
             catch
             {
                 PersistentInventory.Instance?.PreserveCapacityForNextSceneLoad(false);

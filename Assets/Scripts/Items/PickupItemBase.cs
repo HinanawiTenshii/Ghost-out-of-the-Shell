@@ -64,6 +64,24 @@ public class PickupItemBase : MonoBehaviour, ISerializationCallbackReceiver
     }
 
     public string ItemId => itemId;
+    // Ordinary supplies only dirty the periodic fallback. Keys, progression
+    // materials/credentials and authored quest pickups deserve a checkpoint.
+    internal bool IsAutoSaveMilestonePickup
+    {
+        get
+        {
+            if (this is KeyPickupItem || this is TrialProofPickupItem || this is CounterfeitTrialProofPickupItem ||
+                this is GoldenGemPickupItem || this is SynthesisToolsPickupItem || this is MortarControlDevicePickupItem ||
+                this is MortarRemotePickupItem || this is FusePickupItem || this is PurpleBombShellPickupItem ||
+                this is SkyBlueGunpowderPickupItem || this is MemoPickupItem || this is SilenceSealRelicPickupItem ||
+                ItemId == "purple_bomb" || ItemId == "decoy_bomb") return true;
+            if (journalChangesOnPickup != null)
+                foreach (var change in journalChangesOnPickup)
+                    if (!string.IsNullOrWhiteSpace(change.entryId) && change.operation != QuestJournalEventOperation.Remove)
+                        return true;
+            return false;
+        }
+    }
     // Read-only map lookup: use this scene instance's authored completion event
     // rather than matching every item with the same item ID or prefab name.
     internal bool CompletesQuestOnPickup(string questId)
@@ -464,6 +482,8 @@ public class PickupItemBase : MonoBehaviour, ISerializationCallbackReceiver
         // they already call this method after successfully entering inventory.
         ItemDescriptionWindow.GetOrCreate().NotifyPickedUp(this);
         PickedUp?.Invoke(this);
+        if (IsAutoSaveMilestonePickup) GameSaveSystem.RequestAutoSave("key_or_quest_item:" + ItemId, true);
+        else GameSaveSystem.MarkAutoSaveProgress();
     }
 
     protected virtual void OnDropped()

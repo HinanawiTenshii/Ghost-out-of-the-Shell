@@ -23,6 +23,7 @@ public sealed class PlayerGrowthAttributes : MonoBehaviour
         public float areaPotionEnergyRemaining;
         public bool areaPotionEnergyFrozen;
         public string areaPotionEnergyToken;
+        public bool exhibitionLoadoutGranted;
     }
 
     [SerializeField] private bool persistBetweenScenes = true;
@@ -30,6 +31,7 @@ public sealed class PlayerGrowthAttributes : MonoBehaviour
     [SerializeField, Min(0)] private int skillValue;
     [SerializeField, Min(0)] private int possessionEnergy;
     [SerializeField, Min(0)] private int collectibleCount;
+    private bool exhibitionLoadoutGranted;
     [SerializeField] private System.Collections.Generic.List<string> unlockedSkills = new System.Collections.Generic.List<string>();
 
     public enum SkillType { Passive, Active }
@@ -108,6 +110,7 @@ public sealed class PlayerGrowthAttributes : MonoBehaviour
         if (string.IsNullOrEmpty(id) || discoveredCharacterSkills.Contains(id)) return;
         discoveredCharacterSkills.Add(id);
         AttributesChanged?.Invoke();
+        GameSaveSystem.RequestAutoSave("character_skill_discovered:" + id, true);
     }
     [SerializeField] private string[] equippedSkills = new string[5];
     public int SoulMarkLevel => HasSkill("soul_mark_3") ? 3 : HasSkill("soul_mark_2") ? 2 : HasSkill("soul_mark") ? 1 : 0;
@@ -160,6 +163,7 @@ public sealed class PlayerGrowthAttributes : MonoBehaviour
         var mover = ZeldaRuntimeRegistry.GetControlledMover();
         if (mover != null) mover.GetComponent<ZeldaCharacterData>()?.ApplyPlayerHealthUpgrade();
         AttributesChanged?.Invoke();
+        GameSaveSystem.RequestAutoSave("skill_upgraded:" + id, true);
         return true;
     }
 
@@ -303,6 +307,30 @@ public sealed class PlayerGrowthAttributes : MonoBehaviour
 
     public event Action AttributesChanged;
 
+    internal bool GrantExhibitionLoadout()
+    {
+        if (!ExhibitionEdition.IsEnabled || exhibitionLoadoutGranted) return false;
+        // One grant per campaign, saved with growth. Loading or changing floors
+        // must not replenish spent DATA or reapply the passive health increase.
+        exhibitionLoadoutGranted = true;
+        foreach (string id in new[] { "health_1", "soul_mark", "soul_mark_2", "domino" })
+            if (!unlockedSkills.Contains(id)) unlockedSkills.Add(id);
+        collectibleCount = 3;
+        if (equippedSkills == null || equippedSkills.Length != 5) Array.Resize(ref equippedSkills, 5);
+        foreach (string id in new[] { "soul_mark_2", "domino" })
+        {
+            bool equipped = false;
+            for (int i = 0; i < equippedSkills.Length; i++)
+                if (GetEquippedSkill(i) == id) { equipped = true; break; }
+            if (!equipped)
+                for (int i = 0; i < equippedSkills.Length; i++)
+                    if (string.IsNullOrEmpty(equippedSkills[i])) { equippedSkills[i] = id; break; }
+        }
+        ZeldaRuntimeRegistry.GetControlledMover()?.CharacterData?.ApplyPlayerHealthUpgrade();
+        AttributesChanged?.Invoke();
+        return true;
+    }
+
     public RuntimeState CaptureRuntimeState()
     {
         return new RuntimeState
@@ -311,6 +339,7 @@ public sealed class PlayerGrowthAttributes : MonoBehaviour
             skillValue = skillValue,
             possessionEnergy = possessionEnergy,
             collectibleCount = collectibleCount,
+            exhibitionLoadoutGranted = exhibitionLoadoutGranted,
             unlockedSkills = unlockedSkills.ToArray(),
             discoveredCharacterSkills = discoveredCharacterSkills.ToArray(),
             potionEnergyRemaining = Mathf.Max(0f, potionEnergyExpiresAt - Time.time),
@@ -341,6 +370,7 @@ public sealed class PlayerGrowthAttributes : MonoBehaviour
         potionEnergyCurrent = PotionEnergyRemaining > 0f ? Mathf.Clamp(state.potionEnergyCurrent, 0, 2) : 0;
         potionEnergyWasActive = PotionEnergyRemaining > 0f;
         collectibleCount = Mathf.Max(0, state.collectibleCount);
+        exhibitionLoadoutGranted = state.exhibitionLoadoutGranted;
         unlockedSkills = new System.Collections.Generic.List<string>(state.unlockedSkills ?? Array.Empty<string>());
         discoveredCharacterSkills = new System.Collections.Generic.List<string>(state.discoveredCharacterSkills ?? Array.Empty<string>());
         equippedSkills = new string[5];

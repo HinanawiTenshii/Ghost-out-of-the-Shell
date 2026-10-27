@@ -26,6 +26,20 @@ public sealed class SignpostInteraction : MonoBehaviour
     [SerializeField, Range(0f, 1f), InspectorName("阅读背景压暗程度")]
     private float backgroundDimOpacity = .6f;
 
+    [Header("Quest / 阅读接取任务（可选）")]
+    [SerializeField, InspectorName("阅读时接取任务")]
+    private bool addJournalEntryOnOpen;
+    [SerializeField, InspectorName("任务 ID")]
+    private string journalEntryId = string.Empty;
+    [SerializeField, InspectorName("父任务 ID"), Tooltip("留空为独立任务；父任务未接取时不会接取此任务。")]
+    private string journalParentEntryId = string.Empty;
+    [SerializeField, InspectorName("任务名称")]
+    private string journalEntryTitle = string.Empty;
+    [SerializeField, InspectorName("任务描述"), TextArea(4, 12)]
+    private string journalEntryDetails = string.Empty;
+    [SerializeField, InspectorName("任务提示偏移"), Tooltip("相对告示牌原点的世界坐标偏移，放在牌面上方。")]
+    private Vector2 journalMarkerOffset = new Vector2(0f, 1.5f);
+
     private static SignpostInteraction activeSignpost;
     private static int inputBlockedThroughFrame = -1;
     public static bool BlocksInput => activeSignpost != null || Time.frameCount <= inputBlockedThroughFrame;
@@ -56,6 +70,12 @@ public sealed class SignpostInteraction : MonoBehaviour
     {
         activeSignpost = null;
         inputBlockedThroughFrame = -1;
+    }
+
+    private void Awake()
+    {
+        QuestJournalInteractionMarker.Configure(
+            gameObject, addJournalEntryOnOpen, journalEntryId, null, journalParentEntryId, journalMarkerOffset);
     }
 
     private void Update()
@@ -126,6 +146,21 @@ public sealed class SignpostInteraction : MonoBehaviour
         windowObject.SetActive(true);
         EnsureWindowOnTop();
         SetPromptVisible(false);
+        TryStartJournalEntry();
+    }
+
+    private void TryStartJournalEntry()
+    {
+        if (!addJournalEntryOnOpen || string.IsNullOrWhiteSpace(journalEntryId)) return;
+
+        // The journal, not a per-sign flag, owns acceptance across alternate
+        // sources, scene travel and saves. Rereading must not overwrite progress.
+        QuestJournalManager journal = QuestJournalManager.GetOrCreate();
+        if (journal.ContainsEntry(journalEntryId) ||
+            !journal.CanTriggerEntry(journalEntryId, journalParentEntryId)) return;
+
+        journal.AddOrUpdateEntry(journalEntryId, journalEntryTitle, journalEntryDetails,
+            gameObject.scene.name, journalParentEntryId);
     }
 
     private void CloseWindow()

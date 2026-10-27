@@ -129,6 +129,7 @@ public sealed class SpecificItemSubmissionStation : MonoBehaviour
                 QuestJournalManager.GetOrCreate().EvaluateKnownCompletionConditions();
             }
 
+            GameSaveSystem.RequestAutoSave(IsComplete ? "craft_completed" : "craft_material_submitted", IsComplete);
             return true;
         }
 

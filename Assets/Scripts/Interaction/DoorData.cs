@@ -175,6 +175,8 @@ public class DoorData : MonoBehaviour
     {
         StopShake();
         isDestroyed = true;
+        var hinge = GetComponentInParent<DoorHingeInteraction>();
+        bool brokeProgressionLock = hinge != null && hinge.IsLocked && hinge.HasProgressionLock;
         if (IsBreakableGlass) GetComponent<MapPointOfInterest>()?.NotifyDestroyed();
         GetComponentInParent<LockedDoorMapMarker>()?.NotifyLeafDestroyed();
         Vector3 destructionPosition = spriteRenderer != null ? spriteRenderer.bounds.center : transform.position;
@@ -217,6 +219,8 @@ public class DoorData : MonoBehaviour
         PlayBreakSound(destructionPosition);
         SpawnFragments();
         Destroy(gameObject);
+        // Request only; the save scheduler waits past destruction and combat cleanup.
+        if (brokeProgressionLock) GameSaveSystem.RequestAutoSave("progression_door_broken", true);
     }
 
     private AudioClip ResolveBreakSound()

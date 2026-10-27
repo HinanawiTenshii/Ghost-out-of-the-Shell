@@ -7,6 +7,23 @@ using UnityEngine;
 public class WaterwayGateTargetFade : MonoBehaviour
 {
     private static readonly HashSet<WaterwayGateTargetFade> ActiveFaders = new HashSet<WaterwayGateTargetFade>();
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetActiveFaders() => ActiveFaders.Clear();
+
+    // No scene-wide discovery: registrations cover both moving shutters and
+    // their downstream water, including dual-gate shared faders.
+    internal static bool BlocksAutomaticSave
+    {
+        get
+        {
+            if (WaterwayGate.HasMovingGate) return true;
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            foreach (var fader in ActiveFaders)
+                if (fader != null && fader.gameObject.scene == scene && fader.IsFading) return true;
+            return false;
+        }
+    }
+
     [SerializeField] private WaterwayGate sourceGate;
     [SerializeField, Min(0.05f)] private float fadeDuration = 0.6f;
 

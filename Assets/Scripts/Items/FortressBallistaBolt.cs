@@ -26,6 +26,9 @@ public sealed class FortressBallistaBolt : MonoBehaviour
     private Mesh arrowMesh;
     private Material arrowMaterial;
 
+    private void OnEnable() => AutoSaveTransientActivity.Register(this);
+    private void OnDisable() => AutoSaveTransientActivity.Unregister(this);
+
     public static bool Fire(FortressBallista source, ZeldaCharacterData user, Vector3 muzzle, Vector2 facing, float velocity)
     {
         if (source == null || user == null || user.IsDead || user.IsGhostLike || facing.sqrMagnitude < .001f ||

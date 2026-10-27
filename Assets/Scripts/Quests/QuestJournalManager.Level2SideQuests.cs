@@ -98,6 +98,7 @@ public sealed partial class QuestJournalManager
         summoningLitCrystals = count;
         summoningPerformed = complete;
         RefreshSummoningQuest();
+        RequestQuestAutoSave(SummoningQuestId, "quest_summoning_progress");
     }
 
     private void RefreshSummoningQuest()

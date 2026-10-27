@@ -119,31 +119,47 @@ public static class PossessionWallSmoke
             }
             finally { Physics2D.queriesHitTriggers = triggers; }
         }
-        foreach (string layer in new[] { "Default", "Visible Non Blocking" })
+        foreach (string layer in new[] { "Default", "Visible Non Blocking", "Ignore Raycast" })
         {
-            Setup(); Wall(layer, new Vector2(.55f, .25f), new Vector2(.1f, 2));
-            Check(Call("FindControlSwitchCandidate") == target, layer + " furniture does not become a wall");
+            Setup(); var obstacle = Wall(layer, new Vector2(.55f, .25f), new Vector2(.1f, 2));
+            Blocked(layer + " solid obstacle");
+            obstacle.isTrigger = true; Physics2D.SyncTransforms();
+            Check(Call("FindControlSwitchCandidate") == target, layer + " interaction trigger is not a solid obstacle");
+            obstacle.isTrigger = false; obstacle.enabled = false; Physics2D.SyncTransforms();
+            Check(Call("FindControlSwitchCandidate") == target, layer + " disabled obstacle permits possession");
+            obstacle.enabled = true; obstacle.gameObject.SetActive(false); Physics2D.SyncTransforms();
+            Check(Call("FindControlSwitchCandidate") == target, layer + " inactive obstacle permits possession");
         }
+        Setup();
+        // Dense trigger stacks can saturate both linecast and endpoint buffers.
+        for (int i = 0; i < 70; i++) Wall("Default", new Vector2(.55f, .25f), new Vector2(2, 2), true);
+        Check(Call("FindControlSwitchCandidate") == target, "many ignored triggers do not block possession");
+        Wall("Visible Non Blocking", new Vector2(.55f, .25f), new Vector2(.08f, 2));
+        Blocked("obstacle cannot be hidden by saturated trigger results");
         foreach (bool atSource in new[] { true, false })
         {
             Setup(); bool starts = Physics2D.queriesStartInColliders;
             try
             {
                 Physics2D.queriesStartInColliders = false;
-                Wall("Blocks", new Vector2(atSource ? 0 : 1.1f, .25f), new Vector2(.08f, 1));
+                Wall("Default", new Vector2(atSource ? 0 : 1.1f, .25f), new Vector2(.08f, 1));
                 Blocked("wall contains " + (atSource ? "source" : "target") + " center");
             }
             finally { Physics2D.queriesStartInColliders = starts; }
         }
         Setup(); player.gameObject.layer = target.gameObject.layer = LayerMask.NameToLayer("Blocks");
         Check(Call("FindControlSwitchCandidate") == target, "character colliders never self-occlude");
+        var child = Own(new GameObject("Target child collider")); child.transform.SetParent(target.transform, false);
+        child.transform.localPosition = new Vector3(-.55f, .25f); child.AddComponent<BoxCollider2D>();
+        Physics2D.SyncTransforms();
+        Check(Call("FindControlSwitchCandidate") == target, "character child colliders do not self-occlude");
         target.gameObject.SetActive(false);
         Check(Call("FindControlSwitchCandidate") == null, "unloaded target cannot enter registry fallback");
 
         Setup(); Check(!Advance(.3f) && player.IsPossessionInProgress && ai.IsPossessionLocked, "normal channel starts");
         var particles = Get<PossessionTransferParticles>(player, "possessionTransferParticles");
         int energy = player.CharacterData.FinalPossessionEnergy;
-        var door = Wall("Blocks", new Vector2(.55f, .25f), new Vector2(.1f, 2));
+        var door = Wall("Default", new Vector2(.55f, .25f), new Vector2(.1f, 2));
         Check(!Advance(10) && !player.IsPossessionInProgress && !ai.IsPossessionLocked, "door closing interrupts and unlocks");
         Check(Get<ZeldaFourWayMover>(player, "pendingControlTarget") == null && player.PossessionProgress == 0, "interrupted progress resets");
         Check(!Get<bool>(particles, "emitting") && Get<bool>(particles, "cancelled"), "wall interruption cancels transfer particles");

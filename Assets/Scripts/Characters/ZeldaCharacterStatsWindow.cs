@@ -55,6 +55,7 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
     private Image skillDiscoveryIcon;
     private string cachedNativeSkillId;
     private PlayerGrowthAttributes.SkillDefinition nativeSkillDefinition;
+    private readonly AttributeSourceHighlight sourceHighlight = new AttributeSourceHighlight();
 
     public void Configure(ZeldaCharacterData source, Vector2 localOffset, float displayScale)
     {
@@ -72,6 +73,7 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
     {
         if (data == null)
         {
+            sourceHighlight.Hide();
             return;
         }
 
@@ -108,6 +110,7 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
 
     private void OnDisable()
     {
+        sourceHighlight.Hide();
         // The overlay is a separate root, so streaming/death would otherwise
         // leave the last visible panel behind with no LateUpdate to fade it.
         isVisible = false;
@@ -120,6 +123,7 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
 
     private void OnDestroy()
     {
+        sourceHighlight.Dispose();
         if (overlayObject != null)
         {
             Destroy(overlayObject);
@@ -399,6 +403,7 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
             canvasGroup.alpha = visibilityAlpha;
             if (!visible)
             {
+                sourceHighlight.Hide();
                 overlayObject.SetActive(false);
             }
         }
@@ -408,6 +413,7 @@ public sealed class ZeldaCharacterStatsWindow : MonoBehaviour
     {
         visibilityAlpha = Mathf.MoveTowards(visibilityAlpha, isVisible ? 1f : 0f, deltaTime / FadeDuration);
         canvasGroup.alpha = visibilityAlpha;
+        sourceHighlight.Show(data != null ? data.transform : null, visibilityAlpha);
         if (!isVisible && visibilityAlpha <= 0f)
         {
             overlayObject.SetActive(false);

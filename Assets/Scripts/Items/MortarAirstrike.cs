@@ -21,6 +21,10 @@ public sealed class MortarAirstrike : MonoBehaviour
     private static AudioClip descentClip, blastClip;
     public Vector2 LandingPoint => transform.position;
     public bool HasImpacted => impacted;
+
+    private void OnEnable() => AutoSaveTransientActivity.Register(this);
+    private void OnDisable() => AutoSaveTransientActivity.Unregister(this);
+
     public static bool TryCall(ZeldaCharacterData user, float delay)
     {
         if (user == null || user.IsDead || user.IsGhostLike) return false;

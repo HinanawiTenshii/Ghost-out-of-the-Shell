@@ -35,6 +35,17 @@ public sealed class CardboardBoxWearState : MonoBehaviour
     private float exitAnimationElapsed;
     private Vector3 exitAnimationStartPosition;
     private bool returnItemAfterExitAnimation = true;
+    private bool landingDustPending;
+    private float movementBobHeight = 0.055f;
+    private float movementBobStrideLength = 0.75f;
+    // Presentation state is deliberately excluded from scalar save snapshots.
+    private struct MotionVisualState
+    {
+        public Vector3 lastPosition;
+        public float phase, height;
+        public Vector2 worldOffset;
+    }
+    private MotionVisualState motionVisual;
     private readonly List<SpriteRenderer> hiddenCharacterRenderers =
         new List<SpriteRenderer>();
     private readonly List<bool> hiddenCharacterRendererStates =
@@ -49,7 +60,11 @@ public sealed class CardboardBoxWearState : MonoBehaviour
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetVisionRegistry() => ActiveWornBoxes.Clear();
-    private void OnEnable() => ActiveWornBoxes.Add(this);
+    private void OnEnable()
+    {
+        ActiveWornBoxes.Add(this);
+        motionVisual.lastPosition = transform.position;
+    }
     private void OnDisable() => ActiveWornBoxes.Remove(this);
 
     internal static float ClipNpcVisionRay(Vector2 origin, Vector2 direction,
@@ -60,7 +75,7 @@ public sealed class CardboardBoxWearState : MonoBehaviour
             if (box == null || !box.isActiveAndEnabled || box.remainingBlockedAttacks <= 0)
                 continue;
             distance = CardboardBoxNpcVision.Clip(origin, direction, distance,
-                observer, ignoredTarget, box.transform, box.visualRenderer);
+                observer, ignoredTarget, box.transform, box.visualRenderer, box.motionVisual.worldOffset);
         }
         return distance;
     }
@@ -77,6 +92,9 @@ public sealed class CardboardBoxWearState : MonoBehaviour
             staminaDrainPerSecond = source.StaminaDrainPerSecond;
             movementSpeedMultiplier = source.WornMovementSpeedMultiplier;
             wornVisualOffset = source.WornVisualOffset;
+            movementBobHeight = source.WornBobHeight;
+            movementBobStrideLength = source.WornBobStrideLength;
+            landingDustPending = source.LandingDustEnabled;
             sourceMaximumStackSize = source.MaxStackSize;
             remainingBlockedAttacks = source.MaximumBlockedAttacks;
             fragmentCount = source.FragmentCount;
@@ -91,6 +109,47 @@ public sealed class CardboardBoxWearState : MonoBehaviour
         HideCharacterVisuals();
         CreateVisual();
         mover?.RegisterCardboardBox(this);
+    }
+
+    public void RestoreSavedFields(List<SavedScalarFields.Value> fields)
+    {
+        SavedScalarFields.Apply(this, fields);
+        // Restoring a disguise is not putting a new box down. Also handles old
+        // saves made halfway through the enter animation, without a false burst.
+        landingDustPending = false;
+        enterAnimationPlaying = false;
+        motionVisual = new MotionVisualState { lastPosition = transform.position };
+        if (visualObject != null) visualObject.transform.localPosition = wornVisualOffset;
+    }
+
+    private void LateUpdate() => UpdateMovementVisual(Time.deltaTime);
+
+    private void UpdateMovementVisual(float deltaTime)
+    {
+        Vector3 position = transform.position;
+        float distance = Vector2.Distance(position, motionVisual.lastPosition);
+        motionVisual.lastPosition = position;
+        if (visualObject == null || exiting || enterAnimationPlaying || deltaTime <= 0f) return;
+
+        // Use actual displacement: pushing against a wall must not look like walking.
+        // A scene teleport should not advance the gait by many strides.
+        float targetHeight = 0f;
+        if (distance > 0.0001f && distance < Mathf.Max(0.5f, deltaTime * 15f))
+        {
+            motionVisual.phase = Mathf.Repeat(motionVisual.phase + distance * Mathf.PI * 2f /
+                Mathf.Max(0.1f, movementBobStrideLength), Mathf.PI * 2f);
+            targetHeight = (1f - Mathf.Cos(motionVisual.phase)) * 0.5f * movementBobHeight;
+        }
+        motionVisual.height = Mathf.Lerp(motionVisual.height, targetHeight, 1f - Mathf.Exp(-22f * deltaTime));
+        if (distance <= 0.0001f && motionVisual.height < 0.0001f)
+        {
+            motionVisual.height = 0f;
+            motionVisual.phase = 0f;
+        }
+        float localHeight = motionVisual.height / Mathf.Max(0.0001f, Mathf.Abs(transform.lossyScale.y));
+        visualObject.transform.localPosition = wornVisualOffset + Vector2.up * localHeight;
+        // NPC vision remains at the resting bounds; only the drawing bobs.
+        motionVisual.worldOffset = transform.TransformVector(Vector3.up * localHeight);
     }
 
     private void Update()
@@ -202,6 +261,11 @@ public sealed class CardboardBoxWearState : MonoBehaviour
         {
             enterAnimationPlaying = false;
             visualObject.transform.localPosition = wornVisualOffset;
+            if (landingDustPending)
+            {
+                landingDustPending = false;
+                CardboardBoxLandingDust.Play(visualRenderer, gameObject);
+            }
         }
     }
 
@@ -363,6 +427,7 @@ public sealed class CardboardBoxWearState : MonoBehaviour
         UpdateVisualFacing();
         enterAnimationElapsed = 0f;
         enterAnimationPlaying = true;
+        motionVisual = new MotionVisualState { lastPosition = transform.position };
     }
 
     private void UpdateVisualFacing()

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Level2-Floor2
   m_EditorClassIdentifier: 
   schemaVersion: 6
-  sourceRevision: 3d202c2b517f40b9dd2e329689aed4a7
+  sourceRevision: 50e43aa6cce6345be012e70dc8e53cd6
   sceneName: Level2-Floor2
   displayName: "\u57CE\u9547\u4E8C\u5C42"
   blockPaths:
@@ -2706,58 +2706,58 @@ MonoBehaviour:
     - {x: -21.193115, y: -3.5968869}
     - {x: -21.193115, y: -4.096887}
   transitions:
-  - position: {x: -75.97, y: -25.24}
-    targetSceneName: Level2-Floor1
-    preservesSceneState: 1
-  - position: {x: -109.55, y: 41.79}
-    targetSceneName: Level2-Floor1
-    preservesSceneState: 1
-  - position: {x: -73.65, y: 11.57}
-    targetSceneName: Level2-Floor1
-    preservesSceneState: 1
-  - position: {x: -104.1, y: 11.57}
-    targetSceneName: Level2-Floor1
-    preservesSceneState: 1
-  - position: {x: -60.14, y: -9.86}
-    targetSceneName: Level2-Floor1
-    preservesSceneState: 1
-  - position: {x: -27.13, y: -9.86}
-    targetSceneName: Level2-Floor1
-    preservesSceneState: 1
-  - position: {x: 55.4, y: -4.73}
-    targetSceneName: Level2-Floor1
-    preservesSceneState: 1
-  - position: {x: 107.78, y: 5.35}
-    targetSceneName: Level2-Floor1
-    preservesSceneState: 1
-  - position: {x: 87.488, y: 53.48}
-    targetSceneName: Level2-Floor1
-    preservesSceneState: 1
-  - position: {x: 28.93, y: 53.48}
-    targetSceneName: Level2-Floor1
-    preservesSceneState: 1
-  - position: {x: -24.67, y: 54.41}
-    targetSceneName: Level2-Floor1
-    preservesSceneState: 1
-  - position: {x: -51.24, y: 23.94}
-    targetSceneName: Level2-Floor1
-    preservesSceneState: 1
-  - position: {x: 61.57, y: 48.6}
-    targetSceneName: Level2-Floor1
-    preservesSceneState: 1
-  - position: {x: 88.66, y: 23.84}
-    targetSceneName: Level2-Floor1
-    preservesSceneState: 1
-  - position: {x: 74.91, y: -30.35}
-    targetSceneName: Level2-Floor1
-    preservesSceneState: 1
-  - position: {x: 56.6, y: 32.47}
+  - position: {x: 68.32, y: 30.82}
     targetSceneName: Level2-Floor1
     preservesSceneState: 1
   - position: {x: 46.79, y: 5.03}
     targetSceneName: Level2-Floor1
     preservesSceneState: 1
-  - position: {x: 68.32, y: 30.82}
+  - position: {x: 56.6, y: 32.47}
+    targetSceneName: Level2-Floor1
+    preservesSceneState: 1
+  - position: {x: 74.91, y: -30.35}
+    targetSceneName: Level2-Floor1
+    preservesSceneState: 1
+  - position: {x: 88.66, y: 23.84}
+    targetSceneName: Level2-Floor1
+    preservesSceneState: 1
+  - position: {x: 61.57, y: 48.6}
+    targetSceneName: Level2-Floor1
+    preservesSceneState: 1
+  - position: {x: -51.24, y: 23.94}
+    targetSceneName: Level2-Floor1
+    preservesSceneState: 1
+  - position: {x: -24.67, y: 54.41}
+    targetSceneName: Level2-Floor1
+    preservesSceneState: 1
+  - position: {x: 28.93, y: 53.48}
+    targetSceneName: Level2-Floor1
+    preservesSceneState: 1
+  - position: {x: 87.488, y: 53.48}
+    targetSceneName: Level2-Floor1
+    preservesSceneState: 1
+  - position: {x: 107.78, y: 5.35}
+    targetSceneName: Level2-Floor1
+    preservesSceneState: 1
+  - position: {x: 55.4, y: -4.73}
+    targetSceneName: Level2-Floor1
+    preservesSceneState: 1
+  - position: {x: -27.13, y: -9.86}
+    targetSceneName: Level2-Floor1
+    preservesSceneState: 1
+  - position: {x: -60.14, y: -9.86}
+    targetSceneName: Level2-Floor1
+    preservesSceneState: 1
+  - position: {x: -104.1, y: 11.57}
+    targetSceneName: Level2-Floor1
+    preservesSceneState: 1
+  - position: {x: -73.65, y: 11.57}
+    targetSceneName: Level2-Floor1
+    preservesSceneState: 1
+  - position: {x: -109.55, y: 41.79}
+    targetSceneName: Level2-Floor1
+    preservesSceneState: 1
+  - position: {x: -75.97, y: -25.24}
     targetSceneName: Level2-Floor1
     preservesSceneState: 1
   questTargets:

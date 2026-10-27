@@ -138,6 +138,7 @@ public sealed partial class QuestJournalManager
         if (trackingChanged) TrackedQuestChanged?.Invoke();
         JournalEntriesChanged?.Invoke(stage == 3 ? QuestJournalChangeKind.Completed :
             added ? QuestJournalChangeKind.InitialSceneLoad : QuestJournalChangeKind.Updated);
+        RequestQuestAutoSave(Level2HeroProofId, "quest_hero_proof_stage");
     }
 
     // The ordinary SceneTransitionPoint clears the previous level's state. Queue

@@ -332,7 +332,7 @@ public static class ArenaChallengeSmoke
         }
         saved.world=JsonUtility.ToJson(world);
         Check(RetroSceneLoadReveal.BeginTransition(saved.scene,()=>typeof(GameSaveSystem).GetMethod("LoadCovered",BindingFlags.Instance|BindingFlags.NonPublic)
-            .Invoke(GameSaveSystem.Instance,new object[]{saved})),"load legacy world without arena records");
+            .Invoke(GameSaveSystem.Instance,new object[]{saved,null,-1,null})),"load legacy world without arena records");
         yield return Ready();
         Check(A!=null&&A.gameObject.activeInHierarchy&&A.scoreboard.display.gameObject.activeInHierarchy,"old save keeps newly installed arena/scoreboard");
         Check(A.CurrentPhase==ArenaChallengeController.Phase.Idle&&A.registrar.GetStartNode(P).id=="arena_start","old save starts fresh registration");

@@ -396,6 +396,9 @@ public sealed class ClockworkPuppetBoxDriver : MonoBehaviour
         previousPhysicsPosition = currentPosition;
     }
 
+    private Vector2 PuppetInteractionOrigin => drivingCollider != null
+        ? (Vector2)drivingCollider.transform.TransformPoint(drivingCollider.offset) : (Vector2)transform.position;
+
     private LeverData FindNearestManualLever(out float closestDistance)
     {
         LeverData closest = null;
@@ -412,7 +415,8 @@ public sealed class ClockworkPuppetBoxDriver : MonoBehaviour
             float distance = lever.GetSurfaceDistanceTo(
                 drivingCollider,
                 transform.position);
-            if (distance <= allowedDistance && distance < closestDistance)
+            if (distance <= allowedDistance && distance < closestDistance &&
+                ZeldaInteractionObstruction.HasClearPath(lever, transform, PuppetInteractionOrigin, lever.transform.position))
             {
                 closestDistance = distance;
                 closest = lever;
@@ -441,7 +445,8 @@ public sealed class ClockworkPuppetBoxDriver : MonoBehaviour
                     puppet.LockedDoorPryDistance,
                     puppet.ManualInteractionDistance)
                 : puppet.ManualInteractionDistance;
-            if (distance <= allowedDistance && distance < closestDistance)
+            if (distance <= allowedDistance && distance < closestDistance &&
+                ZeldaInteractionObstruction.HasClearPath(door, transform, PuppetInteractionOrigin, door.transform.position))
             {
                 closestDistance = distance;
                 closest = door;

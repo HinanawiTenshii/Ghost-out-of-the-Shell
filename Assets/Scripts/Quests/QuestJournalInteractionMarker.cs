@@ -52,7 +52,8 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
         bool addDirectEntry,
         string directEntryId,
         QuestJournalEventChange[] changes,
-        string directParentEntryId = null)
+        string directParentEntryId = null,
+        Vector2? worldOffset = null)
     {
         if (owner == null || !HasRelevantChange(addDirectEntry, directEntryId, changes))
             return null;
@@ -64,6 +65,7 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
             marker = owner.AddComponent<QuestJournalInteractionMarker>();
         }
 
+        if (worldOffset.HasValue) marker.markerOffset = worldOffset.Value;
         marker.SetEntrySources(addDirectEntry, directEntryId, changes, directParentEntryId);
         return marker;
     }

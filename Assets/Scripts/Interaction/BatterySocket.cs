@@ -220,6 +220,7 @@ public sealed class BatterySocket : MonoBehaviour, IConsumableExplosive
             batteryInstalled = true;
             EnsureBatteryIdentity();
             NotifyMechanismPowerState();
+            if (linkedMechanism != null) GameSaveSystem.RequestAutoSave("mechanism_battery_installed");
             return true;
         }
         finally { transferring = false; }
@@ -241,6 +242,7 @@ public sealed class BatterySocket : MonoBehaviour, IConsumableExplosive
             batteryInstalled = false;
             storedBattery = default;
             NotifyMechanismPowerState();
+            if (linkedMechanism != null) GameSaveSystem.RequestAutoSave("mechanism_battery_removed");
             return true;
         }
         finally { transferring = false; }

@@ -18,6 +18,7 @@ public static class SharedHostilitySmoke
     static void Tick()
     {
         if (!EditorApplication.isPlaying || !SessionState.GetBool("SharedHostilitySmoke", false)) return;
+        if (Time.frameCount < 3 || RetroSceneLoadReveal.IsPreparingGameplay) return;
         SessionState.SetBool("SharedHostilitySmoke", false);
         try { Verify(); Clear(); Debug.Log("SHARED_HOSTILITY_PASS checks=" + checks); EditorApplication.Exit(0); }
         catch (Exception e) { Debug.LogException(e); Clear(); EditorApplication.Exit(1); }
@@ -62,7 +63,7 @@ public static class SharedHostilitySmoke
             typeof(ZeldaCharacterAiBase).GetField("searchTimer", Flags) == null, "obsolete per-guard player timer fields removed");
         var timer = Setup(out var a, out var b);
         timer.Advance(8);
-        Check(timer.Remaining == 1, "shared countdown once, independent of guard count");
+        Check(timer.Remaining == 1, "shared countdown once, independent of guard count; remaining=" + timer.Remaining + " phase=" + timer.Phase + " preparing=" + RetroSceneLoadReveal.IsPreparingGameplay);
         Invoke(a, "UpdateTargetAndState", 20f); Invoke(b, "UpdateTargetAndState", 20f);
         Check(a.CurrentState == ZeldaAiState.Hostile && b.CurrentState == ZeldaAiState.Hostile && timer.Remaining == 1,
             "old per-NPC timeout cannot end pursuit; retaliation is not infinite");
@@ -175,5 +176,80 @@ public static class SharedHostilitySmoke
         a.GetComponent<Rigidbody2D>().position = newCenter;
         timer.Advance(9);
         Check(a.CaptureSaveState().searchCenter == newCenter, "new search captures a new entry centre");
+
+        VerifySearchMovement();
+    }
+
+    static T Get<T>(ZeldaCharacterAiBase ai, string field) => (T)typeof(ZeldaCharacterAiBase).GetField(field, Flags).GetValue(ai);
+    static void VerifySearchMovement()
+    {
+        var timer = Setup(out var a, out var b);
+        timer.Advance(9);
+        Check(Get<float>(a,"sharedSearchWaypointPauseDuration") == 2f && Get<float>(a,"sharedSearchMinimumMoveDistance") == 1.2f,
+            "shared search defaults: two-second pauses, 1.2-unit minimum movement");
+        Vector2 center = a.CaptureSaveState().searchCenter;
+        int movingLegs = 0;
+        for (int i = 0; i < 80; i++)
+        {
+            Vector2 origin = a.GetComponent<Rigidbody2D>().position;
+            Invoke(a,"ChooseNextSearchWaypoint");
+            Vector2 point = a.CaptureSaveState().searchWaypoint;
+            float distance = Vector2.Distance(origin, point);
+            if (distance >= 1.3499f) movingLegs++;
+            Check((distance >= 1.3499f || distance < .0001f) && Vector2.Distance(center,point) <= 1.8001f,
+                "every search leg includes minimum travel plus arrival tolerance within original search region");
+            a.GetComponent<Rigidbody2D>().position = point; Physics2D.SyncTransforms();
+        }
+        Check(movingLegs > 70, "open search area normally produces movement rather than waiting");
+        Vector2 arrived = a.GetComponent<Rigidbody2D>().position;
+        Set(a,"cornerEscapeTimer",1f); Set(a,"cornerEscapeDirection",Vector2.left);
+        Invoke(a,"TickSearch",.02f);
+        Check(a.CaptureSaveState().sharedSearchPauseRemaining == 2f && Get<Vector2>(a,"moveDirection") == Vector2.zero &&
+            Get<float>(a,"cornerEscapeTimer") == 0f, "arrival pauses instead of resampling and cancels old escape movement");
+        Invoke(a,"TickSearch",.5f);
+        var saved = JsonUtility.FromJson<ZeldaCharacterAiBase.SaveState>(JsonUtility.ToJson(a.CaptureSaveState()));
+        Check(Mathf.Abs(saved.sharedSearchPauseRemaining - 1.5f) < .001f, "remaining pause serializes");
+        a.ApplySaveState(saved);
+        Check(Mathf.Abs(a.CaptureSaveState().sharedSearchPauseRemaining - 1.5f) < .001f, "save/load preserves partial pause");
+        var randomBeforePause = UnityEngine.Random.state;
+        Invoke(a,"TickSearch",1.49f);
+        Check(Get<Vector2>(a,"moveDirection") == Vector2.zero && a.CaptureSaveState().searchWaypoint == arrived &&
+            UnityEngine.Random.state.Equals(randomBeforePause), "no navigation sampling or motion during pause");
+        Invoke(a,"TickSearch",.02f);
+        Check(a.CaptureSaveState().sharedSearchPauseRemaining == 0f && Vector2.Distance(arrived,a.CaptureSaveState().searchWaypoint) >= 1.3499f,
+            "pause expiry chooses next sufficiently distant point");
+
+        // An old save has no pause field. The next arrival still gets the new cadence.
+        saved.sharedSearchPauseRemaining = 0f; a.ApplySaveState(saved); Invoke(a,"TickSearch",.02f);
+        Check(a.CaptureSaveState().sharedSearchPauseRemaining == 2f, "old save starts using new cadence at next arrival");
+        Set(a,"facingDirection",Vector2.up);
+        player.transform.position = a.transform.position + Vector3.up; player.GetComponent<Rigidbody2D>().position = player.transform.position;
+        Physics2D.SyncTransforms(); timer.Advance(.1f);
+        Check(a.CurrentState == ZeldaAiState.Hostile && a.CaptureSaveState().sharedSearchPauseRemaining == 0f && timer.Remaining == 9f,
+            "seeing player interrupts pause immediately and restores shared hostility");
+
+        timer = Setup(out a,out b); Set(a,"searchRadius",.25f); timer.Advance(9);
+        Invoke(a,"TickSearch",.02f);
+        randomBeforePause = UnityEngine.Random.state;
+        for (int i = 0; i < 30; i++) Invoke(a,"TickSearch",.05f);
+        Check(Get<Vector2>(a,"moveDirection") == Vector2.zero && UnityEngine.Random.state.Equals(randomBeforePause),
+            "insufficient space waits rather than tiny moves or per-frame resampling");
+        Invoke(a,"TickSearch",.51f);
+        Check(a.CaptureSaveState().sharedSearchPauseRemaining == 2f && a.CaptureSaveState().searchWaypoint == Vector2.zero,
+            "bounded retry still cannot choose undersized leg");
+        timer.Advance(12);
+        Check(a.CurrentState == ZeldaAiState.Recovery && b.CurrentState == ZeldaAiState.Recovery,
+            "pauses do not extend shared search duration");
+
+        timer = Setup(out a,out b); timer.Advance(9);
+        Invoke(a,"TickSearch",.02f); Invoke(a,"TickSearch",1.3f);
+        Check(a.CaptureSaveState().sharedSearchPauseRemaining == 2f, "stalled route also waits before retrying");
+        var independent = Npc(40,0,typeof(SkeletonCharacterAi));
+        Set(independent,"searchRadius",.5f); Invoke(independent,"BeginSearch");
+        independent.GetComponent<Rigidbody2D>().position = independent.CaptureSaveState().searchWaypoint;
+        Invoke(independent,"TickSearch",.02f);
+        Check(independent.CaptureSaveState().sharedSearchPauseRemaining == 0f &&
+            independent.CaptureSaveState().sharedPlayerPhase == 0, "independent creature search is unchanged");
+        Debug.Log("SHARED_SEARCH_MOVEMENT_PASS totalChecks=" + checks);
     }
 }

@@ -34342,6 +34342,14 @@ PrefabInstance:
   m_Modification:
     m_TransformParent: {fileID: 1087933806}
     m_Modifications:
+    - target: {fileID: 2481516793516481736, guid: 4cabe481333a16040816eded09dad475, type: 3}
+      propertyPath: contrast
+      value: 1.3
+      objectReference: {fileID: 0}
+    - target: {fileID: 2481516793516481736, guid: 4cabe481333a16040816eded09dad475, type: 3}
+      propertyPath: phosphorGlow
+      value: 0.5
+      objectReference: {fileID: 0}
     - target: {fileID: 2481516793516481738, guid: 4cabe481333a16040816eded09dad475, type: 3}
       propertyPath: m_RootOrder
       value: 6

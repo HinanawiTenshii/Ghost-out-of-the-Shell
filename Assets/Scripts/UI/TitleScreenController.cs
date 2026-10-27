@@ -126,6 +126,7 @@ public sealed partial class TitleScreenController : MonoBehaviour
         mainStatus = CreateMenuLabel(optionsRoot, "", -228f, 23);
         mainStatus.rectTransform.sizeDelta = new Vector2(320f, 84f);
         RefreshContinueButton();
+        ExhibitionEdition.AddMenuCaption(transform, titleFont);
     }
 
     private void OpenLoadSlots()

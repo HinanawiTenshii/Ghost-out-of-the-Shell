@@ -34,7 +34,8 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         CannotOpen = 2,
         PasswordError = 3,
         Opened = 4,
-        General = 5
+        General = 5,
+        AutomaticSave = 6
     }
 
     private sealed class JournalStylePopupEntry
@@ -268,16 +269,9 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         Scene initialScene = gameObject.scene;
         RegisterSceneTaskConfiguration(initialScene, this);
         currentTaskSceneKey = GetSceneTaskKey(initialScene);
-        if (persistBetweenScenes)
-        {
-            // Capture the authored scene configuration above before moving the
-            // HUD out of SceneAssets; never retain the scene container itself.
-            if (transform.parent != null)
-            {
-                transform.SetParent(null, true);
-            }
-            DontDestroyOnLoad(gameObject);
-        }
+        // Capture configuration now, but move the Canvas only after scene
+        // integration. Moving it in Awake can re-enter Unity's native scene
+        // registration while CRT/canvas initialization is still in progress.
 
         hudCanvas = GetComponent<Canvas>();
         hudCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -342,6 +336,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
 
     private void Start()
     {
+        EnsurePersistentHud();
         // A final event hookup after every scene object's Awake has run. From
         // this point onward the HUD is updated only by its data events.
         TryConnectDataSource();
@@ -469,6 +464,7 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
+        EnsurePersistentHud();
         ApplyTaskStateForScene(scene);
         EnforceHudRenderPriority();
         TryConnectDataSource();
@@ -478,6 +474,18 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         RefreshInventoryDisplay();
         UpdateTaskPointer();
         RefreshQuestObjectivePanel();
+    }
+
+    private void EnsurePersistentHud()
+    {
+        if (!persistBetweenScenes || instance != this || gameObject.scene.name == "DontDestroyOnLoad")
+            return;
+
+        // Persist only the HUD, not an authored SceneAssets parent. sceneLoaded
+        // handles scene objects; Start also covers runtime-created HUDs.
+        if (transform.parent != null)
+            transform.SetParent(null, true);
+        DontDestroyOnLoad(gameObject);
     }
 
     private void EnforceHudRenderPriority()
@@ -2467,6 +2475,8 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
             : message.Trim();
         if (value == "任务日志已更新")
             return JournalStyleNotificationKind.QuestJournalUpdate;
+        if (value == "自动存档已完成")
+            return JournalStyleNotificationKind.AutomaticSave;
         if (value.StartsWith("需要"))
             return JournalStyleNotificationKind.RequiredKey;
         if (value == "无法被打开")

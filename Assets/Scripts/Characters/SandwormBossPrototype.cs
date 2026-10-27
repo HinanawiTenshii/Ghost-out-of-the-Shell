@@ -491,6 +491,19 @@ public sealed class SandwormBossPrototype : MonoBehaviour
         return Initialize() && IsInsideArea(point) && obstacles.IsPointClear(point, Clearance);
     }
 
+    /// <summary>A narrow safe approach band outside the boss's authored attack area.</summary>
+    public bool IsNearEncounterBoundary(Vector2 point, float worldMargin)
+    {
+        if (!Initialize() || IsInsideArea(point)) return false;
+        Vector2 local = (Vector2)transform.InverseTransformPoint(point) - wanderCenterOffset;
+        Vector2 half = UsableHalfSize;
+        if (half.x <= 0f || half.y <= 0f) return false;
+        Vector2 nearest = wanderCenterOffset + new Vector2(
+            Mathf.Clamp(local.x, -half.x, half.x), Mathf.Clamp(local.y, -half.y, half.y));
+        Vector2 worldNearest = transform.TransformPoint(nearest);
+        return (worldNearest - point).sqrMagnitude <= worldMargin * worldMargin;
+    }
+
     private bool IsInsideArea(Vector2 point)
     {
         Vector2 local = transform.InverseTransformPoint(new Vector3(point.x, point.y, transform.position.z));

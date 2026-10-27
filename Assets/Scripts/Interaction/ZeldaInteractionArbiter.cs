@@ -202,6 +202,8 @@ public static class ZeldaInteractionArbiter
                 continue;
             }
 
+            if (!HasClearInteractionPath(offer.owner, offer.mover, offer.key, offer.position)) continue;
+
             bestIndex = i;
             bestDistanceSquared = distanceSquared;
             bestFacingDot = facingDot;
@@ -219,7 +221,8 @@ public static class ZeldaInteractionArbiter
             for (int i = 0; i < Offers.Count; i++)
                 if (i != bestIndex && Offers[i].frame == frame &&
                     !IsGhostFormInteraction(Offers[i].mover, Offers[i].key) &&
-                    ShareDialogueTarget(Offers[bestIndex], Offers[i]))
+                    ShareDialogueTarget(Offers[bestIndex], Offers[i]) &&
+                    HasClearInteractionPath(Offers[i].owner, Offers[i].mover, Offers[i].key, Offers[i].position))
                 { companionIndex = i; break; }
         companionOwner = companionIndex >= 0 ? Offers[companionIndex].owner : null;
         companionMover = companionIndex >= 0 ? Offers[companionIndex].mover : null;
@@ -240,11 +243,8 @@ public static class ZeldaInteractionArbiter
             for (int i = 0; i < Requests.Count; i++)
             {
                 Request request = Requests[i];
-                if (request.frame == frame &&
-                    IsSelected(request.owner, request.mover, request.key) &&
-                    Input.GetKeyDown(request.key) && request.action != null)
+                if (Input.GetKeyDown(request.key) && TryExecuteSelectedRequest(request))
                 {
-                    request.action.Invoke();
                     break;
                 }
             }
@@ -252,6 +252,24 @@ public static class ZeldaInteractionArbiter
 
         Offers.RemoveAll(offer => offer.frame <= frame);
         Requests.RemoveAll(request => request.frame <= frame);
+    }
+
+    private static bool HasClearInteractionPath(Component owner, ZeldaFourWayMover mover, KeyCode key, Vector2 position)
+    {
+        // Keep the intentional shop-counter dialogue policy. Possession already
+        // validates its own centre-to-centre path throughout the channel.
+        return owner is CharacterDialogue || (key == KeyCode.F && owner is ZeldaFourWayMover) ||
+            ZeldaInteractionObstruction.HasClearPath(owner, mover, position);
+    }
+
+    private static bool TryExecuteSelectedRequest(Request request)
+    {
+        if (request.frame != Time.frameCount || request.action == null || request.owner == null || request.mover == null ||
+            !request.owner.gameObject.activeInHierarchy || !request.mover.isActiveAndEnabled ||
+            !IsSelected(request.owner, request.mover, request.key) ||
+            !HasClearInteractionPath(request.owner, request.mover, request.key, request.position)) return false;
+        request.action.Invoke();
+        return true;
     }
 
     private static void EnsureRunner()

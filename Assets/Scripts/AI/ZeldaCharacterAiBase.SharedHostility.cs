@@ -2,9 +2,40 @@ using UnityEngine;
 
 public partial class ZeldaCharacterAiBase
 {
+    [Header("Shared Hostility Search Movement")]
+    [SerializeField, Min(.1f), InspectorName("全局搜索到点停留时间"), Tooltip("仅在全局敌对后的搜索中生效；停留仍计入全局搜索总时间。")]
+    private float sharedSearchWaypointPauseDuration = 2f;
+    [SerializeField, Min(.1f), InspectorName("全局搜索最小移动距离"), Tooltip("从当前位置选取下一个搜索点的最短移动距离。空间不足时停留后重试，不缩短距离；不会改变声响吸引的调查。")]
+    private float sharedSearchMinimumMoveDistance = 1.2f;
+    private float sharedSearchPauseRemaining;
     private SharedPlayerHostilityTimer sharedPlayerTimer;
     private bool sharedReturnAfterStun;
-    internal void SetSharedPlayerTimer(SharedPlayerHostilityTimer timer) => sharedPlayerTimer = timer;
+    internal void SetSharedPlayerTimer(SharedPlayerHostilityTimer timer)
+    {
+        sharedPlayerTimer = timer;
+        if (timer == null) sharedSearchPauseRemaining = 0f;
+    }
+    private bool UsesSharedSearchMovement => sharedPlayerTimer != null && UsesSharedPlayerTimer &&
+        sharedPlayerTimer.Phase == SharedPlayerHostilityTimer.IncidentPhase.Search;
+
+    private bool TickSharedSearchPause(float deltaTime)
+    {
+        if (!UsesSharedSearchMovement || sharedSearchPauseRemaining <= 0f) return false;
+        moveDirection = Vector2.zero;
+        sharedSearchPauseRemaining = Mathf.Max(0f, sharedSearchPauseRemaining - Mathf.Max(0f, deltaTime));
+        if (sharedSearchPauseRemaining > 0f) return true;
+        ChooseNextSearchWaypoint();
+        return false;
+    }
+    private void BeginSharedSearchPause()
+    {
+        moveDirection = Vector2.zero;
+        cornerEscapeTimer = cornerStuckTimer = 0f;
+        cornerEscapeDirection = Vector2.zero;
+        ResetCornerOscillationWindow(rb.position);
+        sharedSearchPauseRemaining = Mathf.Max(.1f, sharedSearchWaypointPauseDuration);
+        InvalidateNavigationPlan();
+    }
     protected virtual bool UsesSharedPlayerTimer => !IsSilenceOathIncidentPrivate && ArenaChallengeController.ForAi(this) == null && !(this is AutomatonCharacterAi) && !(this is SkeletonCharacterAi) && !(this is TurretCharacterAi);
     private void SyncSharedPlayerIncident()
     {
@@ -75,6 +106,7 @@ public partial class ZeldaCharacterAiBase
     }
     private void RestoreSharedPlayerIncident(SaveState state)
     {
+        sharedSearchPauseRemaining = 0f;
         if (sharedPlayerTimer != null) sharedPlayerTimer.Leave(this);
         sharedReturnAfterStun = state.sharedReturnAfterStun;
         if (!RetainsSharedPlayerIncident(ZeldaRuntimeRegistry.GetControlledMover())) return;
@@ -85,6 +117,16 @@ public partial class ZeldaCharacterAiBase
         {
             var timer = SharedPlayerHostilityTimer.ForScene(gameObject.scene);
             timer.Restore(this, 1, timer.HostileDuration, lastKnownTargetPosition);
+        }
+        // Missing in older saves => zero: resume the current leg, then use the
+        // new cadence. New saves preserve a partially completed pause exactly.
+        sharedSearchPauseRemaining = UsesSharedSearchMovement &&
+            (currentState == ZeldaAiState.Search || (IsStunned && stateBeforeStun == ZeldaAiState.Search))
+            ? Mathf.Clamp(state.sharedSearchPauseRemaining, 0f, Mathf.Max(.1f, sharedSearchWaypointPauseDuration)) : 0f;
+        if (sharedSearchPauseRemaining > 0f)
+        {
+            cornerEscapeTimer = cornerStuckTimer = 0f;
+            cornerEscapeDirection = Vector2.zero;
         }
     }
 }

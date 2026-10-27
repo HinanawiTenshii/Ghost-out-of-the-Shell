@@ -15,7 +15,7 @@ public sealed class SandwormZeldaCharacterData : ZeldaCharacterData
     public static System.Collections.Generic.IReadOnlyCollection<SandwormZeldaCharacterData> ActiveSandworms => activeSandworms;
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetActiveSandworms() => activeSandworms.Clear();
-    private void OnEnable() => activeSandworms.Add(this);
+    private void OnEnable() { if (!IsDead) activeSandworms.Add(this); }
 
     public bool HasVisibleBodyPart(Camera camera, CameraCircularVision vision, Plane[] frustum)
     {
@@ -89,6 +89,11 @@ public sealed class SandwormZeldaCharacterData : ZeldaCharacterData
         RestoreWholeBodyFeedback();
         GetComponent<SandwormEruptionAttack>()?.CancelAttack();
         base.ApplyRuntimeState(saved);
+        // Old/manual snapshots can contain an active root with zero health.
+        // Such a restored corpse has no pending death/reward transaction and
+        // must not permanently block every future automatic checkpoint.
+        if (!IsDead && isActiveAndEnabled) activeSandworms.Add(this);
+        else activeSandworms.Remove(this);
         if (States == null || string.IsNullOrEmpty(saved.characterSpecificState)) return;
         SavedSandwormState extra = JsonUtility.FromJson<SavedSandwormState>(saved.characterSpecificState);
         if (extra.version == 1) States.SetState(extra.state);
@@ -209,6 +214,9 @@ public sealed class SandwormZeldaCharacterData : ZeldaCharacterData
         proof.SetUniqueInstanceId(identity);
         proof.gameObject.AddComponent<SceneTravelStableId>().Initialize(identity);
         proof.MarkAsDropped();
+        // Death, stable reward identity and dropped-item registration have all
+        // committed. This queues a safe save; it never captures a damage callback.
+        GameSaveSystem.RequestAutoSave("sandworm_defeated_reward_spawned", true);
     }
 
     protected override void PlayDeathSound()

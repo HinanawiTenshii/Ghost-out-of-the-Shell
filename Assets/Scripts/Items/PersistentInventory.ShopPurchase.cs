@@ -81,6 +81,7 @@ public sealed partial class PersistentInventory
             item.CompleteShopPurchase(this);
             NotifyChanged();
             SelectSlot(destination);
+            GameSaveSystem.RequestAutoSave("shop_purchase:" + item.ItemId, item.IsAutoSaveMilestonePickup);
             return true;
         }
         finally { itemExchangeInProgress = false; }

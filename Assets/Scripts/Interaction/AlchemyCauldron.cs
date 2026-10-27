@@ -98,6 +98,7 @@ public sealed class AlchemyCauldron : MonoBehaviour
         var slot=inventory!=null ? inventory.GetSlot(inventory.SelectedSlotIndex) : null;
         if(slot==null || slot.IsEmpty) { message=StatusText()+"\n请选择"+(IsReady ? "玻璃瓶承接药水" : "一份草药粉");return false; }
         transferring=true;
+        bool wasReady=IsReady;
         try
         {
             bool success;
@@ -120,7 +121,12 @@ public sealed class AlchemyCauldron : MonoBehaviour
                 });
                 message=success ? StatusText() : "未能提交草药，物品已保留";
             }
-            if(success)mover.TryBeginItemAttack(.24f);
+            if(success)
+            {
+                mover.TryBeginItemAttack(.24f);
+                if(wasReady || IsReady) GameSaveSystem.RequestAutoSave(wasReady ? "potion_bottled" : "potion_brewed");
+                else GameSaveSystem.MarkAutoSaveProgress();
+            }
             return success;
         }
         finally{transferring=false;}

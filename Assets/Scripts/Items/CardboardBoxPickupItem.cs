@@ -17,6 +17,14 @@ public sealed class CardboardBoxPickupItem : PickupItemBase, IConsumableExplosiv
     [SerializeField, Min(1)] private int maximumBlockedAttacks = 2;
     [SerializeField] private Vector2 wornVisualOffset = new Vector2(0f, 0.08f);
 
+    [Header("Box Feedback / 纸箱动效")]
+    [SerializeField, InspectorName("落地扬尘")]
+    private bool landingDustEnabled = true;
+    [SerializeField, Min(0f), InspectorName("行走起伏高度（世界单位）")]
+    private float wornBobHeight = 0.055f;
+    [SerializeField, Min(0.1f), InspectorName("行走起伏步距")]
+    private float wornBobStrideLength = 0.75f;
+
     [Header("Ground Box")]
     [SerializeField, Min(0.1f)] private float itemInsertionDistance = 1.35f;
     [SerializeField, Min(1)] private int groundAttackDurability = 2;
@@ -73,6 +81,9 @@ public sealed class CardboardBoxPickupItem : PickupItemBase, IConsumableExplosiv
     public float WornMovementSpeedMultiplier => wornMovementSpeedMultiplier;
     public int MaximumBlockedAttacks => maximumBlockedAttacks;
     public Vector2 WornVisualOffset => wornVisualOffset;
+    public bool LandingDustEnabled => landingDustEnabled;
+    public float WornBobHeight => Mathf.Max(0f, wornBobHeight);
+    public float WornBobStrideLength => Mathf.Max(0.1f, wornBobStrideLength);
     public int FragmentCount => fragmentCount;
     public float FragmentLifetime => fragmentLifetime;
     public float FragmentSpeed => fragmentSpeed;
@@ -127,6 +138,13 @@ public sealed class CardboardBoxPickupItem : PickupItemBase, IConsumableExplosiv
     private void OnEnable()
     {
         ActiveBoxes.Add(this);
+    }
+
+    protected override void OnDropped()
+    {
+        base.OnDropped();
+        // Explicit placement only: Awake/OnEnable also run during streaming and loads.
+        if (landingDustEnabled) CardboardBoxLandingDust.Play(GetComponent<SpriteRenderer>(), gameObject);
     }
 
     protected override void OnDisable()
@@ -654,6 +672,8 @@ public sealed class CardboardBoxPickupItem : PickupItemBase, IConsumableExplosiv
         wornMovementSpeedMultiplier = Mathf.Clamp(
             wornMovementSpeedMultiplier, 0.1f, 1f);
         maximumBlockedAttacks = Mathf.Max(1, maximumBlockedAttacks);
+        wornBobHeight = Mathf.Max(0f, wornBobHeight);
+        wornBobStrideLength = Mathf.Max(0.1f, wornBobStrideLength);
         itemInsertionDistance = Mathf.Max(0.1f, itemInsertionDistance);
         groundAttackDurability = Mathf.Max(1, groundAttackDurability);
         fragmentCount = Mathf.Max(1, fragmentCount);
@@ -668,7 +688,8 @@ public sealed class CardboardBoxPickupItem : PickupItemBase, IConsumableExplosiv
 internal static class CardboardBoxNpcVision
 {
     internal static float Clip(Vector2 origin, Vector2 direction, float distance,
-        Transform observer, Transform ignoredTarget, Transform owner, SpriteRenderer renderer)
+        Transform observer, Transform ignoredTarget, Transform owner, SpriteRenderer renderer,
+        Vector2 visualOnlyOffset = default)
     {
         if (distance <= 0f || renderer == null || renderer.sprite == null || !renderer.enabled ||
             !renderer.gameObject.activeInHierarchy ||
@@ -680,6 +701,7 @@ internal static class CardboardBoxNpcVision
         // new colliders, or physics-layer changes.
         Vector2 end = origin + direction * distance;
         Bounds world = renderer.bounds;
+        world.center -= (Vector3)visualOnlyOffset;
         if (Mathf.Max(origin.x, end.x) < world.min.x || Mathf.Min(origin.x, end.x) > world.max.x ||
             Mathf.Max(origin.y, end.y) < world.min.y || Mathf.Min(origin.y, end.y) > world.max.y)
             return distance;
@@ -699,8 +721,8 @@ internal static class CardboardBoxNpcVision
         Vector2 max = (Vector2)sprite.min + Vector2.Scale(sprite.size, new Vector2(23f / 24f, 18f / 20f));
         if (renderer.flipX) { float x = min.x; min.x = -max.x; max.x = -x; }
         if (renderer.flipY) { float y = min.y; min.y = -max.y; max.y = -y; }
-        Vector2 start = renderer.transform.InverseTransformPoint(origin);
-        Vector2 delta = (Vector2)renderer.transform.InverseTransformPoint(end) - start;
+        Vector2 start = renderer.transform.InverseTransformPoint(origin + visualOnlyOffset);
+        Vector2 delta = (Vector2)renderer.transform.InverseTransformPoint(end + visualOnlyOffset) - start;
         // Boxes remain passable. An NPC crossing one must not blind itself.
         if (start.x >= min.x && start.x <= max.x && start.y >= min.y && start.y <= max.y)
             return distance;

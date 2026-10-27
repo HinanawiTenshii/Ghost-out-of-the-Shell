@@ -12,7 +12,6 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
     // Screen-space overlay remains above the world, but stays below all regular UI canvases.
     private const int OverlaySortingOrder = 31000;
     private const int DimmerSortingOrder = 30000;
-    private const int HighlightSortingOrder = DimmerSortingOrder + 1;
     private const float FadeDuration = 0.12f;
     private const float OverlayDisplayScale = 0.5f;
     private static readonly Vector2 PanelSize = new Vector2(270f, 84f);
@@ -61,15 +60,7 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
     private RectTransform panelRect;
     private CanvasGroup canvasGroup;
     private Text requirementLabel;
-    private SpriteRenderer[] highlightedRenderers;
-    private Color[] originalRendererColors;
-    private int[] originalSortingLayerIds;
-    private int[] originalSortingOrders;
-    private GameObject highlightOverlayObject;
-    private Canvas highlightOverlayCanvas;
-    private RectTransform highlightOverlayRect;
-    private Image[] highlightImages;
-    private Transform highlightedSource;
+    private readonly AttributeSourceHighlight sourceHighlight = new AttributeSourceHighlight();
     private bool isVisible;
     private float visibilityAlpha;
     private int lastValue = int.MinValue;
@@ -94,7 +85,7 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
 
     private void ConfigureCommon()
     {
-        CacheHighlightRenderers();
+        sourceHighlight.Hide();
         if (!hasFixedWorldAnchor)
         {
             Transform sourceTransform = SourceTransform;
@@ -135,14 +126,10 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
 
     private void OnDestroy()
     {
-        RestoreSourceColors();
+        sourceHighlight.Dispose();
         if (overlayObject != null)
         {
             Destroy(overlayObject);
-        }
-        if (highlightOverlayObject != null)
-        {
-            Destroy(highlightOverlayObject);
         }
     }
 
@@ -398,242 +385,9 @@ public sealed class ZeldaRequirementWindow : MonoBehaviour
         }
     }
 
-    private void CacheHighlightRenderers()
-    {
-        Transform source = SourceTransform;
-        if (source == highlightedSource && highlightedRenderers != null)
-        {
-            return;
-        }
-
-        RestoreSourceColors();
-        highlightedSource = source;
-        highlightedRenderers = source.GetComponentsInChildren<SpriteRenderer>(true);
-        originalRendererColors = new Color[highlightedRenderers.Length];
-        originalSortingLayerIds = new int[highlightedRenderers.Length];
-        originalSortingOrders = new int[highlightedRenderers.Length];
-        for (int i = 0; i < highlightedRenderers.Length; i++)
-        {
-            originalRendererColors[i] = highlightedRenderers[i].color;
-            originalSortingLayerIds[i] = highlightedRenderers[i].sortingLayerID;
-            originalSortingOrders[i] = highlightedRenderers[i].sortingOrder;
-        }
-        RebuildHighlightOverlay();
-    }
-
     private void ApplySourceHighlight()
     {
-        if (highlightedRenderers == null || originalRendererColors == null)
-        {
-            return;
-        }
-
-        int topSortingLayerId = GetTopSortingLayerId();
-        int minimumOriginalOrder = int.MaxValue;
-        int maximumOriginalOrder = int.MinValue;
-        for (int i = 0; i < originalSortingOrders.Length; i++)
-        {
-            minimumOriginalOrder = Mathf.Min(minimumOriginalOrder, originalSortingOrders[i]);
-            maximumOriginalOrder = Mathf.Max(maximumOriginalOrder, originalSortingOrders[i]);
-        }
-        int orderRange = Mathf.Max(0, maximumOriginalOrder - minimumOriginalOrder);
-        // Keep the highlighted source above the dimmer, but strictly below
-        // its own attribute Canvas so it can never cover the window.
-        int highlightBaseOrder = Mathf.Min(
-            OverlaySortingOrder - orderRange - 1,
-            DimmerSortingOrder + 1);
-
-        for (int i = 0; i < highlightedRenderers.Length; i++)
-        {
-            SpriteRenderer renderer = highlightedRenderers[i];
-            if (renderer == null)
-            {
-                continue;
-            }
-
-            Color original = originalRendererColors[i];
-            Color white = new Color(1f, 1f, 1f, original.a);
-            renderer.color = Color.Lerp(original, white, visibilityAlpha);
-            if (visibilityAlpha > 0f)
-            {
-                renderer.sortingLayerID = topSortingLayerId;
-                renderer.sortingOrder = highlightBaseOrder + originalSortingOrders[i] - minimumOriginalOrder;
-            }
-            else
-            {
-                renderer.sortingLayerID = originalSortingLayerIds[i];
-                renderer.sortingOrder = originalSortingOrders[i];
-            }
-        }
-
-        UpdateHighlightOverlay();
-    }
-
-    private void RebuildHighlightOverlay()
-    {
-        if (highlightOverlayObject != null)
-        {
-            Destroy(highlightOverlayObject);
-        }
-
-        highlightOverlayObject = new GameObject(
-            name + " Requirement Highlight Overlay",
-            typeof(RectTransform));
-        int uiLayer = LayerMask.NameToLayer("UI");
-        if (uiLayer >= 0)
-        {
-            highlightOverlayObject.layer = uiLayer;
-        }
-
-        highlightOverlayCanvas = highlightOverlayObject.AddComponent<Canvas>();
-        highlightOverlayCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        highlightOverlayCanvas.overrideSorting = true;
-        highlightOverlayCanvas.sortingOrder = HighlightSortingOrder;
-        ConfigureResponsiveScaling(highlightOverlayObject);
-        highlightOverlayRect = highlightOverlayObject.transform as RectTransform;
-
-        int count = highlightedRenderers != null
-            ? highlightedRenderers.Length
-            : 0;
-        highlightImages = new Image[count];
-        for (int i = 0; i < count; i++)
-        {
-            GameObject imageObject = new GameObject(
-                "Highlighted Sprite " + (i + 1),
-                typeof(RectTransform),
-                typeof(CanvasRenderer),
-                typeof(Image));
-            imageObject.transform.SetParent(highlightOverlayRect, false);
-            if (uiLayer >= 0)
-            {
-                imageObject.layer = uiLayer;
-            }
-
-            Image image = imageObject.GetComponent<Image>();
-            image.raycastTarget = false;
-            image.preserveAspect = false;
-            highlightImages[i] = image;
-        }
-
-        CRTScreenEffect.RegisterCanvas(highlightOverlayCanvas);
-        highlightOverlayObject.SetActive(false);
-    }
-
-    private void UpdateHighlightOverlay()
-    {
-        if (highlightOverlayObject == null ||
-            highlightOverlayRect == null ||
-            highlightImages == null)
-        {
-            return;
-        }
-
-        bool show = visibilityAlpha > 0f;
-        if (highlightOverlayObject.activeSelf != show)
-        {
-            highlightOverlayObject.SetActive(show);
-        }
-        if (!show)
-        {
-            return;
-        }
-
-        Camera camera = Camera.main;
-        if (camera == null)
-        {
-            highlightOverlayObject.SetActive(false);
-            return;
-        }
-
-        int count = Mathf.Min(highlightedRenderers.Length, highlightImages.Length);
-        for (int i = 0; i < count; i++)
-        {
-            SpriteRenderer sourceRenderer = highlightedRenderers[i];
-            Image image = highlightImages[i];
-            bool rendererVisible = sourceRenderer != null &&
-                                   sourceRenderer.enabled &&
-                                   sourceRenderer.gameObject.activeInHierarchy &&
-                                   sourceRenderer.sprite != null;
-            image.gameObject.SetActive(rendererVisible);
-            if (!rendererVisible)
-            {
-                continue;
-            }
-
-            Sprite sprite = sourceRenderer.sprite;
-            image.sprite = sprite;
-            Color original = originalRendererColors[i];
-            image.color = new Color(1f, 1f, 1f, original.a * visibilityAlpha);
-
-            Vector2 localSize = sourceRenderer.drawMode == SpriteDrawMode.Simple
-                ? (Vector2)sprite.bounds.size
-                : sourceRenderer.size;
-            Vector3 worldCenter = sourceRenderer.bounds.center;
-            Vector3 screenCenter = camera.WorldToScreenPoint(worldCenter);
-            Vector3 screenRight = camera.WorldToScreenPoint(
-                worldCenter + sourceRenderer.transform.TransformVector(
-                    Vector3.right * localSize.x * 0.5f));
-            Vector3 screenUp = camera.WorldToScreenPoint(
-                worldCenter + sourceRenderer.transform.TransformVector(
-                    Vector3.up * localSize.y * 0.5f));
-
-            if (screenCenter.z <= 0f ||
-                !RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                    highlightOverlayRect,
-                    screenCenter,
-                    null,
-                    out Vector2 localCenter) ||
-                !RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                    highlightOverlayRect,
-                    screenRight,
-                    null,
-                    out Vector2 localRight) ||
-                !RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                    highlightOverlayRect,
-                    screenUp,
-                    null,
-                    out Vector2 localUp))
-            {
-                image.gameObject.SetActive(false);
-                continue;
-            }
-
-            Vector2 rightVector = localRight - localCenter;
-            Vector2 upVector = localUp - localCenter;
-            RectTransform imageRect = image.rectTransform;
-            imageRect.anchoredPosition = localCenter;
-            imageRect.sizeDelta = new Vector2(
-                Mathf.Max(1f, rightVector.magnitude * 2f),
-                Mathf.Max(1f, upVector.magnitude * 2f));
-            imageRect.localRotation = Quaternion.Euler(
-                0f,
-                0f,
-                Mathf.Atan2(rightVector.y, rightVector.x) * Mathf.Rad2Deg);
-            imageRect.localScale = new Vector3(
-                sourceRenderer.flipX ? -1f : 1f,
-                sourceRenderer.flipY ? -1f : 1f,
-                1f);
-        }
-    }
-
-    private void RestoreSourceColors()
-    {
-        if (highlightedRenderers == null || originalRendererColors == null ||
-            originalSortingLayerIds == null || originalSortingOrders == null)
-        {
-            return;
-        }
-
-        int count = Mathf.Min(highlightedRenderers.Length, originalRendererColors.Length);
-        for (int i = 0; i < count; i++)
-        {
-            if (highlightedRenderers[i] != null)
-            {
-                highlightedRenderers[i].color = originalRendererColors[i];
-                highlightedRenderers[i].sortingLayerID = originalSortingLayerIds[i];
-                highlightedRenderers[i].sortingOrder = originalSortingOrders[i];
-            }
-        }
+        sourceHighlight.Show(SourceTransform, visibilityAlpha);
     }
 
     private int GetRequirementValue()

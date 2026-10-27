@@ -7,6 +7,21 @@ using UnityEngine.Events;
 [AddComponentMenu("Interaction/Waterway Gate")]
 public sealed class WaterwayGate : MonoBehaviour
 {
+    private static readonly HashSet<WaterwayGate> ActiveGates = new HashSet<WaterwayGate>();
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetActiveGates() => ActiveGates.Clear();
+
+    internal static bool HasMovingGate
+    {
+        get
+        {
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            foreach (var gate in ActiveGates)
+                if (gate != null && gate.gameObject.scene == scene && gate.IsMoving) return true;
+            return false;
+        }
+    }
+
     public enum Letter { A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z }
 
     [Header("Identifier / 中央编号")]
@@ -91,6 +106,7 @@ public sealed class WaterwayGate : MonoBehaviour
 
     private void OnEnable()
     {
+        ActiveGates.Add(this);
         MapPointOfInterest.AttachMechanism(this);
         CaptureInitialOpen();
         barrier = GetComponent<BoxCollider2D>();
@@ -336,6 +352,7 @@ public sealed class WaterwayGate : MonoBehaviour
 
     private void OnDisable()
     {
+        ActiveGates.Remove(this);
         if (generated != null) generated.SetActive(false);
         if (Application.isPlaying) CameraCircularVision.NotifyBlockersChanged();
     }

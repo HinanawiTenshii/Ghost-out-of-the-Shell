@@ -36,6 +36,10 @@ public class ZeldaFourWayMover:UnityEngine.MonoBehaviour {
  public ZeldaCharacterData data=new ZeldaCharacterData();public T GetComponent<T>() where T:class{return data as T;}
 }
 public class CharacterDialogue:UnityEngine.MonoBehaviour {}
+// Physics is covered by InteractionObstructionSmoke; keep this suite focused on E/F arbitration.
+public static class ZeldaInteractionObstruction {
+ public static bool HasClearPath(UnityEngine.Component owner,ZeldaFourWayMover actor,UnityEngine.Vector2 point){return true;}
+}
 public static class ClockworkPuppetRuntime {public static bool BlocksCharacterInput;}
 public static class SignpostInteraction {public static bool BlocksInput;}
 public static class CharacterDialogueWindow {public static bool BlocksInput;}

@@ -104,6 +104,8 @@ public static class InvestigationSearchSmoke
         var data = new SerializedObject(ai);
         Check(data.FindProperty("investigationDuration").floatValue == 16f, label + " 16 seconds");
         Check(data.FindProperty("investigationWaypointPauseDuration").floatValue == 3.5f, label + " 3.5 second pauses");
+        Check(data.FindProperty("sharedSearchWaypointPauseDuration").floatValue == 2f, label + " shared search two-second pauses");
+        Check(data.FindProperty("sharedSearchMinimumMoveDistance").floatValue == 1.2f, label + " shared search minimum movement defaults");
     }
     public static void Run()
     {
@@ -123,6 +125,7 @@ public static class InvestigationSearchSmoke
     static void Tick()
     {
         if (!EditorApplication.isPlaying || !SessionState.GetBool(Key, false)) return;
+        if (Time.frameCount < 3 || RetroSceneLoadReveal.IsPreparingGameplay) return;
         SessionState.SetBool(Key, false); checks = SessionState.GetInt(Key + ".checks", 0);
         try { Verify(); Debug.Log("INVESTIGATION_SEARCH_PASS checks=" + checks); Clear(); EditorApplication.Exit(0); }
         catch (Exception e) { Debug.LogException(e); Clear(); EditorApplication.Exit(1); }

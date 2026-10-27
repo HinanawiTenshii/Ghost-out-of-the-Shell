@@ -75,6 +75,7 @@ public sealed class FortressMortarRemoteInstallation : MonoBehaviour
         QuestJournalManager.GetOrCreate().RecordSandwormMortarInstallation();
         mover.TryBeginItemAttack(.24f);
         ZeldaHealthHeartsUI.Instance?.ShowNotificationPopup("装置已安装，获得臼炮遥控器");
+        GameSaveSystem.RequestAutoSave("mortar_remote_installed", true);
         return true;
     }
     private void RefreshMountedVisual()

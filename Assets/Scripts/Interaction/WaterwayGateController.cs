@@ -28,6 +28,7 @@ public sealed class WaterwayGateController : MonoBehaviour
     private Material ownedMaterial, promptMaterial;
     private bool dirty = true;
     private float pose;
+    private bool pendingAutoSave;
 
     public WaterwayGate LinkedGate => linkedGate;
     public string DisplayedIdentifier => linkedGate != null ? linkedGate.Identifier : "--";
@@ -56,8 +57,14 @@ public sealed class WaterwayGateController : MonoBehaviour
     public void SetOpen(bool value)
     {
         if (linkedGate == null || IsTransitionLocked || !HasBatteryPower) return;
+        bool changed = linkedGate.IsOpenRequested != value;
         linkedGate.SetOpen(value);
         RefreshState();
+        if (changed && Application.isPlaying && !GameSaveSystem.IsLoading && !CharacterPotionBuffs.IsRestoringWorld)
+        {
+            pendingAutoSave = true;
+            GameSaveSystem.MarkAutoSaveProgress();
+        }
     }
 
     public void ToggleFromExternal()
@@ -91,6 +98,12 @@ public sealed class WaterwayGateController : MonoBehaviour
         if (dirty || generated == null) Rebuild();
         RefreshState();
         if (!Application.isPlaying) return;
+
+        if (pendingAutoSave && !IsTransitionLocked)
+        {
+            pendingAutoSave = false;
+            GameSaveSystem.RequestAutoSave("waterway_gate_changed");
+        }
 
         ZeldaFourWayMover mover = InputBlocked ? null : GetNearbyCharacter();
         if (linkedGate == null || IsTransitionLocked || !HasBatteryPower || mover == null)

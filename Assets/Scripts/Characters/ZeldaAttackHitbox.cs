@@ -168,8 +168,11 @@ public class ZeldaAttackHitbox : MonoBehaviour
             observedOutcome.HitTarget = true;
     }
 
+    private void OnEnable() => AutoSaveTransientActivity.Register(this);
+
     private void OnDisable()
     {
+        AutoSaveTransientActivity.Unregister(this);
         if (observedOutcome != null) observedOutcome.IsComplete = true;
     }
 
