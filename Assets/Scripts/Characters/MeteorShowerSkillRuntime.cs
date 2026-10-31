@@ -156,7 +156,7 @@ public sealed class MeteorShowerSkillRuntime : MonoBehaviour
             while (fire && strike.fireTicks < 5 && impactAge + .0001f >= strike.fireTicks + 1)
             {
                 strike.fireTicks++;
-                ZeldaAttackHitbox.ApplyCircularPulse(strike.point, Radius, 2, owner);
+                ZeldaAttackHitbox.ApplyCircularPulse(strike.point, Radius, 2, owner, false);
             }
             if (InvalidOwner) { cancelled = true; skillAudio?.Stop(); Destroy(gameObject); return; }
             strike.visual.RenderAt(age);

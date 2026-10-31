@@ -159,15 +159,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   crtMaterial: {fileID: 2100000, guid: c5a8077d9703b284c94e77cf1fe357b4, type: 2}
   curvature: 0.019
-  scanlineIntensity: 0.27
-  scanlineCount: 180
-  chromaticAberration: 1.25
+  scanlineIntensity: 0.16
+  scanlineCount: 360
+  chromaticAberration: 0.3
   vignette: 0
-  maskIntensity: 0.14
-  noiseIntensity: 0.018
-  brightness: 1.5
-  contrast: 1.3
-  phosphorGlow: 0.5
+  maskIntensity: 0.06
+  noiseIntensity: 0.004
+  brightness: 1.1
+  contrast: 1
+  phosphorGlow: 0.26
 --- !u!114 &295897090
 MonoBehaviour:
   m_ObjectHideFlags: 0

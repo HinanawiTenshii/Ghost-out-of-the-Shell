@@ -115,7 +115,7 @@ public class PickupItemBase : MonoBehaviour, ISerializationCallbackReceiver
     public void OnBeforeSerialize() => InitializeUseSkillRequirement();
     public void OnAfterDeserialize() => InitializeUseSkillRequirement();
 
-    public string FormatDescriptionWithRequirements(string description)
+    public string FormatDescriptionWithRequirements(string description, bool includeUseRequirement = true)
     {
         string text = (description ?? string.Empty).TrimEnd();
         string extra = AdditionalSkillRequirementDescription;
@@ -133,6 +133,9 @@ public class PickupItemBase : MonoBehaviour, ISerializationCallbackReceiver
             text = text.Substring(0, lineStart).TrimEnd();
         }
         if (!string.IsNullOrEmpty(extra)) text = string.IsNullOrEmpty(text) ? extra : text + "\n" + extra;
+        // Detail windows render the use requirement separately as HUD icons.
+        // Other callers retain the existing complete textual description.
+        if (!includeUseRequirement) return text;
         return string.IsNullOrEmpty(text) ? SkillRequirementDescription : text + "\n" + SkillRequirementDescription;
     }
     public PickupItemPersistentIdentity PersistentIdentity => persistentIdentity;
@@ -170,6 +173,7 @@ public class PickupItemBase : MonoBehaviour, ISerializationCallbackReceiver
 
     protected virtual void Awake()
     {
+        LevelSceneVisualProfile.DecoratePickup(this);
         InitializeUseSkillRequirement();
         triggerCollider = GetComponent<Collider2D>();
         triggerCollider.isTrigger = UsesTriggerCollider;
@@ -200,7 +204,7 @@ public class PickupItemBase : MonoBehaviour, ISerializationCallbackReceiver
 
         if (controlledMover == null ||
             !CanAttemptPickup ||
-            IsGhostControlledMover(controlledMover) ||
+            IsGhostControlledMover(controlledMover) || IsHeroPresentingPickup(controlledMover) ||
             Vector2.Distance(transform.position, controlledMover.transform.position) > pickupDistance)
         {
             return;
@@ -226,6 +230,7 @@ public class PickupItemBase : MonoBehaviour, ISerializationCallbackReceiver
             && CanAttemptPickup
             && controlledMover != null
             && !IsGhostControlledMover(controlledMover)
+            && !IsHeroPresentingPickup(controlledMover)
             && Vector2.Distance(transform.position, controlledMover.transform.position) <= pickupDistance;
         if (!canPrompt)
         {
@@ -476,11 +481,15 @@ public class PickupItemBase : MonoBehaviour, ISerializationCallbackReceiver
         LevelRunStatistics.RecordExpansion(this);
         // Pickup feedback applies to every item, independently of its use-animation exceptions.
         // Start before a first-pickup description window can pause the game.
-        FindControlledMover()?.TryBeginItemAttack(.24f);
+        var pickupMover = FindControlledMover();
+        var hero = pickupMover != null ? pickupMover.CharacterData as HeroZeldaCharacterData : null;
+        bool presented = hero != null && hero.TryPresentPickedItem(this, pickupMover);
+        if (!presented) pickupMover?.TryBeginItemAttack(.24f);
         // Keep first-pickup information handling on the shared notification
         // path. Derived items such as BombPickupItem override TryPickUp, but
         // they already call this method after successfully entering inventory.
-        ItemDescriptionWindow.GetOrCreate().NotifyPickedUp(this);
+        ItemDescriptionWindow.GetOrCreate().NotifyPickedUp(this,
+            presented ? hero.PickupPresentationDuration : 0f);
         PickedUp?.Invoke(this);
         if (IsAutoSaveMilestonePickup) GameSaveSystem.RequestAutoSave("key_or_quest_item:" + ItemId, true);
         else GameSaveSystem.MarkAutoSaveProgress();
@@ -503,8 +512,13 @@ public class PickupItemBase : MonoBehaviour, ISerializationCallbackReceiver
             source != null && source.ActiveMover != null
                 ? source.ActiveMover
                 : ZeldaRuntimeRegistry.GetControlledMover();
-        return IsGhostControlledMover(controlledMover);
+        return IsGhostControlledMover(controlledMover) || IsHeroPresentingPickup(controlledMover);
     }
+
+    // Finish the brief two-handed pose before accepting the next pickup, so a
+    // second item cannot overwrite the first item's pending description/reward visual.
+    private static bool IsHeroPresentingPickup(ZeldaFourWayMover mover) =>
+        mover != null && mover.CharacterData is HeroZeldaCharacterData hero && hero.IsPresentingPickup;
 
     public static bool IsGhostControlledMover(ZeldaFourWayMover mover)
     {

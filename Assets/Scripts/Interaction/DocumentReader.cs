@@ -126,7 +126,8 @@ public sealed class DocumentReader : MonoBehaviour
             {
                 EnsureReadingCanvasOnTop();
             }
-            if (activeDocument == this && Input.GetKeyDown(KeyCode.E))
+            if (activeDocument == this &&
+                (Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Escape)))
             {
                 CloseDocument();
             }
@@ -434,7 +435,7 @@ public sealed class DocumentReader : MonoBehaviour
         hintRect.pivot = new Vector2(0.5f, 0f);
         hintRect.anchoredPosition = new Vector2(0f, 24f);
         hintRect.sizeDelta = new Vector2(300f, 32f);
-        closeHint.text = "按[E]关闭";
+        closeHint.text = "按[E] / [Esc]关闭";
 
         CRTScreenEffect.RegisterCanvas(readingCanvas, enableGlow: true);
         readingCanvasObject.SetActive(false);

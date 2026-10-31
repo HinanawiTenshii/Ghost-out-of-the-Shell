@@ -24,6 +24,8 @@ $production
 }
 public class HeroHarness : PaladinHarness {
 $fields
+public bool HasSword => true;
+public bool HasShield => true;
 $derived
 "@
 Add-Type -TypeDefinition $code -CompilerOptions '/nowarn:0414,0649'

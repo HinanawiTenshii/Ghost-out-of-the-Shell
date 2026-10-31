@@ -1,5 +1,12 @@
 using UnityEngine;
 
+// Optional per-object feedback override; damage, collision removal and persistence
+// still belong to DoorData. Existing doors/glass retain their default effects.
+public interface IDoorDestructionEffect
+{
+    void PlayDestruction(Vector3 center, SpriteRenderer source);
+}
+
 [RequireComponent(typeof(SpriteRenderer))]
 [RequireComponent(typeof(BoxCollider2D))]
 public class DoorData : MonoBehaviour
@@ -38,6 +45,7 @@ public class DoorData : MonoBehaviour
     private bool isShaking;
     private bool isDestroyed;
     private ZeldaRequirementWindow requirementWindow;
+    private IDoorDestructionEffect customDestructionEffect;
 
     public int Durability => durability;
     public bool IsDestroyed => isDestroyed;
@@ -46,7 +54,9 @@ public class DoorData : MonoBehaviour
     private void Awake()
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
-        ResolveBreakSound(); // Preload before the impact frame; clips use preloaded PCM.
+        customDestructionEffect = GetComponent<IDoorDestructionEffect>();
+        if (customDestructionEffect == null)
+            ResolveBreakSound(); // Preload before the impact frame; clips use preloaded PCM.
         attachedVisualRestPositions = new Vector3[attachedVisuals.Length];
         for (int i = 0; i < attachedVisuals.Length; i++)
             if (attachedVisuals[i] != null)
@@ -216,8 +226,13 @@ public class DoorData : MonoBehaviour
             destructionPosition,
             isDirectCharacterAttack ? attackSource : null);
         SpawnInvestigationPulse(destructionPosition);
-        PlayBreakSound(destructionPosition);
-        SpawnFragments();
+        if (customDestructionEffect != null)
+            customDestructionEffect.PlayDestruction(destructionPosition, spriteRenderer);
+        else
+        {
+            PlayBreakSound(destructionPosition);
+            SpawnFragments();
+        }
         Destroy(gameObject);
         // Request only; the save scheduler waits past destruction and combat cleanup.
         if (brokeProgressionLock) GameSaveSystem.RequestAutoSave("progression_door_broken", true);
@@ -266,33 +281,12 @@ public class DoorData : MonoBehaviour
 
     private void SpawnFragments()
     {
-        if (spriteRenderer == null)
-        {
-            return;
-        }
-
-        Color fragmentColor = spriteRenderer.color;
-        Vector3 origin = spriteRenderer.bounds.center;
-
-        for (int i = 0; i < fragmentCount; i++)
-        {
-            float angle = (360f / fragmentCount) * i + Random.Range(-15f, 15f);
-            Vector2 direction = new Vector2(Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad));
-            float speed = fragmentSpeed * Random.Range(0.65f, 1.15f);
-
-            GameObject fragmentObject = new GameObject("Door Fragment");
-            fragmentObject.transform.position = origin;
-            fragmentObject.transform.localScale = Vector3.one * fragmentScale * Random.Range(0.75f, 1.25f);
-
-            SpriteRenderer fragmentRenderer = fragmentObject.AddComponent<SpriteRenderer>();
-            fragmentRenderer.sprite = DoorFragmentVisual.FragmentSprite;
-            fragmentRenderer.color = fragmentColor;
-            fragmentRenderer.sortingLayerID = spriteRenderer.sortingLayerID;
-            fragmentRenderer.sortingOrder = spriteRenderer.sortingOrder + 1;
-
-            DoorFragmentVisual fragment = fragmentObject.AddComponent<DoorFragmentVisual>();
-            fragment.Configure(direction * speed, fragmentLifetime, Random.Range(-720f, 720f));
-        }
+        // Use the common path so already-placed/unpacked objects and old saves
+        // receive the same visual update without replacing their serialized data.
+        var surface = IsBreakableGlass ? DoorDestructionVisual.Surface.Glass :
+            GetComponentInParent<DoubleSlidingDoor>() != null ? DoorDestructionVisual.Surface.Metal :
+            DoorDestructionVisual.Surface.Wood;
+        DoorDestructionVisual.Play(spriteRenderer, surface, fragmentCount, fragmentLifetime, fragmentSpeed, fragmentScale);
     }
 
     private void OnValidate()

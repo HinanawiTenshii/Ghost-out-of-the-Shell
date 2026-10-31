@@ -1,0 +1,18 @@
+DESERT AMBIENCE / 沙漠环境音
+
+Sandstorm Looping — gbayles
+https://freesound.org/people/gbayles/sounds/632771/
+Looping edit of SandstormMix.mp3 — blackatomproductions
+https://freesound.org/people/blackatomproductions/sounds/565015/
+
+Both source pages publish these sounds under CC0 1.0 Universal.
+https://creativecommons.org/publicdomain/zero/1.0/
+Credit is provided voluntarily; CC0 does not require attribution.
+
+File obtained from Freesound's public full-length high-quality MP3 preview:
+https://cdn.freesound.org/previews/632/632771_4537135-hq.mp3
+This is Freesound's preview transcode, not the uploader's login-only original.
+No trimming, pitch or tempo changes. Unity transcodes for streaming playback.
+Playback gain is reduced and crossfaded below music during the boss encounter.
+
+用于 Level2-Desert。保留完整循环音源，以较低音量播放；遭遇沙虫时进一步降低风声音量。

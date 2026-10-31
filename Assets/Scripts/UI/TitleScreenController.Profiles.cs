@@ -29,8 +29,8 @@ public sealed partial class TitleScreenController
         ConfigureOptionsRoot(progressOptionsRoot);
         progressBack = back;
         CreateMenuLabel(progressOptionsRoot, heading, 210f, 20);
-        progressStatus = CreateMenuLabel(progressOptionsRoot, "", -228f, 23);
-        progressStatus.rectTransform.sizeDelta = new Vector2(320f, 84f);
+        progressStatus = CreateMenuLabel(progressOptionsRoot, "", -238f, 18);
+        progressStatus.rectTransform.sizeDelta = new Vector2(440f, 64f);
     }
 
     private Text CreateMenuLabel(Transform parent, string value, float y, int size)
@@ -39,11 +39,12 @@ public sealed partial class TitleScreenController
         var rect = text.rectTransform;
         rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0.5f, 0.5f);
         rect.anchoredPosition = new Vector2(0f, y);
-        rect.sizeDelta = new Vector2(320f, 30f);
+        rect.sizeDelta = new Vector2(440f, 30f);
         text.font = titleFont; text.fontSize = size; text.text = value;
         text.color = GhostBlue; text.alignment = TextAnchor.MiddleLeft;
         text.raycastTarget = false;
         TitleScreenGlow.Attach(text);
+        EnhanceTerminalGlow(text);
         return text;
     }
 
@@ -70,14 +71,14 @@ public sealed partial class TitleScreenController
             if (!creating)
             {
                 var selectRect = select.GetComponent<RectTransform>();
-                selectRect.sizeDelta = new Vector2(224f, 56f);
-                selectRect.anchoredPosition = new Vector2(-48f, 105f - i * 70f);
+                selectRect.sizeDelta = new Vector2(336f, 56f);
+                selectRect.anchoredPosition = new Vector2(-52f, 105f - i * 70f);
                 var remove = CreateOption(progressOptionsRoot, "删除", 105f - i * 70f,
                     profile != null, () => ShowDeleteProfile(id));
                 remove.name = "删除进度 " + (i + 1);
                 var removeRect = remove.GetComponent<RectTransform>();
                 removeRect.sizeDelta = new Vector2(88f, 56f);
-                removeRect.anchoredPosition = new Vector2(116f, 105f - i * 70f);
+                removeRect.anchoredPosition = new Vector2(176f, 105f - i * 70f);
             }
         }
         CreateOption(progressOptionsRoot, "返回", -105f, true, ShowMainMenu);
@@ -142,10 +143,7 @@ public sealed partial class TitleScreenController
         if (continueButton == null) return;
         bool available = GameSaveSystem.Instance != null && GameSaveSystem.Instance.HasContinuableProgress;
         continueButton.interactable = available;
-        var hover = continueButton.GetComponent<PauseMenuButtonHover>();
-        if (hover != null) hover.enabled = available;
-        continueButton.GetComponentInChildren<Text>().color = available ? GhostBlue : DisabledBlue;
-        continueButton.GetComponent<Image>().color = available ? ButtonBlue : Color.clear;
+        continueButton.GetComponent<TitleTerminalOption>()?.Refresh();
     }
 
     private void RefreshSaveMessage()

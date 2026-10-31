@@ -154,10 +154,14 @@ public static class QuestFeedbackSmoke
         Set(director,"nextMarkerTime",float.MaxValue);
         var hudGo = new GameObject("Marker HUD"); hudGo.SetActive(false);
         var hud = hudGo.AddComponent<ZeldaHealthHeartsUI>();
+        Object.DontDestroyOnLoad(hudGo);
         var map = new GameObject("Marker map",typeof(RectTransform),typeof(CanvasRenderer)).AddComponent<RuntimeMiniMapGraphic>();
         Set(map,"geometrySceneName",SceneManager.GetActiveScene().name);
         Set(hud,"questJournal",journal); Set(hud,"taskMiniMapGraphic",map);
         Call(hud,"ApplyTrackedQuestTarget",SceneManager.GetActiveScene(),Vector2.zero);
+        var flag = Get<GameObject>(hud,"trackedQuestWorldMarker");
+        Check(flag.scene == hudGo.scene && flag.GetComponent<MeshFilter>() != null &&
+            flag.GetComponent<Renderer>().sortingOrder == 29999, "persistent HUD creates shared world flag under vision mask");
         Vector2 sample = director.CachedMarker;
         for (int i=1;i<=10;i++)
         {

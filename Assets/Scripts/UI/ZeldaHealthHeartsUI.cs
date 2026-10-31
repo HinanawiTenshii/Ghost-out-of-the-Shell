@@ -244,8 +244,6 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
     private Scene taskMiniMapScene;
     private string taskMiniMapAreaDisplayName;
     private GameObject trackedQuestWorldMarker;
-    private Texture2D trackedQuestWorldMarkerTexture;
-    private Sprite trackedQuestWorldMarkerSprite;
     private bool trackedQuestTargetInCurrentScene;
     private Vector2 trackedQuestTargetWorldPosition;
     private readonly List<Vector2> trackedQuestTargetPositions = new List<Vector2>();
@@ -419,16 +417,6 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         foreach (var marker in additionalQuestWorldMarkers)
             if (marker != null) Destroy(marker);
         additionalQuestWorldMarkers.Clear();
-
-        if (trackedQuestWorldMarkerSprite != null)
-        {
-            Destroy(trackedQuestWorldMarkerSprite);
-        }
-
-        if (trackedQuestWorldMarkerTexture != null)
-        {
-            Destroy(trackedQuestWorldMarkerTexture);
-        }
 
         for (int i = 0; i < permissionSprites.Length; i++)
         {
@@ -2868,69 +2856,10 @@ public sealed class ZeldaHealthHeartsUI : MonoBehaviour
         if (trackedQuestWorldMarker != null)
             return;
 
-        trackedQuestWorldMarkerTexture = new Texture2D(
-            1,
-            1,
-            TextureFormat.RGBA32,
-            false);
-        trackedQuestWorldMarkerTexture.name = "Tracked Quest World Marker Texture";
-        trackedQuestWorldMarkerTexture.filterMode = FilterMode.Point;
-        trackedQuestWorldMarkerTexture.wrapMode = TextureWrapMode.Clamp;
-        trackedQuestWorldMarkerTexture.SetPixel(0, 0, Color.white);
-        trackedQuestWorldMarkerTexture.Apply(false, false);
-        trackedQuestWorldMarkerSprite = Sprite.Create(
-            trackedQuestWorldMarkerTexture,
-            new Rect(0f, 0f, 1f, 1f),
-            new Vector2(0.5f, 0.5f),
-            1f);
-        trackedQuestWorldMarkerSprite.name = "Tracked Quest World Marker Sprite";
-
-        trackedQuestWorldMarker = new GameObject("Tracked Quest World Marker");
+        trackedQuestWorldMarker = QuestJournalInteractionMarker.CreateWorldVisual(gameObject.scene);
+        trackedQuestWorldMarker.name = "Tracked Quest World Marker";
         DontDestroyOnLoad(trackedQuestWorldMarker);
-        trackedQuestWorldMarker.transform.rotation = Quaternion.Euler(0f, 0f, 45f);
-
-        CreateTrackedQuestWorldMarkerLayer(
-            trackedQuestWorldMarker.transform,
-            "White Border",
-            0.46f,
-            Color.white,
-            29997);
-        CreateTrackedQuestWorldMarkerLayer(
-            trackedQuestWorldMarker.transform,
-            "Dark Cyan Outer",
-            0.36f,
-            new Color32(18, 92, 108, 255),
-            29998);
-        CreateTrackedQuestWorldMarkerLayer(
-            trackedQuestWorldMarker.transform,
-            "Sky Blue Inner",
-            0.18f,
-            new Color32(86, 190, 245, 255),
-            29999);
         trackedQuestWorldMarker.SetActive(false);
-    }
-
-    private void CreateTrackedQuestWorldMarkerLayer(
-        Transform parent,
-        string layerName,
-        float worldSize,
-        Color color,
-        int sortingOrder)
-    {
-        GameObject layerObject = new GameObject(layerName, typeof(SpriteRenderer));
-        layerObject.transform.SetParent(parent, false);
-        layerObject.transform.localPosition = Vector3.zero;
-        layerObject.transform.localRotation = Quaternion.identity;
-        layerObject.transform.localScale = new Vector3(worldSize, worldSize, 1f);
-
-        SpriteRenderer renderer = layerObject.GetComponent<SpriteRenderer>();
-        renderer.sprite = trackedQuestWorldMarkerSprite;
-        renderer.color = color;
-        renderer.sortingLayerID = 0;
-        // CameraCircularVision uses order 30000. These layers deliberately
-        // remain immediately below it, while still staying above ordinary
-        // world sprites. UI is composited by its later camera and stays above.
-        renderer.sortingOrder = sortingOrder;
     }
 
     private static string ResolveSceneAreaDisplayName(Scene scene)

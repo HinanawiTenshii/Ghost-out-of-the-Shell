@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Level2-Floor-1
   m_EditorClassIdentifier: 
   schemaVersion: 6
-  sourceRevision: 65c0fa6784ddd61fc82ace8ddd338d1b
+  sourceRevision: 2747e1802b159104b066899065e31cce
   sceneName: Level2-Floor-1
   displayName: "\u57CE\u9547\u5730\u4E0B"
   blockPaths:

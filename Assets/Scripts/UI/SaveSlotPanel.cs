@@ -50,7 +50,7 @@ public sealed class SaveSlotPanel : MonoBehaviour
         list = Rect(
             "Slot Panel",
             root,
-            titleLayout ? new Vector2(255f, 0f) : Vector2.zero,
+            titleLayout ? new Vector2(310f, 0f) : Vector2.zero,
             new Vector2(titleLayout ? 330f : 510f, titleLayout ? 550f : 640f));
         if (!titleLayout)
         {

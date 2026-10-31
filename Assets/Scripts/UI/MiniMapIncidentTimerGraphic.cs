@@ -22,12 +22,42 @@ public sealed class MiniMapIncidentTimerGraphic : MaskableGraphic
     private static readonly Color TrackColor = new Color32(7, 15, 38, 255);
 
     protected override void Awake() { base.Awake(); raycastTarget = false; }
-    protected override void OnEnable() { base.OnEnable(); raycastTarget = false; RefreshFromScene(); }
+    protected override void OnEnable() { base.OnEnable(); raycastTarget = false; RefreshFromScene(); RefreshQuestBorderInset(); }
 
     public void Bind(Graphic map)
     {
+        if (miniMap is RuntimeMiniMapGraphic previous) previous.SetQuestBorderInset(0f);
         miniMap = map;
         RefreshFromScene();
+        RefreshQuestBorderInset();
+    }
+
+    protected override void OnDisable()
+    {
+        if (miniMap is RuntimeMiniMapGraphic map) map.SetQuestBorderInset(0f);
+        base.OnDisable();
+    }
+
+    protected override void OnRectTransformDimensionsChange()
+    {
+        base.OnRectTransformDimensionsChange();
+        RefreshQuestBorderInset();
+    }
+
+    private void RefreshQuestBorderInset()
+    {
+        if (!(miniMap is RuntimeMiniMapGraphic map) || map == null) return;
+        if (!isActiveAndEnabled || !HasIncident) { map.SetQuestBorderInset(0f); return; }
+        Rect bounds = rectTransform.rect;
+        float size = Mathf.Min(bounds.width, bounds.height);
+        float half = Mathf.Max(0f, size * .5f - Mathf.Clamp(borderWidth, .5f, size * .1f) - 1f);
+        Matrix4x4 toMap = map.rectTransform.worldToLocalMatrix * rectTransform.localToWorldMatrix;
+        Vector2 min = toMap.MultiplyPoint3x4(bounds.center - Vector2.one * half);
+        Vector2 max = toMap.MultiplyPoint3x4(bounds.center + Vector2.one * half);
+        Rect viewport = map.GetPixelAdjustedRect();
+        float inset = Mathf.Max(Mathf.Max(min.x - viewport.xMin, viewport.xMax - max.x),
+            Mathf.Max(min.y - viewport.yMin, viewport.yMax - max.y));
+        map.SetQuestBorderInset(inset);
     }
 
     // Independent of ZeldaHealthHeartsUI.Update: that event-driven script sleeps
@@ -58,9 +88,11 @@ public sealed class MiniMapIncidentTimerGraphic : MaskableGraphic
             fraction = 0f;
         }
         if (displayedPhase == phase && remaining01 == fraction) return;
+        bool borderChanged = displayedPhase != phase;
         displayedPhase = phase;
         remaining01 = fraction;
         color = phase == SharedPlayerHostilityTimer.IncidentPhase.Search ? SearchColor : HostileColor;
+        if (borderChanged) RefreshQuestBorderInset();
         SetVerticesDirty();
     }
 

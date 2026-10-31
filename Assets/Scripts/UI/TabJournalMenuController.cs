@@ -206,7 +206,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
                     Time.unscaledTime >= nextCaptainMapRefresh)
                 {
                     nextCaptainMapRefresh = Time.unscaledTime + .7f;
-                    ApplyTrackedQuestTargetToMap(selectedMapSceneName, miniMapGraphic, false);
+                    ApplyTrackedQuestTargetToMap(selectedMapSceneName, miniMapGraphic);
                 }
                 UpdateMiniMapTransitionPositions();
                 UpdateMiniMapPointPositions();
@@ -955,7 +955,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
                 GetMiniMapSnapshot(selectedMapSceneName);
             miniMapGraphic.RebuildFromSnapshot(snapshot);
         }
-        ApplyTrackedQuestTargetToMap(selectedMapSceneName, miniMapGraphic, false);
+        ApplyTrackedQuestTargetToMap(selectedMapSceneName, miniMapGraphic);
         RefreshMapSceneQuestMarkers();
         miniMapGraphic.ResetView();
         if (selectedIsCurrent)
@@ -981,7 +981,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
     private void ApplyTrackedQuestTargetToMap(
         string mapSceneName,
         RuntimeMiniMapGraphic mapGraphic,
-        bool clampToBorder)
+        bool clampToBorder = true)
     {
         if (mapGraphic == null || questJournal == null ||
             string.IsNullOrWhiteSpace(questJournal.TrackedEntryId) ||
@@ -1873,8 +1873,7 @@ public sealed class TabJournalMenuController : MonoBehaviour
 
         ApplyTrackedQuestTargetToMap(
             selectedMapSceneName,
-            miniMapGraphic,
-            false);
+            miniMapGraphic);
     }
 
     private void UpdateQuestTrackButton(QuestJournalManager.Entry selectedEntry)

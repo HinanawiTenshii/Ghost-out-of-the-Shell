@@ -101,7 +101,11 @@ public static class ZeldaRuntimeRegistry
     {
         if (mover != null)
         {
-            if (moverSet.Add(mover)) InvalidateSpatialSnapshot();
+            if (moverSet.Add(mover))
+            {
+                InvalidateSpatialSnapshot();
+                LevelSceneVisualProfile.DecorateCharacter(mover);
+            }
             if (mover.isActiveAndEnabled) controlledSet.Add(mover);
         }
     }
@@ -185,7 +189,7 @@ public static class ZeldaRuntimeRegistry
     {
         if (ai != null)
         {
-            aiSet.Add(ai);
+            if (aiSet.Add(ai)) LevelSceneVisualProfile.DecorateVision(ai);
         }
     }
 

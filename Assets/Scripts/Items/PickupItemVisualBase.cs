@@ -28,7 +28,8 @@ public class PickupItemVisualBase : MonoBehaviour
     /// <summary>
     /// Converts a saved instance tint into the correct UI tint. Multi-colour
     /// icons already contain their colours in the texture and must remain
-    /// white here, while monochrome icons such as keys use the saved tint.
+    /// white here, while monochrome icons use the saved tint. Instance-coloured
+    /// multi-colour icons bake that tint into their own GetInventoryIcon result.
     /// </summary>
     public Color GetInventoryTint(Color instanceDisplayColor)
     {

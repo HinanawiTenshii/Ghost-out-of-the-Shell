@@ -9,9 +9,8 @@ using UnityEngine.UI;
 [DefaultExecutionOrder(10000)]
 public sealed partial class TitleScreenController : MonoBehaviour
 {
-    private static readonly Color GhostBlue = ZeldaUiPalette.Ghost;
-    private static readonly Color BackgroundBlue = new Color(0.018f, 0.055f, 0.095f, 1f);
-    private static readonly Color ButtonBlue = new Color(0.035f, 0.12f, 0.20f, 0.92f);
+    private static readonly Color GhostBlue = new Color32(76, 204, 230, 255);
+    private static readonly Color BackgroundBlue = new Color32(2, 8, 19, 255);
     private static readonly Color DisabledBlue = new Color(0.18f, 0.28f, 0.35f, 1f);
 
     [SerializeField] private Font titleFont;
@@ -31,10 +30,12 @@ public sealed partial class TitleScreenController : MonoBehaviour
         CanvasScaler scaler = GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1280f, 720f);
-        scaler.matchWidthOrHeight = 0.5f;
+        // Keep the complete terminal visible at 4:3 and ultrawide resolutions.
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
 
         EnsureEventSystem();
         BuildInterface();
+        StartCoroutine(BootTerminal());
         if (GameSaveSystem.Instance != null) GameSaveSystem.Instance.Changed += RefreshSaveMessage;
         Cursor.visible = true;
         Cursor.lockState = CursorLockMode.None;
@@ -47,10 +48,11 @@ public sealed partial class TitleScreenController : MonoBehaviour
 
     private void Update()
     {
-        if (RetroSceneLoadReveal.IsBlockingInput) return;
+        if (!terminalReady || RetroSceneLoadReveal.IsBlockingInput) return;
         if (SaveSlotPanel.IsOpen || SaveSlotPanel.LastClosedFrame == Time.frameCount) return;
         if (progressOptionsRoot != null && progressOptionsRoot.gameObject.activeSelf && Input.GetKeyDown(KeyCode.Escape))
         { progressBack?.Invoke(); return; }
+        RestoreTerminalSelection();
     }
 
     public void StartGame()
@@ -69,64 +71,7 @@ public sealed partial class TitleScreenController : MonoBehaviour
 
     private void BuildInterface()
     {
-        GameObject backgroundObject = CreateUiObject(
-            "Title Background",
-            transform,
-            typeof(Image));
-        RectTransform backgroundRect = backgroundObject.GetComponent<RectTransform>();
-        Stretch(backgroundRect);
-        Image background = backgroundObject.GetComponent<Image>();
-        background.color = BackgroundBlue;
-        background.raycastTarget = true;
-
-        GameObject outerFrameObject = CreateUiObject(
-            "Outer Frame",
-            backgroundRect,
-            typeof(Image));
-        RectTransform outerFrameRect = outerFrameObject.GetComponent<RectTransform>();
-        outerFrameRect.anchorMin = new Vector2(0.04f, 0.06f);
-        outerFrameRect.anchorMax = new Vector2(0.96f, 0.94f);
-        outerFrameRect.offsetMin = Vector2.zero;
-        outerFrameRect.offsetMax = Vector2.zero;
-        outerFrameObject.GetComponent<Image>().color =
-            new Color(0.015f, 0.035f, 0.055f, 0.96f);
-        CreateBorder(outerFrameRect, GhostBlue, 3f);
-
-        GameObject titlePanelObject = CreateUiObject(
-            "Title Geometry",
-            outerFrameRect,
-            typeof(Image));
-        RectTransform titlePanelRect = titlePanelObject.GetComponent<RectTransform>();
-        titlePanelRect.anchorMin = titlePanelRect.anchorMax = new Vector2(0.5f, 0.5f);
-        titlePanelRect.pivot = new Vector2(0.5f, 0.5f);
-        titlePanelRect.anchoredPosition = new Vector2(-245f, 0f);
-        titlePanelRect.sizeDelta = new Vector2(420f, 390f);
-        titlePanelObject.GetComponent<Image>().color =
-            new Color(0.025f, 0.075f, 0.12f, 0.82f);
-        CreateBorder(titlePanelRect, GhostBlue, 3f);
-
-        CreateTitleText(titlePanelRect, "GHOST", new Vector2(0f, 64f), 84);
-        CreateTitleText(titlePanelRect, "out of the", new Vector2(0f, 0f), 24);
-        CreateTitleText(titlePanelRect, "SHELL", new Vector2(0f, -64f), 84);
-
-        RectTransform optionsRoot = CreateUiObject(
-            "Title Options",
-            outerFrameRect).GetComponent<RectTransform>();
-        optionsRoot.anchorMin = optionsRoot.anchorMax = new Vector2(0.5f, 0.5f);
-        optionsRoot.pivot = new Vector2(0.5f, 0.5f);
-        optionsRoot.anchoredPosition = new Vector2(255f, 0f);
-        optionsRoot.sizeDelta = new Vector2(330f, 390f);
-
-        CreateOption(optionsRoot, "开始新游戏", 140f, true, StartGame);
-        continueButton = CreateOption(optionsRoot, "继续游戏", 70f, true, () => GameSaveSystem.Instance?.ContinueLatest());
-        CreateOption(optionsRoot, "游戏进度", 0f, true, ShowProfiles);
-        CreateOption(optionsRoot, "游戏设置（暂未开放）", -70f, false, null);
-        CreateOption(optionsRoot, "结束游戏", -140f, true, QuitGame);
-        mainOptionsRoot = optionsRoot;
-        mainStatus = CreateMenuLabel(optionsRoot, "", -228f, 23);
-        mainStatus.rectTransform.sizeDelta = new Vector2(320f, 84f);
-        RefreshContinueButton();
-        ExhibitionEdition.AddMenuCaption(transform, titleFont);
+        BuildTerminalInterface();
     }
 
     private void OpenLoadSlots()
@@ -139,8 +84,8 @@ public sealed partial class TitleScreenController : MonoBehaviour
     {
         optionsRoot.anchorMin = optionsRoot.anchorMax = new Vector2(0.5f, 0.5f);
         optionsRoot.pivot = new Vector2(0.5f, 0.5f);
-        optionsRoot.anchoredPosition = new Vector2(255f, 0f);
-        optionsRoot.sizeDelta = new Vector2(330f, 390f);
+        optionsRoot.anchoredPosition = new Vector2(310f, 0f);
+        optionsRoot.sizeDelta = new Vector2(440f, 440f);
     }
 
     public void ShowMainMenu()
@@ -152,9 +97,10 @@ public sealed partial class TitleScreenController : MonoBehaviour
         }
         if (mainStatus != null) mainStatus.text = "";
         RefreshContinueButton();
+        RestoreTerminalSelection();
     }
 
-    private void CreateTitleText(
+    private Text CreateTitleText(
         RectTransform parent,
         string value,
         Vector2 position,
@@ -165,7 +111,7 @@ public sealed partial class TitleScreenController : MonoBehaviour
         rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.pivot = new Vector2(0.5f, 0.5f);
         rect.anchoredPosition = position;
-        rect.sizeDelta = new Vector2(360f, fontSize + 8f);
+        rect.sizeDelta = new Vector2(540f, fontSize + 16f);
         Text text = textObject.GetComponent<Text>();
         text.text = value;
         text.font = titleFont;
@@ -175,6 +121,8 @@ public sealed partial class TitleScreenController : MonoBehaviour
         text.color = GhostBlue;
         text.raycastTarget = false;
         TitleScreenGlow.Attach(text);
+        EnhanceTerminalGlow(text);
+        return text;
     }
 
     private Button CreateOption(
@@ -193,44 +141,47 @@ public sealed partial class TitleScreenController : MonoBehaviour
         rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.pivot = new Vector2(0.5f, 0.5f);
         rect.anchoredPosition = new Vector2(0f, verticalPosition);
-        rect.sizeDelta = new Vector2(320f, 56f);
+        bool mainMenu = parent.name == "Title Options";
+        rect.sizeDelta = mainMenu ? new Vector2(400f, 48f) : new Vector2(440f, 48f);
 
         Image image = optionObject.GetComponent<Image>();
-        Color normalColor = interactable ? ButtonBlue : new Color(0f, 0f, 0f, 0f);
-        image.color = normalColor;
+        image.color = Color.clear;
 
         Button button = optionObject.GetComponent<Button>();
         button.targetGraphic = image;
         button.interactable = interactable;
         button.transition = Selectable.Transition.None;
-        if (interactable)
-        {
-            PauseMenuButtonHover hover =
-                optionObject.AddComponent<PauseMenuButtonHover>();
-            hover.Configure(
-                image,
-                normalColor,
-                Color.Lerp(normalColor, GhostBlue, 0.42f));
-        }
         if (action != null)
         {
-            button.onClick.AddListener(action);
+            button.onClick.AddListener(() =>
+            {
+                if (terminalReady && button.IsInteractable() && !RetroSceneLoadReveal.IsBlockingInput)
+                {
+                    PlayTerminalConfirm();
+                    action();
+                }
+            });
         }
 
         GameObject textObject = CreateUiObject("Label", rect, typeof(Text));
         RectTransform textRect = textObject.GetComponent<RectTransform>();
         Stretch(textRect);
-        textRect.offsetMin = new Vector2(12f, 2f);
-        textRect.offsetMax = new Vector2(-12f, -2f);
+        textRect.offsetMin = new Vector2(36f, 2f);
+        textRect.offsetMax = new Vector2(-32f, -2f);
         Text text = textObject.GetComponent<Text>();
         text.text = label;
         text.font = titleFont;
-        text.fontSize = interactable ? 23 : 19;
+        text.fontSize = mainMenu && interactable ? 30 : 22;
+        text.horizontalOverflow = HorizontalWrapMode.Overflow;
+        text.verticalOverflow = VerticalWrapMode.Overflow;
         text.fontStyle = FontStyle.Normal;
         text.alignment = TextAnchor.MiddleLeft;
         text.color = interactable ? GhostBlue : DisabledBlue;
         text.raycastTarget = false;
         TitleScreenGlow.Attach(text);
+        EnhanceTerminalGlow(text);
+        var feedback = optionObject.AddComponent<TitleTerminalOption>();
+        feedback.Configure(text, GhostBlue, DisabledBlue, this);
         return button;
     }
 
@@ -303,6 +254,7 @@ public sealed partial class TitleScreenController : MonoBehaviour
         image.color = color;
         image.raycastTarget = false;
         TitleScreenGlow.Attach(image);
+        EnhanceTerminalGlow(image);
     }
 
     private static GameObject CreateUiObject(

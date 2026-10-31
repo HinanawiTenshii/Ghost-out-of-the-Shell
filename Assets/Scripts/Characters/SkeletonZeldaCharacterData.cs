@@ -149,7 +149,7 @@ public sealed class SkeletonZeldaCharacterData : ZeldaCharacterData
     {
         if(renderer==null || IsDead) return;
         direction=Mathf.Abs(facing.x)>Mathf.Abs(facing.y) ? (facing.x<0 ? 2:3) : (facing.y>0 ? 1:0);
-        int pose=attacking ? 3 : moving ? 1+Mathf.FloorToInt(Time.time*7)%2 : 0;
+        int pose=attacking ? 3 : moving ? 1+GetMovementAnimationFrame(7f) : 0;
         renderer.sprite=GetPreviewSprite(direction,pose);
         renderer.color=GetDamageFeedbackTint(Color.white);
     }

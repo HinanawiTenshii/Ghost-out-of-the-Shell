@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Level0
   m_EditorClassIdentifier: Assembly-CSharp::RuntimeMiniMapSceneData
   schemaVersion: 6
-  sourceRevision: af75e2784c79b875eb1b44dfe1b0dfd8
+  sourceRevision: 452a73120760885a52e9c8b039880a7d
   sceneName: Level0
   displayName: "\u5730\u4E0B\u76D1\u7262"
   blockPaths:

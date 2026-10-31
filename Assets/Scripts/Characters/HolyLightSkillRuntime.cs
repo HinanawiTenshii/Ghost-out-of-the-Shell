@@ -73,7 +73,8 @@ public sealed class HolyLightSkillRuntime : MonoBehaviour
         go.transform.position = center;
         var visual = go.AddComponent<HolyLightColumnVisual>(); visual.Configure(radius, hold);
         strikes.Add(new Strike { center = center, at = at, radius = radius, hold = hold, visual = visual,
-            resolver = ZeldaAttackHitbox.CreateCircularAreaResolver(power, owner, go.transform) });
+            // The column descends from above, not from its caster's horizontal position.
+            resolver = ZeldaAttackHitbox.CreateCircularAreaResolver(power, owner, go.transform, false) });
     }
 
     private void Update() => Advance(Time.deltaTime);

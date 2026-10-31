@@ -108,12 +108,15 @@ public static class NoticeBoardReadingSmoke
         Check(DocumentReader.IsDocumentOpen && DocumentReader.IsInputBlocked && Time.timeScale == 0, "reading pauses gameplay and blocks input");
         Check(canvas.activeSelf && content.text == notice && content.color == ZeldaUiPalette.Primary, "shared reading window shows exact text and palette");
         Check(content.font == Get<Font>(reader, "documentFont") && content.font != null, "project font reused");
+        Check(canvas.transform.Find("Document Panel/Close Hint").GetComponent<Text>().text == "按[E] / [Esc]关闭",
+            "board documents show both close keys");
         Check(!prompt.activeSelf, "read prompt hidden while open");
         var other = Object.Instantiate(prefab); var otherReader = other.GetComponent<DocumentReader>();
         SetText(otherReader, "另一张公告"); Call(otherReader, "OpenDocument");
         Check(!Get<GameObject>(otherReader, "readingCanvasObject").activeSelf && content.text == notice, "cannot stack reading windows; instances keep independent text");
         Call(reader, "CloseDocument");
         Check(!DocumentReader.IsDocumentOpen && !canvas.activeSelf && Time.timeScale == .5f, "close restores original time scale");
+        Check(DocumentReader.IsInputBlocked, "closing frame consumes input so Escape cannot also open pause menu");
         Call(reader, "OpenDocument"); Check(!DocumentReader.IsDocumentOpen, "close frame cannot reopen");
         yield return null;
         Call(reader, "OpenDocument"); Check(DocumentReader.IsDocumentOpen, "can reopen on later frame");
@@ -143,6 +146,8 @@ public static class NoticeBoardReadingSmoke
         actor.transform.position = Vector3.down * .8f;
         SetText(original, "原文档仍然可读。\n第二行。"); Call(original, "OpenDocument");
         Check(DocumentReader.IsDocumentOpen && Get<Text>(original, "contentText").text == original.DocumentText, "legacy document reading works");
+        Check(Get<GameObject>(original, "readingCanvasObject").transform.Find("Document Panel/Close Hint").GetComponent<Text>().text.Contains("[Esc]"),
+            "legacy document also exposes Escape close hint");
         Call(original, "CloseDocument");
         Check(Time.timeScale == 1, "legacy document close restores time");
         var sign = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Decorations/ReadableNoticeSign.prefab");

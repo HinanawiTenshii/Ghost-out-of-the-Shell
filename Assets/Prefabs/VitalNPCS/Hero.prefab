@@ -149,7 +149,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   health: 10
-  skillValue: 4
+  skillValue: 5
   permissionLevel: 0
   possessionEnergy: 3
   possessionCost: 1
@@ -181,7 +181,18 @@ MonoBehaviour:
   deathSoundMaxDistance: 16
   attributeWindowOffset: {x: 0, y: -0.25}
   attributeWindowScale: 2.2
-  attackPower: 3
+  persistentIdentity: {fileID: 0}
+  sprintVisualSettings:
+    enabled: 1
+    cadenceMultiplier: 1.5
+    transitionSeconds: 0.12
+    bobPixels: 1
+    bobCyclesPerSecond: 2.5
+    dust: 1
+    dustStepDistance: 1.1
+    particlesPerStep: 2
+    dustColor: {r: 0.69, g: 0.7, b: 0.72, a: 0.48}
+  attackPower: 5
   attackPrefab: {fileID: 100000, guid: c7a3afec32db4e4d83d29bb18d2f601c, type: 3}
   attackDuration: 0.25
   attackSpawnOffset: {x: 0, y: 0.6}
@@ -194,13 +205,20 @@ MonoBehaviour:
   capeShadow: {r: 0.1, g: 0.2, b: 0.35, a: 1}
   visorColor: {r: 0.08, g: 0.23, b: 0.32, a: 1}
   walkFramesPerSecond: 7
-  faceColor: {r: 0.96, g: 0.76, b: 0.54, a: 1}
   hairColor: {r: 0.88, g: 0.66, b: 0.25, a: 1}
+  faceColor: {r: 0.96, g: 0.76, b: 0.54, a: 1}
   collarColor: {r: 0.88, g: 0.93, b: 0.89, a: 1}
-  metalColor: {r: 0.69, g: 0.8, b: 0.85, a: 1}
-  bootsColor: {r: 0.25, g: 0.17, b: 0.12, a: 1}
   leatherColor: {r: 0.43, g: 0.26, b: 0.14, a: 1}
+  bootsColor: {r: 0.25, g: 0.17, b: 0.12, a: 1}
+  metalColor: {r: 0.69, g: 0.8, b: 0.85, a: 1}
   goldColor: {r: 0.94, g: 0.75, b: 0.32, a: 1}
+  enableDirectionalShield: 1
+  shieldBlockAngle: 90
+  blockMelee: 1
+  blockProjectiles: 1
+  blockExplosions: 1
+  shieldBlockSound: {fileID: 0}
+  shieldBlockVolume: 0.5
 --- !u!114 &846310000000000007
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -278,6 +296,8 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   collisionSkinWidth: 0.01
+  independentHostileDuration: 9
+  independentSearchDuration: 12
   searchRadius: 1.8
   searchWaypointTolerance: 0.15
   searchWaypointChangeInterval: 1.2
@@ -352,3 +372,5 @@ MonoBehaviour:
   pursuitSpacing: 0.16
   pursuitLookAheadTime: 0.7
   pursuitOvertakeSpeedAdvantage: 0.15
+  sharedSearchWaypointPauseDuration: 2
+  sharedSearchMinimumMoveDistance: 1.2

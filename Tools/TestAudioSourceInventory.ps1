@@ -14,7 +14,7 @@ if (@($recordedPaths | Select-Object -Unique).Count -ne $recordedPaths.Count) { 
 
 foreach ($entry in $inventory.assets) {
     if (-not $register.Contains($entry.path)) { throw "Missing source-register entry: $($entry.path)" }
-    if ($entry.sourceId -notin @('S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10', 'S11', 'S12', 'S13', 'S14', 'S15', 'S16', 'S17', 'S18', 'S19', 'S20', 'M-ART', 'UNKNOWN')) { throw "Unknown source ID: $($entry.sourceId)" }
+    if ($entry.sourceId -notin @('S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10', 'S11', 'S12', 'S13', 'S14', 'S15', 'S16', 'S17', 'S18', 'S19', 'S20', 'M-ART', 'Visager', 'FreesoundSandstorm', 'Domi', 'UNKNOWN')) { throw "Unknown source ID: $($entry.sourceId)" }
     $assetPath = Join-Path $projectRoot $entry.path
     $hash = (Get-FileHash -LiteralPath $assetPath -Algorithm SHA256).Hash
     if ($hash -ne $entry.sha256) { throw "Audio changed since provenance snapshot: $($entry.path)" }

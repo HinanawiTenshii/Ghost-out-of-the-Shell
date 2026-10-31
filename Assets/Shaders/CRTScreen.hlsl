@@ -3,6 +3,7 @@
 
 sampler2D _MainTex;
 float4 _MainTex_TexelSize;
+float4 _CRT_Viewport;
 
 float _CRT_Curvature;
 float _CRT_ScanlineIntensity;
@@ -25,7 +26,11 @@ float CRT_Hash(float2 p)
 
 void CRT_float(float4 ScreenPosition, out float4 Out)
 {
-    float2 uv = ScreenPosition.xy;
+    // Curvature, scanlines and vignette belong to the virtual display, not its
+    // surrounding black bars. A full (0,0,1,1) rect preserves normal gameplay.
+    float4 viewport = _CRT_Viewport;
+    if (viewport.z <= 0.0 || viewport.w <= 0.0) viewport = float4(0.0, 0.0, 1.0, 1.0);
+    float2 uv = (ScreenPosition.xy - viewport.xy) / viewport.zw;
     float2 centered = uv * 2.0 - 1.0;
 
     // Side-only CRT curvature. The vertical center line remains unchanged;
@@ -40,11 +45,12 @@ void CRT_float(float4 ScreenPosition, out float4 Out)
     float inside = step(0.0, uv.x) * step(uv.x, 1.0)
                  * step(0.0, uv.y) * step(uv.y, 1.0);
     float2 safeUv = saturate(uv);
+    float2 sourceUv = viewport.xy + safeUv * viewport.zw;
 
     float2 aberration = float2(_CRT_ChromaticAberration * _MainTex_TexelSize.x, 0.0);
-    float red = tex2D(_MainTex, saturate(safeUv + aberration)).r;
-    float green = tex2D(_MainTex, safeUv).g;
-    float blue = tex2D(_MainTex, saturate(safeUv - aberration)).b;
+    float red = tex2D(_MainTex, saturate(sourceUv + aberration)).r;
+    float green = tex2D(_MainTex, sourceUv).g;
+    float blue = tex2D(_MainTex, saturate(sourceUv - aberration)).b;
     float3 color = float3(red, green, blue);
 
     // Vary only along the vertical UV axis so each band spans the full screen
@@ -52,7 +58,7 @@ void CRT_float(float4 ScreenPosition, out float4 Out)
     float scanPhase = sin(safeUv.y * _CRT_ScanlineCount * 6.2831853);
     float scanline = lerp(1.0, 0.5 + 0.5 * scanPhase, _CRT_ScanlineIntensity);
 
-    float pixelColumn = floor(safeUv.x * _ScreenParams.x);
+    float pixelColumn = floor(sourceUv.x * _ScreenParams.x);
     float3 phosphor = float3(
         0.72 + 0.28 * step(2.0, fmod(pixelColumn, 3.0)),
         0.72 + 0.28 * step(2.0, fmod(pixelColumn + 2.0, 3.0)),
@@ -61,7 +67,7 @@ void CRT_float(float4 ScreenPosition, out float4 Out)
 
     float2 vignetteUv = safeUv * (1.0 - safeUv.yx);
     float vignette = saturate(pow(saturate(vignetteUv.x * vignetteUv.y * 16.0), _CRT_Vignette));
-    float noise = (CRT_Hash(floor(safeUv * _ScreenParams.xy) + _CRT_TimeValue) - 0.5)
+    float noise = (CRT_Hash(floor(sourceUv * _ScreenParams.xy) + _CRT_TimeValue) - 0.5)
                 * _CRT_NoiseIntensity;
 
     color = color * scanline + noise;

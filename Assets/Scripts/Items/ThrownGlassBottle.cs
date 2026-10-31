@@ -136,7 +136,8 @@ public sealed class ThrownGlassBottle : MonoBehaviour
     private void ApplyImpact(Component target)
     {
         if (target is ZeldaCharacterData character)
-        { if (!character.IsDead && character.CanTakeAttackDamage) character.TakeDamage(AttackPower, owner); }
+        { if (!character.IsDead && character.CanTakeAttackDamage)
+            character.TakeDamage(AttackPower, owner, DirectionalDamageContext.Projectile(direction)); }
         else if (target is DoorData door) door.ReceiveAttack(AttackPower, owner, true);
         else if (target is CardboardBoxPickupItem box) box.ReceiveAttack(AttackPower, owner);
         else if (target is BatteryPickupItem battery) battery.ReceiveAttack(AttackPower, owner);

@@ -16,7 +16,7 @@ public sealed class SilenceSealRelicPickupItem : PickupItemBase
     {
         var mover = ZeldaRuntimeRegistry.GetControlledMover();
         var owner = mover != null ? mover.CharacterData : null;
-        if (!CanAttemptPickup || !isActiveAndEnabled || IsPickupLocked || owner == null ||
+        if (!CanAttemptPickup || !isActiveAndEnabled || IsPickupLocked || IsPickupBlockedForControlledCharacter() || owner == null ||
             owner.IsDead || owner.IsGhostLike || !mover.isActiveAndEnabled ||
             DocumentReader.IsInputBlocked || Time.timeScale <= 0f || GameSaveSystem.IsLoading ||
             ZeldaRuntimeRegistry.GetGameplayScene(gameObject) != ZeldaRuntimeRegistry.GetGameplayScene(mover.gameObject) ||

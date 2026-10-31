@@ -1,6 +1,6 @@
 using UnityEngine;
 
-/// <summary>Visual-only scatter, homing and arrival effect. Never awards currency.</summary>
+/// <summary>Scatter, homing and arrival feedback. Never awards currency.</summary>
 public sealed class GrowthCollectiblePickupEffect : MonoBehaviour
 {
     private const float MaximumDuration = 12f;
@@ -25,6 +25,17 @@ public sealed class GrowthCollectiblePickupEffect : MonoBehaviour
     private ZeldaFourWayMover cachedTarget;
     private ZeldaCharacterData targetData;
     private SpriteRenderer targetVisual;
+    private GrowthPickupFlightAudio flightAudio;
+    private AudioClip homingClip, absorptionClip;
+    private float homingVolume, absorptionVolume;
+    private bool audioConfigured, audioAttempted;
+
+    public void ConfigureAudio(AudioClip homing, AudioClip absorption, float flightVolume, float arrivalVolume)
+    {
+        homingClip = homing; absorptionClip = absorption;
+        homingVolume = Mathf.Clamp01(flightVolume); absorptionVolume = Mathf.Clamp01(arrivalVolume);
+        audioConfigured = true;
+    }
 
     public void Initialize(int count, float scatterSeconds, float scatterSpeed, float followSpeed,
         float trailSeconds, float flashSeconds, int sortingOrder,
@@ -172,6 +183,13 @@ public sealed class GrowthCollectiblePickupEffect : MonoBehaviour
         // Split a frame that crosses the phase boundary instead of holding the
         // endpoints for a whole frame. The remaining time continues the same flight.
         float homingDelta = Mathf.Max(0f, elapsed - Mathf.Max(previousElapsed, scatterDuration));
+        bool homingNow = homingDelta > 0f && hasTarget && !expired;
+        if (audioConfigured && !audioAttempted && homingNow && !GameSaveSystem.IsLoading)
+        {
+            audioAttempted = true;
+            flightAudio = GrowthPickupFlightAudio.Create(this, homingClip, absorptionClip, homingVolume, absorptionVolume);
+        }
+        int arrivals = 0;
         for (int i = 0; i < count; i++)
         {
             // ParticleSystem can compact/reorder the array after deaths. Seed is the
@@ -225,6 +243,7 @@ public sealed class GrowthCollectiblePickupEffect : MonoBehaviour
                 }
                 if (arrived)
                 {
+                    arrivals++;
                     buffer[i].position = destination;
                     buffer[i].remainingLifetime = -1f;
                     ribbons.Arrive(id, destination, elapsed - timeLeft);
@@ -251,6 +270,7 @@ public sealed class GrowthCollectiblePickupEffect : MonoBehaviour
             remaining++;
         }
         particles.SetParticles(buffer, count);
+        if (flightAudio != null) flightAudio.ReportFrame(homingNow, arrivals, remaining, destination);
         if (expired) ribbons.ClearAll();
         ribbons.Render(elapsed, hasTarget, destination);
         if (remaining == 0 && !ribbons.HasVisibleRibbons)
@@ -337,6 +357,7 @@ public sealed class GrowthCollectiblePickupEffect : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (flightAudio != null) flightAudio.Finish();
         ribbons?.Dispose();
         if (flashMaterial != null) Destroy(flashMaterial);
     }

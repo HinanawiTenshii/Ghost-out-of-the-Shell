@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d3a7219158374bc7a0730b0e3ab07301, type: 3}
+  m_Name: TerminalSceneLoadStyle
+  m_EditorClassIdentifier:
+  font: {fileID: 12800000, guid: 292af55397c443f6a5d7774297dac481, type: 3}
+  beginSound: {fileID: 8300000, guid: d3a7219158374bc7a0730b0e3ab07304, type: 3}
+  scanSound: {fileID: 8300000, guid: d3a7219158374bc7a0730b0e3ab07305, type: 3}
+  readySound: {fileID: 8300000, guid: d3a7219158374bc7a0730b0e3ab07306, type: 3}
+  volume: 0.25
+  areas:
+  - scene: "Level0"
+    label: "地下监牢"
+  - scene: "Level1-Garden"
+    label: "城堡庭院"
+  - scene: "Level1-Floor-1"
+    label: "城堡地下室"
+  - scene: "Level1-Floor1"
+    label: "城堡一楼"
+  - scene: "Level1-Floor2"
+    label: "城堡二楼"
+  - scene: "Level1-Floor3"
+    label: "城堡三楼"
+  - scene: "Level2-Desert"
+    label: "沙漠"
+  - scene: "Level2-Floor-1"
+    label: "城镇地下"
+  - scene: "Level2-Floor1"
+    label: "城镇一层"
+  - scene: "Level2-Floor2"
+    label: "城镇二层"
+  - scene: "TutorialLevel"
+    label: "教学关卡"
+  - scene: "Tutorial_SwordCave"
+    label: "剑之洞窟"
+  - scene: "Tutorial_Skills&Battles"
+    label: "试炼之路"
+  - scene: "Tutorial_Castle"
+    label: "城堡"
+  - scene: "Tutorial_Basic&Attackpower"
+    label: "旅途起点"
+  - scene: "DevlogDemo"
+    label: "开发日志演示"
+  - scene: "VisualStyleLab"
+    label: "视觉实验街区"

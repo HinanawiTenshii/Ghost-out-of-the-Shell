@@ -1,0 +1,36 @@
+BACKGROUND MUSIC / 背景音乐署名
+
+Music by Visager (Josie Brechner)
+https://visager.bandcamp.com/
+
+Eerie Mausoleum [Loop]
+Album: Songs From An Unmade World 2 (2016)
+Used in: Level0
+Source: https://freemusicarchive.org/music/Visager/Songs_From_An_Unmade_World_2/Visager_-_Songs_From_An_Unmade_World_2_-_29_Eerie_Mausoleum_-Loop-/
+
+Royal Entrance [Loop]
+Album: Songs From An Unmade World 2 (2016)
+Used in: Level1 (all five areas)
+Source: https://freemusicarchive.org/music/Visager/Songs_From_An_Unmade_World_2/Visager_-_Songs_From_An_Unmade_World_2_-_18_Royal_Entrance_-Loop-/
+
+Pyramid Level [Loop]
+Album: Songs From An Unmade World (2015)
+Used in: Level2-Floor-1, Level2-Floor1, Level2-Floor2
+Source: https://freemusicarchive.org/music/Visager/Songs_From_An_Unmade_World/Visager_-_Songs_from_an_Unmade_World_-_15_Pyramid_Level_-Loop-/
+
+Miniboss Fight [Loop]
+Album: Songs From An Unmade World 2 (2016)
+Used in: Level2-Desert, after encountering the Sandworm Boss
+Source: https://freemusicarchive.org/music/Visager/Songs_From_An_Unmade_World_2/Visager_-_Songs_From_An_Unmade_World_2_-_28_Miniboss_Fight_-Loop-/
+
+All four tracks are licensed under Creative Commons Attribution 4.0 International (CC BY 4.0).
+License: https://creativecommons.org/licenses/by/4.0/
+Legal code: https://creativecommons.org/licenses/by/4.0/legalcode
+
+Changes: Original loop-version MP3 files retained unchanged in the project.
+Unity transcodes the audio to Vorbis for streaming playback. Playback volume is reduced in-game.
+No composition, arrangement, pitch or tempo changes. No endorsement by the composer is implied.
+
+以上四首音乐采用 CC BY 4.0 许可，版权归原作者所有。
+项目保留原始循环版音源，仅由引擎转码并降低播放音量，未改变旋律、编曲、音高或速度。
+本署名文件随游戏发布；仅涵盖上述四首音乐，不替代项目中其他素材的授权说明。

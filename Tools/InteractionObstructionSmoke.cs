@@ -107,6 +107,8 @@ public static class InteractionObstructionSmoke
         Check(Select(notice), "many overlapping trigger areas do not cause false obstruction");
         var group = Go("Scene group"); notice.transform.SetParent(group.transform, true);
         var siblingWall = Box("Sibling obstacle", new Vector2(.55f,.25f), new Vector2(.08f,2)); siblingWall.transform.SetParent(group.transform, true);
+        Check(Select(notice), "signpost reading ignores sibling furniture");
+        siblingWall.gameObject.layer = LayerMask.NameToLayer("Blocks"); Physics2D.SyncTransforms();
         Check(!Select(notice), "shared scene parent does not exempt unrelated obstacles");
         siblingWall.enabled = false;
         Check(Select(notice) && Execute(notice, () => Call(notice,"OpenWindow")) && SignpostInteraction.BlocksInput,
@@ -115,12 +117,42 @@ public static class InteractionObstructionSmoke
 
         Setup(); var doc = Go("Readable text", new Vector2(1.1f,0)).AddComponent<DocumentReader>();
         var obstruction = Box("Glass", new Vector2(.55f,.125f), new Vector2(.08f,2), "Visible Non Blocking");
+        var documentGlass = obstruction.gameObject.AddComponent<DoorData>();
+        typeof(DoorData).GetField("breakMaterial",F).SetValue(documentGlass, DoorData.BreakMaterial.Glass);
         Check(!Select(doc) && !Execute(doc, () => Call(doc,"OpenDocument")) && !DocumentReader.IsDocumentOpen,
             "glass prevents real document opening");
         obstruction.enabled = false;
         Check(Select(doc) && Execute(doc, () => Call(doc,"OpenDocument")) && DocumentReader.IsDocumentOpen,
             "real document opens after obstacle removal");
         Call(doc,"CloseDocument"); yield return null;
+
+        Setup(); doc = Go("Document across furniture", new Vector2(1.1f,0)).AddComponent<DocumentReader>();
+        var furniture = Box("Solid table surrounding document", new Vector2(.65f,.125f), new Vector2(1.4f,1));
+        furniture.gameObject.AddComponent<DoorData>(); // Destructible furniture is not a door.
+        foreach(string layer in new[]{"Default", "Visible Non Blocking", "Ignore Raycast"})
+        {
+            furniture.gameObject.layer=LayerMask.NameToLayer(layer);Physics2D.SyncTransforms();
+            Check(Select(doc),"reading ignores furniture including overlapping endpoints: "+layer);
+        }
+        Check(Execute(doc,()=>Call(doc,"OpenDocument"))&&DocumentReader.IsDocumentOpen,"real document opens across solid furniture");
+        Call(doc,"CloseDocument");yield return null;
+        furniture.gameObject.SetActive(false);
+        var hinge=Go("Arbitrarily named door",new Vector2(.55f,.125f)).AddComponent<DoorHingeInteraction>();
+        var leaf=Box("Door child",new Vector2(.55f,.125f),new Vector2(.08f,2));leaf.transform.SetParent(hinge.transform,true);
+        Check(!Select(doc),"closed hinge door blocks reading on Default");
+        leaf.enabled=false;Check(Select(doc),"open door collider releases reading");
+        leaf.enabled=true;Physics2D.SyncTransforms();
+        Check(!Execute(doc,()=>{throw new Exception("Read through closing door");}),"door closing after prompt blocks final reading request");
+        hinge.gameObject.SetActive(false);
+        var sliding=Go("Sliding barrier").AddComponent<DoubleSlidingDoor>();sliding.enabled=false;
+        var slidingLeaf=Box("Sliding door child",new Vector2(.55f,.125f),new Vector2(.08f,2),"Visible Non Blocking");
+        slidingLeaf.transform.SetParent(sliding.transform,true);
+        Check(!Select(doc),"sliding door child blocks reading on non-wall layer");
+        slidingLeaf.gameObject.SetActive(false);Check(Select(doc),"inactive sliding leaf no longer blocks");
+        sliding.gameObject.SetActive(false);
+        var wallTrigger=Box("Explicit wall",new Vector2(.55f,.125f),new Vector2(.08f,2),"Hidden Blocks",true);
+        Check(!Select(doc),"wall-trigger barrier still blocks reading");
+        wallTrigger.gameObject.SetActive(false);
 
         Setup(); var inventory = PersistentInventory.Instance ?? Go("Inventory").AddComponent<PersistentInventory>();
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/PickupItems/GoldCoinPickupItem.prefab");

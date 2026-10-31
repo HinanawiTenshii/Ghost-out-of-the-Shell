@@ -42,6 +42,7 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
     private Vector2 viewCenterNormalized = new Vector2(0.5f, 0.5f);
     private bool showTrackedQuestTarget;
     private bool clampQuestTargetToBorder;
+    private float questBorderInset;
     private Vector2 trackedQuestTargetPosition;
     private readonly List<Vector2> additionalTrackedQuestTargets = new List<Vector2>();
 
@@ -143,6 +144,16 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
         trackedQuestTargetPosition = worldPosition;
         clampQuestTargetToBorder = clampToBorder;
         SetVerticesDirty();
+    }
+
+    // Normally zero. The HUD incident ring reserves only its actual occupied
+    // strip while visible; the full map has no such overlay.
+    public void SetQuestBorderInset(float inset)
+    {
+        inset = Mathf.Max(0f, inset);
+        if (Mathf.Approximately(questBorderInset, inset)) return;
+        questBorderInset = inset;
+        if (showTrackedQuestTarget && markerLayer != null) markerLayer.SetVerticesDirty();
     }
 
     public void ResetView()
@@ -700,7 +711,10 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
             AddDiamond(vertexHelper, cameraCenter, 9f * iconScale, markerColor);
         }
 
-
+        float borderInset = Mathf.Min(questBorderInset, Mathf.Min(drawingRect.width, drawingRect.height) * .5f);
+        Rect questRect = new Rect(drawingRect.xMin + borderInset, drawingRect.yMin + borderInset,
+            Mathf.Max(0f, drawingRect.width - borderInset * 2f), Mathf.Max(0f, drawingRect.height - borderInset * 2f));
+        float questScale = clampQuestTargetToBorder ? GetQuestBorderMarkerScale(questRect, iconScale) : iconScale;
         for (int targetIndex = 0; showTrackedQuestTarget && targetIndex <= additionalTrackedQuestTargets.Count; targetIndex++)
         {
             Vector2 targetCenter = MapPoint(
@@ -708,27 +722,36 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
                 worldCenter,
                 rectCenter,
                 scale);
-            if (clampQuestTargetToBorder &&
-                !drawingRect.Contains(targetCenter))
-            {
-                // Intersect the direction from the minimap centre to the
-                // off-screen objective with the actual frame. Keeping the
-                // marker centre on this intersection makes it sit on the
-                // border instead of floating one icon-radius inside it.
-                Vector2 direction = targetCenter - drawingRect.center;
-                float horizontalFactor = Mathf.Abs(direction.x) > 0.0001f
-                    ? drawingRect.width * 0.5f / Mathf.Abs(direction.x)
-                    : float.PositiveInfinity;
-                float verticalFactor = Mathf.Abs(direction.y) > 0.0001f
-                    ? drawingRect.height * 0.5f / Mathf.Abs(direction.y)
-                    : float.PositiveInfinity;
-                float borderFactor = Mathf.Min(
-                    horizontalFactor,
-                    verticalFactor);
-                targetCenter = drawingRect.center + direction * borderFactor;
-            }
-            AddQuestTargetMarker(vertexHelper, targetCenter, iconScale);
+            if (clampQuestTargetToBorder)
+                targetCenter = ClampQuestMarkerToBorder(targetCenter, questRect, questScale);
+            AddQuestTargetMarker(vertexHelper, targetCenter, questScale);
         }
+    }
+
+    // Leave the complete marker inside the clipping rect, including targets whose
+    // centres are still visible but whose glyphs would already cross the edge.
+    // One unit of rasterization clearance, not the former six-unit dead band.
+    // Use the hexagon's actual width; its bounds are not a square.
+    private static float QuestBorderClearance(Rect rect)
+        => Mathf.Min(1f, Mathf.Max(0f, Mathf.Min(rect.width, rect.height)) * .1f);
+
+    internal static float GetQuestBorderMarkerScale(Rect rect, float requestedScale)
+        => Mathf.Max(0f, Mathf.Min(requestedScale, Mathf.Min(
+            (rect.width - QuestBorderClearance(rect) * 2f) / (QuestFlagGlyph.HalfWidth * 2f),
+            (rect.height - QuestBorderClearance(rect) * 2f) / QuestFlagGlyph.Size)));
+
+    internal static Vector2 ClampQuestMarkerToBorder(Vector2 position, Rect rect, float markerScale)
+    {
+        float clearance = QuestBorderClearance(rect);
+        Vector2 half = new Vector2(Mathf.Max(0f, rect.width * .5f - QuestFlagGlyph.HalfWidth * markerScale - clearance),
+            Mathf.Max(0f, rect.height * .5f - QuestFlagGlyph.HalfSize * markerScale - clearance));
+        Vector2 direction = position - rect.center;
+        float factor = 1f;
+        if (Mathf.Abs(direction.x) > .0001f) factor = Mathf.Min(factor, half.x / Mathf.Abs(direction.x));
+        if (Mathf.Abs(direction.y) > .0001f) factor = Mathf.Min(factor, half.y / Mathf.Abs(direction.y));
+        // Ray/rectangle intersection preserves bearing, including diagonals.
+        // The badge itself stays upright rather than becoming a direction arrow.
+        return rect.center + direction * factor;
     }
 
     private void CollectKnownQuestTargets(Scene scene)
@@ -1288,12 +1311,7 @@ public sealed partial class RuntimeMiniMapGraphic : MaskableGraphic
         Vector2 center,
         float scale)
     {
-        Color border = Color.white;
-        Color outer = new Color32(18, 92, 108, 255);
-        Color inner = new Color32(86, 190, 245, 255);
-        AddDiamond(vertexHelper, center, 14f * scale, border);
-        AddDiamond(vertexHelper, center, 11.4f * scale, outer);
-        AddDiamond(vertexHelper, center, 5.8f * scale, inner);
+        QuestFlagGlyph.AddTo(vertexHelper, center, scale);
     }
 
     private static void AddSolidTriangle(

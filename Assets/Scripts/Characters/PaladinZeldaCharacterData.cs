@@ -113,11 +113,14 @@ public class PaladinZeldaCharacterData : ZeldaCharacterData
         if (renderer == null) return;
         if (visualsDirty) { ReleaseSprites(); visualsDirty = false; }
         int direction = Mathf.Abs(facing.x) > Mathf.Abs(facing.y) ? (facing.x < 0f ? 2 : 3) : (facing.y > 0f ? 1 : 0);
-        int pose = isAttacking ? 3 : isMoving ? 1 + (Mathf.FloorToInt(Time.time * walkFramesPerSecond) % 2) : 0;
+        int pose = GetVisualPose(isMoving, isAttacking);
         if (frames[direction, pose] == null) frames[direction, pose] = CreateSprite(direction, pose);
         renderer.sprite = frames[direction, pose];
         renderer.color = GetDamageFeedbackTint(Color.white);
     }
+
+    protected int GetVisualPose(bool moving, bool attacking)
+        => attacking ? 3 : moving ? 1 + GetMovementAnimationFrame(walkFramesPerSecond) : 0;
 
     protected virtual Sprite CreateSprite(int direction, int pose)
     {
@@ -221,7 +224,7 @@ public class PaladinZeldaCharacterData : ZeldaCharacterData
         Gizmos.color = previousColor;
     }
 
-    private void OnDestroy() => ReleaseSprites();
+    protected virtual void OnDestroy() => ReleaseSprites();
     private void ReleaseSprites()
     {
         for (int d = 0; d < 4; d++)

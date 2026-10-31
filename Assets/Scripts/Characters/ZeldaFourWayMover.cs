@@ -152,6 +152,7 @@ public class ZeldaFourWayMover : MonoBehaviour
     public float MaximumStamina => Mathf.Max(0.1f, maximumStamina) * ExhibitionEdition.StaminaMultiplier;
     public void RestoreSavedMovement(Vector2 facing, float stamina)
     {
+        if (characterData != null) characterData.ResetSprintVisual();
         facingDirection = facing.sqrMagnitude > 0f ? facing.normalized : Vector2.down;
         currentStamina = Mathf.Clamp(stamina, 0f, MaximumStamina);
         moveDirection = Vector2.zero;
@@ -226,6 +227,7 @@ public class ZeldaFourWayMover : MonoBehaviour
 
     private void OnDisable()
     {
+        if (characterData != null) characterData.ResetSprintVisual();
         EndItemAttack();
         if (characterSkillProgressBar != null) characterSkillProgressBar.Hide();
         ZeldaRuntimeRegistry.NotifyMoverDisabled(this);
@@ -532,12 +534,14 @@ public class ZeldaFourWayMover : MonoBehaviour
     {
         if (characterData is TurretZeldaCharacterData)
         {
+            characterData.RecordSprintVisualMovement(Vector2.zero);
             rb.velocity = Vector2.zero;
             rb.angularVelocity = 0f;
             return;
         }
         if (IsAttacking || characterData.IsDead)
         {
+            characterData.RecordSprintVisualMovement(Vector2.zero);
             return;
         }
 
@@ -553,10 +557,12 @@ public class ZeldaFourWayMover : MonoBehaviour
             Mathf.Max(bodyCollider.bounds.extents.x, bodyCollider.bounds.extents.y));
         if (allowedDisplacement.sqrMagnitude <= 0f)
         {
+            characterData.RecordSprintVisualMovement(Vector2.zero);
             return;
         }
 
         rb.MovePosition(rb.position + allowedDisplacement);
+        characterData.RecordSprintVisualMovement(allowedDisplacement);
         PositionChanged?.Invoke();
     }
 

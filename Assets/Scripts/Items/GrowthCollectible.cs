@@ -35,6 +35,17 @@ public sealed class GrowthCollectible : MonoBehaviour
     [SerializeField, Range(0.18f, 0.45f)] private float pickupTrailDuration = 0.24f;
     [SerializeField, Range(0.05f, 0.5f)] private float pickupFlashDuration = 0.16f;
 
+    [Header("Pickup Audio")]
+    [Tooltip("留空时使用默认的 D.A.T.A 晶体碎裂音效。")]
+    [SerializeField] private AudioClip pickupSound;
+    [SerializeField, Range(0f, 1f)] private float pickupSoundVolume = 0.65f;
+    [Tooltip("粒子回流时的汇聚循环声；留空使用默认音效。")]
+    [SerializeField] private AudioClip homingSound;
+    [SerializeField, Range(0f, 1f)] private float homingSoundVolume = 0.38f;
+    [Tooltip("粒子实际抵达角色时的吸收声；留空使用默认音效。")]
+    [SerializeField] private AudioClip absorptionSound;
+    [SerializeField, Range(0f, 1f)] private float absorptionSoundVolume = 0.55f;
+
     private bool collected;
 
     private static Sprite circleSprite;
@@ -85,6 +96,8 @@ public sealed class GrowthCollectible : MonoBehaviour
 
     private void Awake()
     {
+        GrowthCollectibleAudio.Preload();
+        GrowthPickupFlightAudio.Preload();
         CircleCollider2D trigger = GetComponent<CircleCollider2D>();
         trigger.isTrigger = true;
         trigger.radius = Mathf.Max(orbitRadius, pickupDistance * 0.65f);
@@ -169,6 +182,7 @@ public sealed class GrowthCollectible : MonoBehaviour
         growth.AddCollectibles(Mathf.Max(1, collectibleAmount));
         LevelRunStatistics.RecordSkill(this, collectibleAmount);
         PlayPickupBurst();
+        GrowthCollectibleAudio.Play(gameObject.scene, transform.position, pickupSound, pickupSoundVolume);
         Destroy(gameObject);
         GameSaveSystem.RequestAutoSave("data_collected", true);
         return true;
@@ -186,6 +200,7 @@ public sealed class GrowthCollectible : MonoBehaviour
         effect.Initialize(pickupBurstParticleCount, pickupBurstLifetime, pickupBurstSpeed,
             pickupHomingSpeed, pickupTrailDuration, pickupFlashDuration,
             baseSortingOrder + 2, particleMaterial, lineMaterial, glowSprite.texture);
+        effect.ConfigureAudio(homingSound, absorptionSound, homingSoundVolume, absorptionSoundVolume);
         burstObject.SetActive(true);
         effect.Begin();
     }

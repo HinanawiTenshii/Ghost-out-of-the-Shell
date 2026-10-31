@@ -1,0 +1,22 @@
+fileFormatVersion: 2
+guid: b2f970775cb54a3ea2b71b2a51f349c2
+AudioImporter:
+  externalObjects: {}
+  serializedVersion: 6
+  defaultSettings:
+    loadType: 2
+    sampleRateSetting: 0
+    sampleRateOverride: 44100
+    compressionFormat: 1
+    quality: 0.8
+    conversionMode: 0
+  platformSettingOverrides: {}
+  forceToMono: 0
+  normalize: 0
+  preloadAudioData: 0
+  loadInBackground: 1
+  ambisonic: 0
+  3D: 0
+  userData: Visager / Josie Brechner - CC BY 4.0. See StreamingAssets/Visager-Music-Credits.txt
+  assetBundleName:
+  assetBundleVariant:

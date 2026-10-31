@@ -3,6 +3,7 @@ Shader "Hidden/Cogitans/CRTScreenFallback"
     Properties
     {
         _MainTex ("Screen Texture", 2D) = "white" {}
+        [HideInInspector] _CRT_Viewport ("Presentation Viewport", Vector) = (0,0,1,1)
         [HideInInspector] _CRT_Curvature ("Curvature", Float) = 0.08
         [HideInInspector] _CRT_ScanlineIntensity ("Scanline Intensity", Float) = 0.28
         [HideInInspector] _CRT_ScanlineCount ("Scanline Count", Float) = 240

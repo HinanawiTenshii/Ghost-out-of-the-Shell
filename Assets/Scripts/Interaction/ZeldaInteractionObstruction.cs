@@ -9,7 +9,7 @@ public static class ZeldaInteractionObstruction
     private static Collider2D[] overlaps = new Collider2D[16];
     private static readonly List<Collider2D> targetColliders = new List<Collider2D>(8);
     private static readonly List<Renderer> targetRenderers = new List<Renderer>(8);
-    private static readonly int pickupWallLayers = LayerMask.GetMask("Blocks", "Hidden Blocks");
+    private static readonly int wallLayers = LayerMask.GetMask("Blocks", "Hidden Blocks");
 
     public static bool HasClearPath(Component target, ZeldaFourWayMover actor, Vector2 interactionPosition)
     {
@@ -66,17 +66,22 @@ public static class ZeldaInteractionObstruction
             !ZeldaFourWayMover.ColliderBlocksPossession(hit) || !hit.gameObject.activeInHierarchy ||
             ZeldaRuntimeRegistry.GetGameplayScene(hit.gameObject) != ZeldaRuntimeRegistry.GetGameplayScene(actorRoot.gameObject)) return false;
 
-        // Items can be reached across furniture (including items placed on a
-        // solid tabletop). Reading/mechanisms keep the stricter solid-obstacle
-        // rule. Use the same policy for both the prompt and the final E request.
-        if (!(target is PickupItemBase) && !(target is GrowthCollectible)) return true;
-        if ((pickupWallLayers & (1 << hit.gameObject.layer)) != 0) return true;
+        // Reading and pickups can reach across furniture. Reading additionally
+        // respects door leaves; other mechanisms retain the solid-obstacle rule.
+        // The arbiter uses this for both prompt selection and the final E request.
+        bool reading = target is DocumentReader || target is SignpostInteraction;
+        if (!reading && !(target is PickupItemBase) && !(target is GrowthCollectible)) return true;
+        if ((wallLayers & (1 << hit.gameObject.layer)) != 0) return true;
 
         // Glass can be authored on Default or Visible Non Blocking, and its
         // collider may live on a child. Identify the material, not its name or
         // durability, so reinforced glass blocks pickups just like ordinary glass.
         var glass = hit.GetComponentInParent<DoorData>();
-        return glass != null && glass.IsBreakableGlass;
+        if (glass != null && glass.IsBreakableGlass) return true;
+        // DoorData alone also marks destructible boxes, bushes and props. Only
+        // actual door/gate owners count; child colliders and arbitrary layers work.
+        return reading && (hit.GetComponentInParent<DoorHingeInteraction>() != null ||
+            hit.GetComponentInParent<DoubleSlidingDoor>() != null || hit.GetComponentInParent<WaterwayGate>() != null);
     }
 
     private static Vector2 GetApproachPoint(Component target, Vector2 origin, Vector2 offeredPoint)

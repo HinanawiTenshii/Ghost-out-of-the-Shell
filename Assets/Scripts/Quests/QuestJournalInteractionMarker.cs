@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// <summary>
 /// Scene-only marker for an interaction that can add a quest journal entry.
-/// It deliberately uses world SpriteRenderers, so it is never captured by the
+/// It deliberately uses a world renderer, so it is never captured by the
 /// full map or real-time mini-map UI.
 /// </summary>
 public sealed class QuestJournalInteractionMarker : MonoBehaviour
@@ -16,13 +16,6 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
         public string title;
         public string details;
     }
-
-    private const int WhiteBorderOrder = 29997;
-    private const int DarkCyanOrder = 29998;
-    private const int SkyBlueOrder = 29999;
-
-    private static Texture2D sharedTexture;
-    private static Sprite sharedSprite;
 
     [SerializeField, Tooltip("World-space offset from the interaction object.")]
     private Vector2 markerOffset = new Vector2(0f, 0.72f);
@@ -372,53 +365,5 @@ public sealed class QuestJournalInteractionMarker : MonoBehaviour
     }
 
     internal static GameObject CreateWorldVisual(UnityEngine.SceneManagement.Scene scene)
-    {
-        EnsureSharedSprite();
-        var root = new GameObject("Quest Journal Interaction Marker") { hideFlags = HideFlags.DontSave };
-        UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(root, scene);
-        root.transform.rotation = Quaternion.Euler(0f, 0f, 45f);
-
-        CreateLayer(root, "White Border", 0.46f, Color.white, WhiteBorderOrder);
-        CreateLayer(root, "Dark Cyan Outer", 0.36f, new Color32(18, 92, 108, 255), DarkCyanOrder);
-        CreateLayer(root, "Sky Blue Inner", 0.18f, new Color32(86, 190, 245, 255), SkyBlueOrder);
-        return root;
-    }
-
-    private static void CreateLayer(GameObject root, string layerName, float size, Color color, int order)
-    {
-        GameObject layer = new GameObject(layerName, typeof(SpriteRenderer));
-        layer.transform.SetParent(root.transform, false);
-        layer.transform.localScale = new Vector3(size, size, 1f);
-
-        SpriteRenderer renderer = layer.GetComponent<SpriteRenderer>();
-        renderer.sprite = sharedSprite;
-        renderer.color = color;
-        renderer.sortingLayerID = 0;
-        // The vision mask is order 30000, while UI is rendered later by its
-        // composite camera. This keeps the marker below both of them.
-        renderer.sortingOrder = order;
-    }
-
-    private static void EnsureSharedSprite()
-    {
-        if (sharedSprite != null)
-            return;
-
-        sharedTexture = new Texture2D(1, 1, TextureFormat.RGBA32, false)
-        {
-            name = "Quest Interaction Marker Texture",
-            filterMode = FilterMode.Point,
-            wrapMode = TextureWrapMode.Clamp,
-            hideFlags = HideFlags.HideAndDontSave
-        };
-        sharedTexture.SetPixel(0, 0, Color.white);
-        sharedTexture.Apply(false, false);
-        sharedSprite = Sprite.Create(
-            sharedTexture,
-            new Rect(0f, 0f, 1f, 1f),
-            new Vector2(0.5f, 0.5f),
-            1f);
-        sharedSprite.name = "Quest Interaction Marker Sprite";
-        sharedSprite.hideFlags = HideFlags.HideAndDontSave;
-    }
+        => QuestFlagGlyph.CreateWorldVisual(scene);
 }

@@ -1,181 +1,260 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>Short configurable blast and collision-free white debris used by placed bombs.</summary>
+/// <summary>
+/// Flat-colour vector blast: fast flash, rolling fire, pressure rim and drifting smoke.
+/// Visual only: the caller still owns damage, audio and investigation. One bounded
+/// dynamic mesh replaces the old per-fragment GameObjects.
+/// </summary>
 public sealed class BombExplosionVisual : MonoBehaviour
 {
-    private sealed class Particle
+    private struct Fragment
     {
-        public Transform Transform;
-        public SpriteRenderer Renderer;
-        public Vector2 Velocity;
-        public float Spin;
+        public Vector2 Direction;
+        public float Reach, Width, Delay, End, Turn;
+    }
+    private struct Puff
+    {
+        public Vector2 Direction;
+        public float Radius, Delay, Drift, Shade, Reach;
     }
 
-    private static Sprite circleSprite;
-    private static Sprite particleSprite;
-
-    private readonly List<Particle> particles = new List<Particle>();
-    private SpriteRenderer outerBlast;
-    private SpriteRenderer innerBlast;
-    private float duration;
-    private float elapsed;
+    private const int CircleSteps = 32;
+    private static Material sharedMaterial;
+    private static readonly Vector2[] circle = CreateUnitCircle();
+    private readonly List<Vector3> vertices = new List<Vector3>(2048);
+    private readonly List<Color32> colors = new List<Color32>(2048);
+    private readonly List<int> triangles = new List<int>(6144);
+    private readonly Fragment[] fragments = new Fragment[20];
+    private readonly Puff[] puffs = new Puff[9];
+    private Mesh mesh;
+    private MeshRenderer meshRenderer;
+    private int fragmentCount;
+    private float duration, lifetime, elapsed, phase;
     private Vector2 blastSize;
-    private Color blastColor;
+    private Color blastColor, hotColor, smokeColor;
 
-    public void Configure(
-        Vector2 size,
-        float visualDuration,
-        Color color,
-        int sortingLayerId,
-        int sortingOrder,
-        int whiteParticleCount = 9)
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetCache()
     {
-        EnsureSprites();
-        duration = Mathf.Max(0.08f, visualDuration);
-        blastSize = new Vector2(Mathf.Max(0.05f, size.x), Mathf.Max(0.05f, size.y));
-        blastColor = new Color(color.r, color.g, color.b, Mathf.Max(0.65f, color.a));
+        if (sharedMaterial != null) Destroy(sharedMaterial);
+        sharedMaterial = null;
+    }
 
-        outerBlast = CreateBlastRenderer(
-            "Outer Blast",
-            new Color(
-                blastColor.r * 0.72f,
-                blastColor.g * 0.72f,
-                blastColor.b * 0.72f,
-                blastColor.a),
-            sortingLayerId,
-            sortingOrder);
-        innerBlast = CreateBlastRenderer(
-            "Inner Blast",
-            Color.Lerp(blastColor, Color.white, 0.25f),
-            sortingLayerId,
-            sortingOrder + 1);
-
-        int count = Mathf.Clamp(whiteParticleCount, 4, 20);
-        for (int i = 0; i < count; i++)
+    public void Configure(Vector2 size, float visualDuration, Color color,
+        int sortingLayerId, int sortingOrder, int whiteParticleCount = 9)
+    {
+        duration = Mathf.Max(.08f, visualDuration);
+        // Only translucent smoke survives this short tail, never another damage pulse.
+        lifetime = duration + Mathf.Min(.28f, duration * .55f);
+        elapsed = 0;
+        blastSize = new Vector2(Mathf.Max(.05f, size.x), Mathf.Max(.05f, size.y));
+        blastColor = new Color(color.r, color.g, color.b, Mathf.Max(.65f, color.a));
+        hotColor = Color.Lerp(blastColor, Color.white, .67f);
+        smokeColor = Color.Lerp(new Color(.22f, .25f, .29f), blastColor, .12f);
+        fragmentCount = Mathf.Clamp(whiteParticleCount, 4, fragments.Length);
+        phase = Random.Range(0f, Mathf.PI * 2);
+        for (int i = 0; i < fragmentCount; i++)
         {
-            float angle = (Mathf.PI * 2f * i / count) + Random.Range(-0.18f, 0.18f);
-            float speed = Random.Range(1.8f, 3.4f);
-            GameObject particleObject = new GameObject("White Explosion Particle");
-            particleObject.transform.SetParent(transform, false);
-            SpriteRenderer renderer = particleObject.AddComponent<SpriteRenderer>();
-            renderer.sprite = particleSprite;
-            renderer.color = Color.white;
-            renderer.sortingLayerID = sortingLayerId;
-            renderer.sortingOrder = sortingOrder + 2;
-            float scale = Random.Range(0.075f, 0.14f);
-            particleObject.transform.localScale = Vector3.one * scale;
-            particles.Add(new Particle
-            {
-                Transform = particleObject.transform,
-                Renderer = renderer,
-                Velocity = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * speed,
-                Spin = Random.Range(-480f, 480f)
-            });
+            float angle = phase + i * Mathf.PI * 2 / fragmentCount + Random.Range(-.18f, .18f);
+            fragments[i] = new Fragment {
+                Direction = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)),
+                Reach = Random.Range(.38f, .49f), Width = Random.Range(.009f, .018f),
+                Delay = Random.Range(0f, .055f), End = Random.Range(.65f, .97f), Turn = Random.Range(-.65f, .65f)
+            };
         }
+        for (int i = 0; i < puffs.Length; i++)
+        {
+            float angle = phase + i * Mathf.PI * 2 / puffs.Length + Random.Range(-.22f, .22f);
+            puffs[i] = new Puff {
+                Direction = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)),
+                Radius = Random.Range(.076f, .114f), Delay = Random.Range(.04f, .18f),
+                Drift = Random.Range(.01f, .055f), Shade = Random.Range(.02f, .17f),
+                Reach = i % 3 == 0 ? Random.Range(.1f, .17f) : Random.Range(.24f, .31f)
+            };
+        }
+        EnsureMesh();
+        meshRenderer.sortingLayerID = sortingLayerId;
+        meshRenderer.sortingOrder = Mathf.Clamp(sortingOrder + 2, short.MinValue, short.MaxValue);
+        if (GetComponent<CameraVisionStreamingExempt>() == null)
+            gameObject.AddComponent<CameraVisionStreamingExempt>();
+        ApplyFrame(0);
+    }
+
+    private void EnsureMesh()
+    {
+        if (sharedMaterial == null)
+            sharedMaterial = new Material(Shader.Find("Sprites/Default")) {
+                name = "Flat Vector Explosion", mainTexture = Texture2D.whiteTexture,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+        if (mesh == null)
+        {
+            mesh = new Mesh { name = "Vector Explosion Geometry", hideFlags = HideFlags.HideAndDontSave };
+            mesh.MarkDynamic();
+            var filter = GetComponent<MeshFilter>();
+            if (filter == null) filter = gameObject.AddComponent<MeshFilter>();
+            filter.sharedMesh = mesh;
+            meshRenderer = GetComponent<MeshRenderer>();
+            if (meshRenderer == null) meshRenderer = gameObject.AddComponent<MeshRenderer>();
+            meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            meshRenderer.receiveShadows = false;
+            meshRenderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+            meshRenderer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+        }
+        meshRenderer.sharedMaterial = sharedMaterial;
     }
 
     private void Update()
     {
+        if (mesh == null || Time.deltaTime <= 0) return;
         elapsed += Time.deltaTime;
-        float progress = Mathf.Clamp01(elapsed / duration);
-        float burst = 1f - Mathf.Pow(1f - progress, 3f);
-
-        SetBlastState(outerBlast, blastSize * (0.2f + burst * 0.8f), 1f - progress);
-        SetBlastState(innerBlast, blastSize * (0.12f + burst * 0.46f), 1f - progress);
-
-        float particleFade = 1f - progress;
-        for (int i = 0; i < particles.Count; i++)
-        {
-            Particle particle = particles[i];
-            particle.Transform.position += (Vector3)(particle.Velocity * Time.deltaTime);
-            particle.Velocity *= Mathf.Pow(0.12f, Time.deltaTime);
-            particle.Transform.Rotate(0f, 0f, particle.Spin * Time.deltaTime);
-            particle.Renderer.color = new Color(1f, 1f, 1f, particleFade);
-        }
-
-        if (progress >= 1f)
-        {
-            Destroy(gameObject);
-        }
+        if (elapsed >= lifetime) { Destroy(gameObject); return; }
+        ApplyFrame(elapsed);
     }
 
-    private SpriteRenderer CreateBlastRenderer(
-        string objectName,
-        Color color,
-        int sortingLayerId,
-        int sortingOrder)
+    private void ApplyFrame(float age)
     {
-        GameObject blastObject = new GameObject(objectName);
-        blastObject.transform.SetParent(transform, false);
-        SpriteRenderer renderer = blastObject.AddComponent<SpriteRenderer>();
-        renderer.sprite = circleSprite;
-        renderer.color = color;
-        renderer.sortingLayerID = sortingLayerId;
-        renderer.sortingOrder = sortingOrder;
-        return renderer;
-    }
-
-    private static void SetBlastState(SpriteRenderer renderer, Vector2 size, float alpha)
-    {
-        renderer.transform.localScale = new Vector3(size.x, size.y, 1f);
-        Color color = renderer.color;
-        color.a = alpha;
-        renderer.color = color;
-    }
-
-    private static void EnsureSprites()
-    {
-        if (circleSprite != null)
+        vertices.Clear(); colors.Clear(); triangles.Clear();
+        float t = Mathf.Clamp01(age / duration);
+        float total = Mathf.Clamp01(age / lifetime);
+        // Staggered faceted smoke puffs behind the fire, with small flat highlight caps.
+        for (int i = 0; i < puffs.Length; i++)
         {
-            return;
+            Puff puff = puffs[i];
+            float p = Mathf.Clamp01((total - puff.Delay) / (1f - puff.Delay));
+            float alpha = Mathf.SmoothStep(0, 1, p * 7) * (1f - SmoothRange(.36f, 1f, p));
+            if (alpha <= .001f) continue;
+            float travel = EaseOut(p);
+            Vector2 position = puff.Direction * Mathf.Lerp(.04f, puff.Reach, travel) + Vector2.up * (p * puff.Drift);
+            Vector2 radius = Vector2.one * puff.Radius * Mathf.Lerp(.7f, 1.3f, travel);
+            radius.y *= .86f;
+            Color shade = Color.Lerp(smokeColor, new Color(.53f, .54f, .53f), puff.Shade);
+            AddDisc(position, radius, WithAlpha(shade, alpha * .66f), 12, phase + i);
+            AddDisc(position + new Vector2(-.012f, .02f) * travel, radius * .63f,
+                WithAlpha(Color.Lerp(shade, Color.white, .12f), alpha * .26f), 12, phase + i);
         }
 
-        circleSprite = CreateCircleSprite(32);
-        Texture2D particleTexture = new Texture2D(3, 3, TextureFormat.RGBA32, false);
-        particleTexture.name = "Runtime Bomb Particle";
-        particleTexture.filterMode = FilterMode.Point;
-        particleTexture.wrapMode = TextureWrapMode.Clamp;
-        for (int y = 0; y < 3; y++)
+        float expansion = EaseOut(Mathf.Clamp01(t / .62f));
+        float fireAlpha = 1f - SmoothRange(.2f, .79f, t);
+        if (fireAlpha > .001f)
         {
-            for (int x = 0; x < 3; x++)
-            {
-                particleTexture.SetPixel(x, y, Color.white);
-            }
+            float radius = Mathf.Lerp(.075f, .32f, expansion);
+            float roll = phase + t * .28f;
+            AddCloud(radius, WithAlpha(Color.Lerp(blastColor, new Color(.16f, .12f, .13f), .25f), fireAlpha * .9f), roll);
+            AddCloud(radius * .85f, WithAlpha(blastColor, fireAlpha), roll + .09f);
+            AddCloud(radius * .57f, WithAlpha(Color.Lerp(blastColor, Color.white, .42f), fireAlpha), roll + .53f);
         }
-        particleTexture.Apply(false, true);
-        particleSprite = Sprite.Create(
-            particleTexture,
-            new Rect(0f, 0f, 3f, 3f),
-            new Vector2(0.5f, 0.5f),
-            3f);
-        particleSprite.name = "Runtime Bomb White Particle";
+
+        // Narrow pressure rim follows the configured blast footprint, not the AI range.
+        float rimAlpha = (1f - SmoothRange(.2f, .69f, t)) * .76f;
+        if (rimAlpha > .001f)
+            AddArc(.11f + .385f * EaseOut(Mathf.Clamp01(t / .65f)), Mathf.Lerp(.018f, .004f, t),
+                0, Mathf.PI * 2, WithAlpha(hotColor, rimAlpha), 64);
+        if (t > .18f && t < .8f)
+        {
+            float alpha = (1f - SmoothRange(.3f, .8f, t)) * .35f;
+            for (int i = 0; i < 6; i++)
+                AddArc(.07f + .37f * expansion, .006f, phase + i * Mathf.PI / 3,
+                    .34f, WithAlpha(hotColor, alpha), 6);
+        }
+
+        for (int i = 0; i < fragmentCount; i++)
+        {
+            Fragment piece = fragments[i];
+            float p = Mathf.Clamp01((t - piece.Delay) / (piece.End - piece.Delay));
+            if (t < piece.Delay || p >= 1) continue;
+            float travel = EaseOut(p);
+            Vector2 side = new Vector2(-piece.Direction.y, piece.Direction.x);
+            Vector2 position = piece.Direction * Mathf.Lerp(.04f, piece.Reach, travel)
+                + side * Mathf.Sin(p * Mathf.PI) * piece.Turn * .018f;
+            float length = Mathf.Lerp(.105f, .017f, travel);
+            float width = piece.Width * Mathf.Lerp(1f, .45f, p);
+            float turn = p * piece.Turn;
+            Vector2 forward = piece.Direction * Mathf.Cos(turn) + side * Mathf.Sin(turn);
+            Vector2 across = new Vector2(-forward.y, forward.x);
+            Color tint = Color.Lerp(Color.white, hotColor, SmoothRange(.2f, .85f, p));
+            AddShard(position, forward * length, across * width,
+                WithAlpha(tint, 1f - SmoothRange(.4f, 1f, p)));
+            if ((i & 1) == 0)
+                AddShard(position * .78f - side * .035f, across * width * 1.6f, forward * width * .6f,
+                    WithAlpha(Color.Lerp(blastColor, Color.white, .25f), (1f - p) * .85f));
+        }
+        float flashAlpha = 1f - SmoothRange(.04f, .28f, t);
+        if (flashAlpha > .001f)
+            AddCloud(Mathf.Lerp(.04f, .14f, EaseOut(Mathf.Clamp01(t / .28f))),
+                WithAlpha(Color.Lerp(blastColor, Color.white, .91f), flashAlpha), phase);
+
+        mesh.Clear();
+        mesh.SetVertices(vertices); mesh.SetColors(colors);
+        mesh.SetTriangles(triangles, 0, false);
+        mesh.bounds = new Bounds(Vector3.zero, new Vector3(blastSize.x * 1.12f, blastSize.y * 1.12f, .1f));
+        meshRenderer.enabled = vertices.Count > 0;
     }
 
-    private static Sprite CreateCircleSprite(int size)
+    private static float SmoothRange(float from, float to, float value)
+        => Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(from, to, value));
+    private static float EaseOut(float t) { float inv = 1f - t; return 1f - inv * inv * inv; }
+    private Color WithAlpha(Color color, float alpha) { color.a = alpha * blastColor.a; return color; }
+    private void Vertex(Vector2 point, Color32 color)
     {
-        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
-        texture.name = "Runtime Bomb Explosion";
-        texture.filterMode = FilterMode.Bilinear;
-        texture.wrapMode = TextureWrapMode.Clamp;
-        Vector2 center = Vector2.one * ((size - 1) * 0.5f);
-        float radius = size * 0.48f;
-        for (int y = 0; y < size; y++)
-        {
-            for (int x = 0; x < size; x++)
-            {
-                float normalized = Vector2.Distance(new Vector2(x, y), center) / radius;
-                float alpha = Mathf.Clamp01((1f - normalized) * 4f);
-                texture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
-            }
-        }
-        texture.Apply(false, true);
-        Sprite sprite = Sprite.Create(
-            texture,
-            new Rect(0f, 0f, size, size),
-            new Vector2(0.5f, 0.5f),
-            size);
-        sprite.name = "Runtime Bomb Explosion";
-        return sprite;
+        vertices.Add(new Vector3(point.x * blastSize.x, point.y * blastSize.y, 0));
+        colors.Add(color);
     }
+    private void AddCloud(float radius, Color tint, float rotation)
+    {
+        int start = vertices.Count;
+        Vertex(Vector2.zero, tint);
+        for (int i = 0; i < CircleSteps; i++)
+        {
+            float angle = i * Mathf.PI * 2 / CircleSteps;
+            float lobes = 1f + .065f * Mathf.Sin(angle * 3 + rotation) +
+                .055f * Mathf.Sin(angle * 7 - rotation) + .035f * Mathf.Sin(angle * 5 + rotation * 2);
+            Vertex(circle[i] * (radius * lobes), tint);
+            Triangle(start, start + 1 + i, start + 1 + (i + 1) % CircleSteps);
+        }
+    }
+    private void AddDisc(Vector2 position, Vector2 radius, Color tint, int steps, float rotation)
+    {
+        int start = vertices.Count;
+        Vertex(position, tint);
+        for (int i = 0; i < steps; i++)
+        {
+            float angle = rotation + i * Mathf.PI * 2 / steps;
+            Vertex(position + new Vector2(Mathf.Cos(angle) * radius.x, Mathf.Sin(angle) * radius.y), tint);
+            Triangle(start, start + 1 + i, start + 1 + (i + 1) % steps);
+        }
+    }
+    private void AddArc(float radius, float thickness, float startAngle, float sweep, Color tint, int steps)
+    {
+        int start = vertices.Count;
+        for (int i = 0; i <= steps; i++)
+        {
+            float angle = startAngle + i * sweep / steps;
+            Vector2 direction = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            Vertex(direction * radius, tint); Vertex(direction * (radius - thickness), tint);
+            if (i == 0) continue;
+            int v = start + i * 2;
+            Triangle(v - 2, v - 1, v); Triangle(v, v - 1, v + 1);
+        }
+    }
+    private void AddShard(Vector2 position, Vector2 along, Vector2 across, Color tint)
+    {
+        int start = vertices.Count;
+        Vertex(position + along * .15f, tint); Vertex(position + across, tint);
+        Vertex(position - along, tint); Vertex(position - across * .65f, tint);
+        Triangle(start, start + 1, start + 2); Triangle(start, start + 2, start + 3);
+    }
+    private void Triangle(int a, int b, int c) { triangles.Add(a); triangles.Add(b); triangles.Add(c); }
+    private static Vector2[] CreateUnitCircle()
+    {
+        var result = new Vector2[CircleSteps];
+        for (int i = 0; i < result.Length; i++)
+        {
+            float angle = i * Mathf.PI * 2 / result.Length;
+            result[i] = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+        }
+        return result;
+    }
+    private void OnDestroy() { if (mesh != null) Destroy(mesh); }
 }

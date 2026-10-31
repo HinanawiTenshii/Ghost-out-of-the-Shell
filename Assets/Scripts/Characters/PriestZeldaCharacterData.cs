@@ -118,7 +118,7 @@ public class PriestZeldaCharacterData : ZeldaCharacterData
         if (renderer == null) return;
         if (visualsDirty) { ReleaseSprites(); visualsDirty = false; }
         int direction = Mathf.Abs(facing.x) > Mathf.Abs(facing.y) ? (facing.x < 0f ? 2 : 3) : (facing.y > 0f ? 1 : 0);
-        int pose = isAttacking ? 3 : isMoving ? 1 + (Mathf.FloorToInt(Time.time * walkFramesPerSecond) % 2) : 0;
+        int pose = isAttacking ? 3 : isMoving ? 1 + GetMovementAnimationFrame(walkFramesPerSecond) : 0;
         if (frames[direction, pose] == null) frames[direction, pose] = CreateSprite(direction, pose);
         renderer.sprite = frames[direction, pose];
         renderer.color = GetDamageFeedbackTint(Color.white);

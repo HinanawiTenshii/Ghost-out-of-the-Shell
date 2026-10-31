@@ -10,6 +10,6 @@ public sealed class MapSceneQuestMarkerGraphic : MaskableGraphic
         vh.Clear();
         Rect rect = rectTransform.rect;
         RuntimeMiniMapGraphic.AddQuestTargetMarker(
-            vh, rect.center, Mathf.Min(rect.width, rect.height) / 28f);
+            vh, rect.center, Mathf.Min(rect.width, rect.height) / QuestFlagGlyph.Size);
     }
 }

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Level2-Desert
   m_EditorClassIdentifier: 
   schemaVersion: 6
-  sourceRevision: f1951476bb1fe887b66961d2611bf22a
+  sourceRevision: bf7cbac486243272788fd77adb05b651
   sceneName: Level2-Desert
   displayName: "\u6C99\u6F20"
   blockPaths:

@@ -5,11 +5,11 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 
 /// <summary>
-/// Covers every newly loaded scene in black, then reveals it in horizontal
-/// steps from the bottom of the screen to the top.
+/// Keeps state restoration hidden behind a terminal-style top-to-bottom refresh.
+/// Presentation never advances or short-circuits the actual loading gates.
 /// </summary>
 [DefaultExecutionOrder(-10000)]
-public sealed class RetroSceneLoadReveal : MonoBehaviour
+public sealed partial class RetroSceneLoadReveal : MonoBehaviour
 {
     [SerializeField, Min(2)] private int revealSteps = 16;
     [SerializeField, Min(0f)] private float blackHoldDuration = 0.08f;
@@ -27,6 +27,7 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
     {
         if (!IsBlockingInput) return;
         BlockMenuNavigation();
+        UpdateLoadingStatus();
     }
 
     private void BlockMenuNavigation()
@@ -98,6 +99,7 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
             return false;
         }
         instance.transitionPending = true;
+        instance.ConfigurePresentation(sceneName, false);
         IsPreparingGameplay = true;
         SceneLoadMetrics.Begin(sceneName);
         SoulMarkRuntime.ClearForSceneTransition();
@@ -114,9 +116,18 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         CreateBeforeFirstSceneLoad();
         if (moveUnderCover == null || instance.transitionPending || IsBlockingInput) return false;
         instance.transitionPending = true;
+        instance.ConfigurePresentation(null, true);
         IsBlockingInput = true;
         instance.BlockMenuNavigation();
         instance.StartCoroutine(instance.CoverBeforeLoad(moveUnderCover, true));
+        return true;
+    }
+
+    /// <summary>Arena layout reloads keep all scene-loading gates, but omit the region announcement.</summary>
+    public static bool BeginLayoutTransition(string sceneName, System.Action loadScene)
+    {
+        if (!BeginTransition(sceneName, loadScene)) return false;
+        instance.localPresentation = true;
         return true;
     }
 
@@ -129,15 +140,14 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         {
             music.Stop();
         }
+        if (!localOnly) foreach (var desert in FindObjectsOfType<DesertEncounterAudio>(true))
+        {
+            desert.StopForSceneTransition();
+        }
         canvasObject.SetActive(true);
         canvasGroup.blocksRaycasts = true;
-        for (int i = 0; i < blackBands.Length; i++) blackBands[i].gameObject.SetActive(false);
-        float stepDuration = coverDuration / blackBands.Length;
-        for (int i = 0; i < blackBands.Length; i++)
-        {
-            blackBands[i].gameObject.SetActive(true);
-            yield return new WaitForSecondsRealtime(stepDuration);
-        }
+        yield return ScanScreen(false, coverDuration);
+        BeginLoadingWait();
         // Present a fully black frame before capture/reset and asynchronous loading.
         yield return null;
         if (localOnly)
@@ -192,7 +202,9 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         IsPreparingGameplay = true;
         DontDestroyOnLoad(gameObject);
         BuildOverlay();
+        ConfigurePresentation(null, false);
         ShowFullBlack();
+        BeginLoadingWait();
     }
 
     private void OnEnable()
@@ -223,7 +235,10 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         IsPreparingGameplay = true;
         SceneLoadMetrics.SceneLoaded();
         waitingForSceneLoaded = false;
+        if (!transitionPending) localPresentation = false;
+        SetPresentationDestination(scene.name);
         ShowFullBlack();
+        SetLoadingPhase(LoadingPhase.Restoring);
         if (revealRoutine != null)
         {
             StopCoroutine(revealRoutine);
@@ -295,6 +310,7 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
             blackBands[index] = band;
         }
 
+        BuildTerminalPresentation();
         CRTScreenEffect.RegisterCanvas(overlayCanvas);
     }
 
@@ -316,7 +332,9 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         for (int index = 0; index < blackBands.Length; index++)
         {
             blackBands[index].gameObject.SetActive(true);
+            bandImages[index].color = Color.black;
         }
+        SetScanVisible(false);
 
         Canvas.ForceUpdateCanvases();
     }
@@ -327,6 +345,7 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
         // initialization and persistent-state restoration from flashing onscreen.
         yield return null;
 
+        SetLoadingPhase(LoadingPhase.Restoring);
         SceneTravelStateManager stateManager = SceneTravelStateManager.Instance;
         while (stateManager != null &&
                (stateManager.IsSceneTravelRestoreInProgress ||
@@ -341,6 +360,7 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
 
         if (prepareStreaming)
         {
+            SetLoadingPhase(LoadingPhase.Preparing);
             // The arrival position (including trapdoors/save restores) is final
             // now. Do not prepare against the camera's authored scene position.
             foreach (var follow in FindObjectsOfType<CameraFollowActiveZeldaMover>())
@@ -371,20 +391,8 @@ public sealed class RetroSceneLoadReveal : MonoBehaviour
             yield return new WaitForSecondsRealtime(blackHoldDuration);
         }
 
-        float stepDuration = revealDuration / blackBands.Length;
-        for (int index = 0; index < blackBands.Length; index++)
-        {
-            // Array order follows screen coordinates from bottom to top.
-            blackBands[index].gameObject.SetActive(false);
-            if (stepDuration > 0f)
-            {
-                yield return new WaitForSecondsRealtime(stepDuration);
-            }
-            else
-            {
-                yield return null;
-            }
-        }
+        yield return ScanScreen(true, revealDuration);
+        FinishPresentation();
 
         canvasGroup.blocksRaycasts = false;
         canvasGroup.interactable = false;

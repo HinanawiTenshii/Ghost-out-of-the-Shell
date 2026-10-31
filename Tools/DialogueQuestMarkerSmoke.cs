@@ -99,19 +99,19 @@ public static class DialogueQuestMarkerSmoke
         Check(Visible(merchant) && Visible(engineer), "reading parent quest unlocks both child markers");
         foreach (var d in new[] { merchant, engineer, craftsman })
         {
-            var glyph = Root(d).GetComponentsInChildren<SpriteRenderer>();
-            Check(glyph.Length == 3 && glyph[0].color == Color.white && glyph.Max(g => g.sortingOrder) == 29999,
-                d.name + " reuses three-layer quest glyph below vision mask");
+            var glyph = Root(d).GetComponentsInChildren<Renderer>();
+            Check(glyph.Length == 1 && Root(d).GetComponent<MeshFilter>() != null && glyph[0].sortingOrder == 29999,
+                d.name + " reuses solid quest flag below vision mask");
             Check(glyph[0].bounds.min.y > Icon(d).bounds.max.y + .05f &&
                 Mathf.Abs(Root(d).transform.position.x - Icon(d).transform.position.x) < .001f,
                 d.name + " marker centered above speech icon without overlap");
             Check(Root(d).scene == d.gameObject.scene, d.name + " marker belongs to correct scene");
         }
-        var originalSize = Root(craftsman).GetComponentInChildren<SpriteRenderer>().bounds.size;
+        var originalSize = Root(craftsman).GetComponentInChildren<Renderer>().bounds.size;
         craftsman.transform.position += new Vector3(3, 2, 0); craftsman.transform.localScale *= .5f;
         Set(craftsman, "selected", true); Refresh(craftsman);
-        Check(Vector3.Distance(originalSize, Root(craftsman).GetComponentInChildren<SpriteRenderer>().bounds.size) < .001f &&
-            Root(craftsman).GetComponentInChildren<SpriteRenderer>().bounds.min.y > Icon(craftsman).bounds.max.y,
+        Check(Vector3.Distance(originalSize, Root(craftsman).GetComponentInChildren<Renderer>().bounds.size) < .001f &&
+            Root(craftsman).GetComponentInChildren<Renderer>().bounds.min.y > Icon(craftsman).bounds.max.y,
             "moving/scaling NPC and hovered bubble keep marker size and spacing");
         craftsman.enabled = false;
         Check(!Visible(craftsman), "disabled dialogue hides task offer");

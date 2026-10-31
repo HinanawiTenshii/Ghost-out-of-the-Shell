@@ -1,0 +1,16 @@
+Tool: built-in image_gen
+Source video: C:/Users/34979/Videos/10月30日.mp4
+Video: 2408x1440, 60fps, duration 198.762812s.
+Reviewed sampled frames and burned-in subtitles. Focus: bomb, clockwork puppet, cardboard box, disposable pistol and item interaction.
+Generated composition based on video references; not a literal gameplay screenshot.
+Native image: 1622x970. Delivery: Lanczos resampling to 2408x1440 PNG and JPG to match video dimensions.
+
+Use case: ads-marketing / compositing
+Create a finished Chinese indie game development video cover, landscape ratio 2408:1440 (1.6722:1). Target 2408x1440 if supported.
+References 1-4 are ACTUAL gameplay frames from this video, authoritative for pixel-art sprites, items and cyan rectangular HUD styling. Reference 5 is existing game wordmark; use its typographic identity, ignore the apparent blue haze around it, keep flat legible lettering.
+Video subject is item mechanics: bombs make noise and damage; a small clockwork puppet remotely activates switches; cardboard box conceals the player; a disposable flintlock pistol triggers mechanisms and other items. This is NOT a futuristic space game.
+Design a striking polished editorial thumbnail true to this very simple pixel-art top-down game. Dark almost-black navy background, muted blue checkerboard floor, electric pale cyan rectangular thin-outline inventory frames and minimap UI, sparse bright ivory architectural walls. Geometric modernist composition and very light CRT scanlines. The art should remain crisp low-resolution pixel sprites enlarged without smoothing, not detailed illustration.
+Layout: generous 5% safe margin. Left 48%: small crisp cyan tag '开发日志', below HUGE perfectly legible bold Chinese title on two lines: '道具不止' then '一种用法'. White first line, cyan second line, no busy background behind text. Small supporting line below '潜行 · 遥控 · 道具联动'. Compact flat existing GHOST / out of the / SHELL brand signature at upper left or bottom left subordinate to Chinese headline.
+Right 52%: a confident enlarged cropped gameplay-inspired top-down scene of a navy checkerboard corridor, cream-hatted pixel adventurer, small cyan round ghost from reference 1, and the tiny silver round-headed tripod clockwork puppet from reference 2, cardboard box as in refs, a red-topped lever. Sparse cyan dashed arrows show item interaction around box/puppet/lever, not complicated infographic. Frame this scene with the game's cyan HUD corner lines. A small authentic minimap inset in upper right; no unreadable tiny labels. Maintain primitive flat pixel appearance and actual designs.
+Bottom across right/center: FOUR neat enlarged square cyan inventory slots, containing actual pixel silhouettes for a black spherical fuse bomb, silver round-headed thin-legged puppet, tan cardboard box, brown-handled silver-barreled flintlock pistol, respectively. Each optional label only if legible: '炸弹' '机关魔像' '纸箱' '一次性手铳'. These must match reference sprite vocabulary, not generic detailed weapons or modern firearms.
+No invented episode number, no new logos, no editor windows/toolbar/error strip, no captured subtitles, no watermark, no photorealism, no anime portrait, no glossy 3D icons, no excessive glow. Keep the title readable at thumbnail size and avoid overloading. The visual is a promotional composition based on actual gameplay.

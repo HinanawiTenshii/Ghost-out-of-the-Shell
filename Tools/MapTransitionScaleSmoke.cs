@@ -52,7 +52,12 @@ public static class MapTransitionScaleSmoke
                 test.SetCameraMarkerVisible(true); Call(test, "PopulateMarkers", vh);
                 Check(vh.currentVertCount == iconVertices * 2 + 4, "player marker retained");
                 test.SetTrackedQuestTarget(true, Vector2.one * 100, true); Call(test, "PopulateMarkers", vh);
-                Check(vh.currentVertCount == iconVertices * 2 + 16, "quest marker retained with same geometry");
+                using (var flag = new VertexHelper())
+                {
+                    QuestFlagGlyph.AddTo(flag, Vector2.zero, 1f);
+                    Check(vh.currentVertCount == iconVertices * 2 + 4 + flag.currentVertCount,
+                        "quest marker retained with shared flag geometry");
+                }
             }
             float previous = 0;
             test.ZoomBy(-100);

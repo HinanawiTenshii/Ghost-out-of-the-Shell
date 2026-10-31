@@ -172,8 +172,9 @@ public sealed class DisposableHandgunBullet : MonoBehaviour
         {
             if (!character.IsDead && character.CanTakeAttackDamage)
             {
-                if (anonymousHit) character.TakeHandgunDamage(AttackPower, firingPosition, owner);
-                else character.TakeDamage(AttackPower, owner);
+                var impact = DirectionalDamageContext.Projectile(direction);
+                if (anonymousHit) character.TakeHandgunDamage(AttackPower, firingPosition, owner, impact);
+                else character.TakeDamage(AttackPower, owner, impact);
             }
         }
         else if (target is DoorData door) door.ReceiveAttack(AttackPower, owner, true);

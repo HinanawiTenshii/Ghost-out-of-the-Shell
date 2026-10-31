@@ -12,9 +12,11 @@ public sealed class PixelCharacterWalkAnimator : MonoBehaviour
     private float framesPerSecond;
     private float elapsed;
     private int lastFrame = -1;
+    private ZeldaCharacterData character;
 
     public void Initialize(ZeldaCharacterData character)
     {
+        this.character = character;
         framesPerSecond = 7f;
         if (character is BehemothZeldaCharacterData)
         {
@@ -82,7 +84,10 @@ public sealed class PixelCharacterWalkAnimator : MonoBehaviour
             frames = CreateFrames(original);
             cachedFrames.Add(original, frames);
         }
-        renderer.sprite = frames[Mathf.FloorToInt(elapsed * framesPerSecond) % 2];
+        int frame;
+        if (character == null || !character.TryGetSprintWalkFrame(framesPerSecond, out frame))
+            frame = Mathf.FloorToInt(elapsed * framesPerSecond) % 2;
+        renderer.sprite = frames[frame];
     }
 
     private Sprite[] CreateFrames(Sprite original)

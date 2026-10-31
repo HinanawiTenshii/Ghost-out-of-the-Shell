@@ -18,6 +18,10 @@
 
 ## 音效逐项清单
 
+### 假标题操作音效补充（TITLE_SYNTH，2026-10-30）
+
+`Assets/SoundEffect/FakeTitle/TitleEnter.wav`（约 0.28 秒）与 `TitleConfirm.wav`（0.14 秒）为项目内原创程序化合成：开头 Enter 使用上行三音，选项确认使用短双音。生成脚本 `Tools/GenerateFakeTitleAudio.py` 仅用 Python 标准库产生柔化方波与短音符包络，无外部录音、采样或游戏原声，未新增第三方素材授权需求。两段为 mono PCM16 / 44.1 kHz，原件峰值分别 0.24 / 0.22，运行时音量 0.3；Unity 关闭归一化、预加载，使用独立单音源避免连点叠音，不干扰标题背景音乐。
+
 来源编号对应下文的作者、链接、许可及署名要求。
 
 | 当前资源路径 | 原始素材 / 出处 | 使用情况 | 来源与确认程度 |
@@ -141,6 +145,16 @@
 
 ## 背景音乐附录
 
+### Domi — 新手关与假标题选曲（2026-10-30）
+
+- 作者：**Domi.wav（Dominic Sandefur）**；专辑：**Pixel Adventures Vol. 1**。[官方发布与下载页](https://domiwav.itch.io/8-bit-rpg-adventure-and-fantasy-music-pack-pixel-adventures-vol-1)。
+- 假标题：`Assets/BGMS/Domi/AdventuresSpirit.wav`，原曲 **Adventure's Spirit / Title Theme**，96 秒。
+- 新手关：`Assets/BGMS/Domi/AGreatJourney.wav`，原曲 **A Great Journey / Overworld**，约 100.513 秒；此选曲替代之前的 Windy Bluffs 方案。
+- **Adventure's Spirit 已接入 FakeTitleScreen**：沿用场景内 2D 循环播放器，音量 0.18；第一档标题调色板出现时起曲，按 Enter 打开选项不重播。**A Great Journey 仍仅暂存**。文件不在 Resources 或 StreamingAssets 中，也没有加入任何 AssetBundle。
+- 从作者的 itch.io 官方免费通道获取原始 ZIP，仅提取上述两首原始 WAV；保留 48 kHz、24-bit、立体声，未剪辑、变速或调整原件音量。仅简化文件名。Unity 导入预设为流式 Vorbis、质量 0.8、不预加载，供后续场景接入。
+- 作者公开许可允许商业与非商业项目免费使用，署名为推荐而非强制；这是**作者自定许可，不标记为 CC0 或 CC BY**。下载与授权记录、后续署名建议见 [Domi 来源记录](ThirdParty/Domi/README.md)，官方页面快照为 `Docs/ThirdParty/Domi/PixelAdventuresVol1.html`。
+- 原始包与两首 WAV 的 SHA-256、包内原始文件名、时长和 GUID 已加入 `Docs/AudioAssetInventory.json`。标题曲已按较低音量接入；音频原件与 GUID 保持不变。
+
 虽然本次主要记录音效，也一并登记当前全部 BGM，避免以后制作版权页时遗漏。以下作者与标题由现存 MP3 标签确认；历史下载日期及下载凭据未留存。
 
 | 当前资源路径 | 原曲标题 | 作者 / 来源 | 当前检出引用 |
@@ -148,12 +162,36 @@
 | `Assets/BGMS/MusMus-BGM-157.mp3` | 世界は灰色だったのに | watson / MusMus | TitleScreen |
 | `Assets/BGMS/MusMus-PKPK-002.mp3` | MusMus Quest ～城～ | watson / MusMus | 暂未检出静态引用 |
 | `Assets/BGMS/m-art_UndergroundInvasion.mp3` | 地下攻略 | Napi / M-ART | Level Background Music 预制体 |
-| `Assets/BGMS/m-art_RoyalGarden.mp3` | ロイヤルガーデン | Napi / M-ART | Level1-Garden、Level1-Floor-1、Floor1、Floor2、Floor3 |
-| `Assets/BGMS/m-art_Jimejime.mp3` | じめじめ地面 | Napi / M-ART | Level0 |
+| `Assets/BGMS/m-art_RoyalGarden.mp3` | ロイヤルガーデン | Napi / M-ART | 历史保留，2026-10-30 已从 Level1 场景替换 |
+| `Assets/BGMS/m-art_Jimejime.mp3` | じめじめ地面 | Napi / M-ART | 历史保留，2026-10-30 已从 Level0 场景替换 |
+| `Assets/BGMS/Visager/EerieMausoleum-Loop.mp3` | Eerie Mausoleum [Loop] | Visager / Josie Brechner | Level0 |
+| `Assets/BGMS/Visager/RoyalEntrance-Loop.mp3` | Royal Entrance [Loop] | Visager / Josie Brechner | Level1 全部五个场景 |
+| `Assets/BGMS/Visager/PyramidLevel-Loop.mp3` | Pyramid Level [Loop] | Visager / Josie Brechner | Level2-Floor-1、Floor1、Floor2；不包括沙漠 |
+| `Assets/BGMS/Visager/MinibossFight-Loop.mp3` | Miniboss Fight [Loop] | Visager / Josie Brechner | Level2-Desert，首次看到沙虫后 |
+| `Assets/BGMS/Ambience/SandstormLooping.mp3` | Sandstorm Looping | gbayles；原混音 blackatomproductions / Freesound | Level2-Desert，战斗中压低音量 |
 
 - MusMus：[官方站点](https://musmus.main.jp/)、[使用条款](https://musmus.main.jp/info.html)，署名及取得渠道核对要求同 S5。
 - M-ART：[官方站点](https://mart.kitunebi.com/)、[使用条款](https://mart.kitunebi.com/info.html)、[野外/地下城曲目页](https://mart.kitunebi.com/music_field.html)。文件 comment 标签包含官方站址，作者为 Napi。
 - M-ART 条款于 2026-09-25 核对：可用于商业游戏/视频，通常不强制署名或报告；版权不放弃，允许常规音频加工。若制作编曲，须按条款标明作者并说明为编曲；不能以素材或原声带形式独立再分发。不是 CC0。为方便溯源，仍建议署名 `Music by Napi / M-ART — https://mart.kitunebi.com/`。
+
+### Visager — Level0 / Level1 / Level2 复古背景音乐（2026-10-30）
+
+- 作者：Visager（Josie Brechner）。[作者第一张专辑](https://visager.bandcamp.com/album/songs-from-an-unmade-world)、[第二张专辑](https://visager.bandcamp.com/album/songs-from-an-unmade-world-2)均链接 CC BY 4.0，并指明 Free Music Archive 是免费获取渠道。
+- 本次从 Free Music Archive 各曲目页的 `data-track-info.fileUrl` 下载官方循环版本，原始 MP3 标签也包含曲名、作者及 `Attribution: http://creativecommons.org/licenses/by/4.0/`。实际下载链接、取得日期、文件大小及 SHA-256 记录在 `Docs/AudioAssetInventory.json`；下载时的页面快照见 `Docs/ThirdParty/Visager`。
+- 许可：[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)。允许商业游戏使用及加工；须保留作者、来源和许可链接，注明修改，不暗示作者背书。
+- 随游戏打包的署名：`Assets/StreamingAssets/Visager-Music-Credits.txt`。播放器不需要读取此文本；不改动菜单布局。
+- 源文件未剪辑、未重混。Unity 以 Vorbis quality 0.8 流式加载，保留立体声与原采样率，关闭整段预加载。直接引用对应 Loop 版本，不混用带尾奏版本。
+- 原文件测得整体响度分别为 -8.19、-10.98、-8.50 LUFS。对应场景的播放音量设为 **0.08 / 0.11 / 0.085**，约为 -30 LUFS 的背景音量，保留警告与交互音效的可辨识度。音量可在 `Level Background Music` 的播放器组件中继续编辑。
+- 沿用现有场景本地播放器和黑幕切换时停止音乐的机制，没有新增常驻音乐单例或逐帧场景扫描。Level2-Desert 使用独立的场景本地遭遇混音组件（见下），进入沙漠时不会残留上一场景的音乐。教程、主菜单、LastScene 和开发日志场景未修改。
+
+### 沙漠遭遇背景音 — Visager + FreesoundSandstorm（2026-10-30）
+
+- Boss 最终选曲：[Miniboss Fight [Loop]](https://freemusicarchive.org/music/Visager/Songs_From_An_Unmade_World_2/Visager_-_Songs_From_An_Unmade_World_2_-_28_Miniboss_Fight_-Loop-/)，来自 Songs From An Unmade World 2。完整约 179 秒，CC BY 4.0；作者、授权和下载证据同上。原音源响度 -9.47 LUFS，播放增益 **0.095**，约 -29.92 LUFS，与城镇音乐接近。
+- 环境音：[Sandstorm Looping — gbayles](https://freesound.org/people/gbayles/sounds/632771/)，是 [SandstormMix.mp3 — blackatomproductions](https://freesound.org/people/blackatomproductions/sounds/565015/) 的循环版。两个源页面均为 CC0 1.0，已保存于 `Docs/ThirdParty/Freesound/`。
+- 本次获取的是 Freesound 公开、完整约 403.46 秒的 **HQ MP3 预览转码**，不是需登录下载的作者原始上传文件。不绕过登录、不截录播放器。原件保持不变，Unity Vorbis quality 0.8 流式加载；不整段预加载。
+- 风声源响度 -16.11 LUFS，探索增益 **0.12**（约 -34.53 LUFS），战斗增益 **0.035**（约 -45.23 LUFS）；不触发 AI 吸引，也不受角色距离影响。自愿署名随包文件：`Assets/StreamingAssets/Desert-Ambience-Credits.txt`。
+- `Assets/Prefabs/Desert Encounter Audio.prefab` 仅放置于 Level2-Desert。`DesertEncounterAudio` 复用 Boss 血条首次可见事件，无额外视野检测；1.5 秒平滑淡入/淡出，沙虫钻地、离屏或距离卸载均不断曲，死亡/移除后回到风声。
+- 出场景时在黑幕开始处停止两个声源；无 DontDestroyOnLoad。存读档重新载入后等待世界恢复完成，再根据实际可见的存活沙虫触发，旧快照不会删除新增的无状态音频服务。
 
 ## 可用于鸣谢页的署名草稿
 
@@ -181,6 +219,11 @@ Composer: watson
 
 Music
 Napi / M-ART — https://mart.kitunebi.com/
+
+Eerie Mausoleum [Loop], Royal Entrance [Loop], Pyramid Level [Loop], Miniboss Fight [Loop]
+Visager (Josie Brechner) — https://visager.bandcamp.com/
+CC BY 4.0 — https://creativecommons.org/licenses/by/4.0/
+Full sources and playback changes: StreamingAssets/Visager-Music-Credits.txt
 ```
 
 ## 发行前待办与后续维护
@@ -272,6 +315,13 @@ Napi / M-ART — https://mart.kitunebi.com/
 - 均为单声道 44.1 kHz PCM16；默认播放音量 0.55，2～26 单位距离衰减，一个法阵只使用一个音源。不新增 AI 吸引或伤害。
 - 音效跟随仪式保存进度；暂停、加载黑幕时暂停，停用或卸载时停止，读档在对应片段位置续播。阶段时长变化时同步适配播放进度。
 - `python Tools/GenerateSummoningAudio.py --check` 检查确定性、格式、时长、峰值、直流偏移与端点。无新增第三方署名要求。
+
+### 真标题终端音效（TITLE_SYNTH）
+
+- `Assets/Resources/Audio/TitleTerminalBoot.wav`：2 秒分段电子启动声，含短音与留白；在 2.3 秒启动过程的 0.3 秒处播放，对应窗口展开、标题刷新、菜单写入与就绪。
+- `Assets/Resources/Audio/TitleTerminalMove.wav`：约 0.045 秒轻量选择提示。
+- `Assets/Resources/Audio/TitleTerminalConfirm.wav`：0.16 秒确认双音。
+- 由 `Tools/GenerateTerminalTitleAudio.py` 原创合成，无第三方录音或采样。Mono PCM16 / 44.1 kHz，峰值分别 0.18 / 0.12 / 0.18；预加载、关闭归一化，默认播放音量 0.28。单声道不叠音，移动提示间隔至少 90 ms，确认优先；离开标题场景时清理。`--check` 校验成品。
 
 ### S11 — 项目内程序合成：木门与玻璃破坏
 

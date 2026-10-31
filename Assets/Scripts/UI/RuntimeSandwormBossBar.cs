@@ -6,6 +6,10 @@ using UnityEngine.UI;
 [DisallowMultipleComponent, DefaultExecutionOrder(220)]
 public sealed class RuntimeSandwormBossBar : MonoBehaviour
 {
+    public static event System.Action<SandwormZeldaCharacterData> EncounterStarted;
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetEncounterListeners() => EncounterStarted = null;
+
     [SerializeField, Min(80f)] private float barWidth = 380f;
     [SerializeField, Min(0f)] private float permissionGap = 10f;
     [SerializeField, Min(0f)] private float damageTrailDelay = .55f;
@@ -108,7 +112,8 @@ public sealed class RuntimeSandwormBossBar : MonoBehaviour
     {
         var player = ZeldaRuntimeRegistry.GetControlledMover();
         if (player == null || !player.isActiveAndEnabled || ZeldaRuntimeRegistry.GetGameplayScene(player.gameObject) != scene ||
-            CharacterPotionBuffs.IsRestoringWorld || SandwormZeldaCharacterData.ActiveSandworms.Count == 0) return;
+            CharacterPotionBuffs.IsRestoringWorld || GameSaveSystem.IsLoading || RetroSceneLoadReveal.IsPreparingGameplay ||
+            SandwormZeldaCharacterData.ActiveSandworms.Count == 0) return;
         Camera camera = Camera.main;
         if (camera == null || !camera.isActiveAndEnabled) return;
         var vision = camera.GetComponent<CameraCircularVision>();
@@ -125,6 +130,7 @@ public sealed class RuntimeSandwormBossBar : MonoBehaviour
         lastHealth = target.CurrentHealth; lastMaximum = target.Health;
         actual = trail = trailStart = Mathf.Clamp01(lastHealth / (float)Mathf.Max(1, lastMaximum));
         Subscribe();
+        EncounterStarted?.Invoke(target);
     }
 
     private void Subscribe()

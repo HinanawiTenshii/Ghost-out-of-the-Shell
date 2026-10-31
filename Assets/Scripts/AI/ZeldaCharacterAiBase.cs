@@ -20,6 +20,9 @@ public enum ZeldaAiState
 public partial class ZeldaCharacterAiBase : MonoBehaviour
 {
     private const string VisionObjectName = "AI Vision Cone";
+    // A separate, non-serialized rule keeps existing prefab/old-save suspicion
+    // rates intact for ordinary targets while moving boxes take ten seconds.
+    private const float CardboardBoxSuspicionDuration = 10f;
     private readonly List<PlacedBomb> noticedIdleBombs = new List<PlacedBomb>();
     private readonly List<ZeldaFourWayMover> nearbyCharacters = new List<ZeldaFourWayMover>(32);
     private PlacedBomb decoyBombTarget;
@@ -3374,7 +3377,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
             lastKnownTargetPosition = observedBox.WorldCenter;
             suspicionValue = Mathf.Min(
                 maximumSuspicion,
-                suspicionValue + suspicionIncreasePerSecond * deltaTime);
+                suspicionValue + maximumSuspicion * (deltaTime / CardboardBoxSuspicionDuration));
             ChangeState(ZeldaAiState.Suspicious);
             if (suspicionValue >= maximumSuspicion)
             {
@@ -3406,7 +3409,7 @@ public partial class ZeldaCharacterAiBase : MonoBehaviour
             lastKnownTargetPosition = observedGroundBox.WorldCenter;
             suspicionValue = Mathf.Min(
                 maximumSuspicion,
-                suspicionValue + suspicionIncreasePerSecond * deltaTime);
+                suspicionValue + maximumSuspicion * (deltaTime / CardboardBoxSuspicionDuration));
             ChangeState(ZeldaAiState.Suspicious);
             if (suspicionValue >= maximumSuspicion)
             {

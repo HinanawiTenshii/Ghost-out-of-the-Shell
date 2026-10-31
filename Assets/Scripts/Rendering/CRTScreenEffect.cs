@@ -25,6 +25,10 @@ public sealed class CRTScreenEffect : MonoBehaviour
     [SerializeField, Range(0.8f, 1.5f)] private float contrast = 1.12f;
     [SerializeField, Range(0f, 0.5f)] private float phosphorGlow = 0.14f;
 
+    [Header("Optional presentation frame (off for gameplay)")]
+    [SerializeField] private bool constrainAspectRatio;
+    [SerializeField, Min(.1f)] private float presentationAspectRatio = 4f / 3f;
+
     private Material runtimeMaterial;
     private Camera attachedCamera;
     private CRTScreenEffect settingsSource;
@@ -55,6 +59,7 @@ public sealed class CRTScreenEffect : MonoBehaviour
     private static readonly int BrightnessId = Shader.PropertyToID("_CRT_Brightness");
     private static readonly int ContrastId = Shader.PropertyToID("_CRT_Contrast");
     private static readonly int GlowId = Shader.PropertyToID("_CRT_Glow");
+    private static readonly int ViewportId = Shader.PropertyToID("_CRT_Viewport");
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStatics()
@@ -64,6 +69,7 @@ public sealed class CRTScreenEffect : MonoBehaviour
         DeadCanvases.Clear();
         cachedActiveUiCamera = null;
         canvasRegistrySeeded = false;
+        CanvasRegistered = null;
     }
 
     private Material EffectMaterial
@@ -142,7 +148,7 @@ public sealed class CRTScreenEffect : MonoBehaviour
                 }
                 if (material != null)
                 {
-                    ApplyShaderSettings(material);
+                    ApplyShaderSettings(material, source.width, source.height);
                     Graphics.Blit(composite, destination, material);
                 }
                 else Graphics.Blit(composite, destination);
@@ -160,17 +166,32 @@ public sealed class CRTScreenEffect : MonoBehaviour
             return;
         }
 
-        ApplyShaderSettings(material);
+        ApplyShaderSettings(material, source.width, source.height);
         Graphics.Blit(source, destination, material);
     }
 
-    private void ApplyShaderSettings(Material material)
+    private Vector4 ResolveViewport(int width, int height)
+    {
+        if (!constrainAspectRatio || width <= 0 || height <= 0) return new Vector4(0f, 0f, 1f, 1f);
+        float screenAspect = width / (float)height;
+        float frameAspect = Mathf.Max(.1f, presentationAspectRatio);
+        if (screenAspect > frameAspect)
+        {
+            float fraction = frameAspect / screenAspect;
+            return new Vector4((1f - fraction) * .5f, 0f, fraction, 1f);
+        }
+        float verticalFraction = screenAspect / frameAspect;
+        return new Vector4(0f, (1f - verticalFraction) * .5f, 1f, verticalFraction);
+    }
+
+    private void ApplyShaderSettings(Material material, int sourceWidth, int sourceHeight)
     {
         if (material == null)
             return;
 
         float timeValue =
             Application.isPlaying ? Time.unscaledTime : Time.realtimeSinceStartup;
+        Vector4 viewport = ResolveViewport(sourceWidth, sourceHeight);
 
         // These uniforms live in the Custom Function include rather than in the
         // Shader Graph blackboard. They must therefore be supplied globally;
@@ -186,6 +207,7 @@ public sealed class CRTScreenEffect : MonoBehaviour
         Shader.SetGlobalFloat(BrightnessId, brightness);
         Shader.SetGlobalFloat(ContrastId, contrast);
         Shader.SetGlobalFloat(GlowId, phosphorGlow);
+        Shader.SetGlobalVector(ViewportId, viewport);
 
         // The full-screen fallback exposes real material properties as well.
         // Setting both paths keeps the component compatible with either shader.
@@ -200,6 +222,7 @@ public sealed class CRTScreenEffect : MonoBehaviour
         material.SetFloat(BrightnessId, brightness);
         material.SetFloat(ContrastId, contrast);
         material.SetFloat(GlowId, phosphorGlow);
+        material.SetVector(ViewportId, viewport);
     }
 
     private void Awake()
@@ -442,6 +465,9 @@ public sealed class CRTScreenEffect : MonoBehaviour
         return cachedActiveUiCamera;
     }
 
+    // Scene-local presentation experiments can subscribe without changing production UI defaults.
+    public static event System.Action<Canvas> CanvasRegistered;
+
     public static void RegisterCanvas(Canvas canvas, bool enableGlow = false)
     {
         if (canvas == null)
@@ -452,6 +478,7 @@ public sealed class CRTScreenEffect : MonoBehaviour
         // CRT composition applies to all UI; extra phosphor halos are opt-in for menus/windows.
         if (enableGlow) RuntimeUiGlowScope.Attach(canvas);
         else RuntimeUiGlowScope.Detach(canvas);
+        CanvasRegistered?.Invoke(canvas);
         LayerConfiguredCanvases.Remove(canvas);
         Camera uiCamera = FindActiveUiCamera();
         if (uiCamera != null && canvas.isActiveAndEnabled)
@@ -589,6 +616,8 @@ public sealed class CRTScreenEffect : MonoBehaviour
         brightness = settingsSource.brightness;
         contrast = settingsSource.contrast;
         phosphorGlow = settingsSource.phosphorGlow;
+        constrainAspectRatio = settingsSource.constrainAspectRatio;
+        presentationAspectRatio = settingsSource.presentationAspectRatio;
     }
 
     private void OnDisable()
@@ -706,7 +735,7 @@ public sealed partial class RuntimeUiVisibility : MonoBehaviour
         bool titleScene = sceneName.Replace(" ", "").Equals("TitleScreen", System.StringComparison.OrdinalIgnoreCase);
         // Interactive panels, including settlement over a paused gameplay scene,
         // own the pointer. Otherwise LateUpdate hides it after their Open request.
-        bool show = titleScene || LevelSettlementScreen.IsOpen || PauseMenuController.IsPaused || TabJournalMenuController.IsOpen || SaveSlotPanel.IsOpen ||
+        bool show = titleScene || FakeTitleScreenPresentation.IsOpen || LevelSettlementScreen.IsOpen || PauseMenuController.IsPaused || TabJournalMenuController.IsOpen || SaveSlotPanel.IsOpen ||
             DoorPasswordPanel.IsOpen || ElectricGatePanel.IsOpen || CharacterDialogueWindow.BlocksInput || TurretZeldaCharacterData.PlayerNeedsCursor;
         if (Cursor.visible != show) Cursor.visible = show;
         // Hide only the visual cursor; mouse aiming and right-click inspection

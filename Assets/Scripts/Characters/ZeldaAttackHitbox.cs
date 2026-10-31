@@ -136,7 +136,13 @@ public class ZeldaAttackHitbox : MonoBehaviour
     private int ownerEchoAttackVersion;
     private bool canDamageOwner;
     private bool isDirectCharacterAttack;
+    private bool canBeShieldBlocked = true;
     private bool potionMeleeSweep;
+    private bool heroSwordSweep;
+    private bool heroOcclusionSorting;
+    private int originalSortingLayer, originalSortingOrder;
+    // The visual-only sweep rig is shared by Berserk and the hero's basic sword.
+    // Only potionMeleeSweep may enlarge the damage region or change occlusion rules.
     private Transform potionSweepScaleRoot;
     private Transform potionSweepPivot;
     private SpriteRenderer potionSweepRenderer;
@@ -213,7 +219,7 @@ public class ZeldaAttackHitbox : MonoBehaviour
     private void Update()
     {
         if (CancelForStunnedOwner()) return;
-        if (!potionMeleeSweep && visualShape != ZeldaAttackVisualShape.Shockwave)
+        if (!potionSweepVisualActive && visualShape != ZeldaAttackVisualShape.Shockwave)
         {
             return;
         }
@@ -221,7 +227,7 @@ public class ZeldaAttackHitbox : MonoBehaviour
         elapsedLifetime += Time.deltaTime;
         float progress = Mathf.Clamp01(
             elapsedLifetime / Mathf.Max(0.01f, lifetime));
-        if (potionMeleeSweep)
+        if (potionSweepVisualActive)
         {
             UpdatePotionSweepVisual(progress);
             return;
@@ -249,12 +255,19 @@ public class ZeldaAttackHitbox : MonoBehaviour
         ZeldaCharacterData attackOwner,
         ZeldaAttackVisualShape inheritedVisualShape,
         bool allowOwnerDamage = false,
-        bool directCharacterAttack = false)
+        bool directCharacterAttack = false,
+        bool allowDirectionalShieldBlock = true)
     {
         // Configuration may precede Awake for an inactive prefab/template.
         // The guard also prevents a later activation from resetting configured geometry.
         if (!initialized) Awake();
         ResetPotionSweepVisual();
+        if (heroOcclusionSorting && spriteRenderer != null)
+        {
+            spriteRenderer.sortingLayerID = originalSortingLayer;
+            spriteRenderer.sortingOrder = originalSortingOrder;
+            heroOcclusionSorting = false;
+        }
         exposedBombTargets = null;
         lifetime = attackLifetime;
         attackPower = inheritedAttackPower;
@@ -264,10 +277,13 @@ public class ZeldaAttackHitbox : MonoBehaviour
         ownerEchoAttackVersion = ownerMover != null ? ownerMover.EchoAttackInterruptionVersion : 0;
         canDamageOwner = allowOwnerDamage;
         isDirectCharacterAttack = directCharacterAttack;
+        canBeShieldBlocked = allowDirectionalShieldBlock;
         visualShape = inheritedVisualShape;
         potionMeleeSweep = directCharacterAttack && inheritedVisualShape != ZeldaAttackVisualShape.Shockwave &&
             inheritedVisualShape != ZeldaAttackVisualShape.DirectionalWave &&
             CharacterPotionBuffs.Has(owner, AlchemyPotionKind.Berserk);
+        heroSwordSweep = directCharacterAttack && inheritedVisualShape == ZeldaAttackVisualShape.Sword &&
+            owner is HeroZeldaCharacterData hero && hero.HasSword;
         // Enlarge only the contact region, not the authored weapon sprite. The existing
         // damagedTargets set already guarantees one hit per character for this swing.
         triggerCollider.size = potionMeleeSweep
@@ -287,8 +303,25 @@ public class ZeldaAttackHitbox : MonoBehaviour
         {
             ApplyVisual();
             spriteRenderer.color = visualTint;
+            if (directCharacterAttack && owner is HeroZeldaCharacterData shieldedHero && shieldedHero.HasShield)
+            {
+                var body = owner.GetComponent<SpriteRenderer>();
+                if (body != null)
+                {
+                    originalSortingLayer = spriteRenderer.sortingLayerID;
+                    originalSortingOrder = spriteRenderer.sortingOrder;
+                    heroOcclusionSorting = true;
+                    // Up: the head covers the far hand/weapon. Left: the near
+                    // shield covers the grip. This also applies to shield-only
+                    // heroes' civilian attacks; down/right use the near arm.
+                    Vector3 facing = transform.up;
+                    bool behindBody = facing.y > .5f || facing.x < -.5f;
+                    spriteRenderer.sortingLayerID = body.sortingLayerID;
+                    spriteRenderer.sortingOrder = body.sortingOrder + (behindBody ? -1 : 1);
+                }
+            }
         }
-        if (potionMeleeSweep) ConfigurePotionSweepVisual();
+        if (potionMeleeSweep || heroSwordSweep) ConfigurePotionSweepVisual();
         if (visualShape == ZeldaAttackVisualShape.DirectionalWave)
         {
             var wave = GetComponent<DirectionalPurpleWave>();
@@ -302,11 +335,11 @@ public class ZeldaAttackHitbox : MonoBehaviour
         if (spriteRenderer == null) return;
         if (potionSweepPivot == null)
         {
-            potionSweepScaleRoot = new GameObject("Berserk Sweep Visual").transform;
+            potionSweepScaleRoot = new GameObject("Melee Sweep Visual").transform;
             potionSweepScaleRoot.SetParent(transform, false);
-            potionSweepPivot = new GameObject("Berserk Sweep Pivot").transform;
+            potionSweepPivot = new GameObject("Melee Sweep Pivot").transform;
             potionSweepPivot.SetParent(potionSweepScaleRoot, false);
-            var visual = new GameObject("Berserk Sweep Weapon", typeof(SpriteRenderer));
+            var visual = new GameObject("Melee Sweep Weapon", typeof(SpriteRenderer));
             visual.transform.SetParent(potionSweepPivot, false);
             potionSweepRenderer = visual.GetComponent<SpriteRenderer>();
         }
@@ -353,7 +386,10 @@ public class ZeldaAttackHitbox : MonoBehaviour
         if (!potionSweepVisualActive || potionSweepRenderer == null) return;
         // The initial facing still selects TwinBlades' profile sprite. The arc
         // is local to that facing, so all four directions use the same motion.
-        float angle = Mathf.SmoothStep(-55f, 55f, Mathf.Clamp01(progress));
+        // Basic hero attack spans 90 degrees in total, centred on the facing
+        // direction. Berserk retains its existing, wider 110-degree sweep.
+        float halfAngle = potionMeleeSweep ? 55f : 45f;
+        float angle = Mathf.SmoothStep(-halfAngle, halfAngle, Mathf.Clamp01(progress));
         potionSweepPivot.localRotation = Quaternion.Euler(0f, 0f, angle);
         // A short forward arc also reads as a sweep for round rocks/fists, whose
         // silhouette barely changes when rotated. Keep the midpoint at the
@@ -445,17 +481,19 @@ public class ZeldaAttackHitbox : MonoBehaviour
 
     /// <summary>An instantaneous circular pulse using the same damage rules as weapons/bombs.
     /// The resolver stays inactive: neither a physical collider nor a persistent hit trigger is enabled.</summary>
-    public static void ApplyCircularPulse(Vector2 center, float radius, int power, ZeldaCharacterData attacker)
+    public static void ApplyCircularPulse(Vector2 center, float radius, int power, ZeldaCharacterData attacker,
+        bool allowDirectionalShieldBlock = true)
     {
         if (attacker == null || attacker.IsDead || radius <= 0f || power <= 0) return;
-        var resolver = CreateCircularAreaResolver(power, attacker);
+        var resolver = CreateCircularAreaResolver(power, attacker, null, allowDirectionalShieldBlock);
         resolver.ResolveCircularArea(center, radius);
         if (Application.isPlaying) Destroy(resolver.gameObject); else DestroyImmediate(resolver.gameObject);
     }
 
     /// <summary>Inactive query-only resolver. Reuse for a whole effect to preserve its per-target hit sets.
     /// The caller owns its lifetime; parenting it to the effect also guarantees cleanup on scene unload.</summary>
-    public static ZeldaAttackHitbox CreateCircularAreaResolver(int power, ZeldaCharacterData attacker, Transform parent = null)
+    public static ZeldaAttackHitbox CreateCircularAreaResolver(int power, ZeldaCharacterData attacker, Transform parent = null,
+        bool allowDirectionalShieldBlock = true)
     {
         if (attacker == null || attacker.IsDead || power <= 0) return null;
         var root = new GameObject("Circular Attack Resolver");
@@ -463,7 +501,8 @@ public class ZeldaAttackHitbox : MonoBehaviour
         if (parent != null) root.transform.SetParent(parent, false);
         else UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(root, attacker.gameObject.scene);
         var resolver = root.AddComponent<ZeldaAttackHitbox>();
-        resolver.Configure(.01f, Vector2.one, Color.clear, power, attacker, ZeldaAttackVisualShape.Box);
+        resolver.Configure(.01f, Vector2.one, Color.clear, power, attacker, ZeldaAttackVisualShape.Box,
+            false, false, allowDirectionalShieldBlock);
         resolver.triggerCollider.enabled = false;
         resolver.physicsBody.simulated = false;
         return resolver;
@@ -525,11 +564,21 @@ public class ZeldaAttackHitbox : MonoBehaviour
             RecordTargetContact(target);
             // Self-inflicted bomb damage should not broadcast the character
             // as its own attacker to AI hostility logic.
-            target.TakeDamage(attackPower, target == owner ? null : owner);
+            DirectionalDamageContext impact = default;
+            if (canBeShieldBlocked)
+            {
+                if (isDirectCharacterAttack && visualShape == ZeldaAttackVisualShape.DirectionalWave)
+                    impact = DirectionalDamageContext.Projectile(transform.up);
+                else if (isDirectCharacterAttack && visualShape != ZeldaAttackVisualShape.Shockwave && owner != null)
+                    impact = DirectionalDamageContext.Melee(owner.transform.position);
+                else impact = DirectionalDamageContext.Explosion(transform.position);
+            }
+            var damageResult = target.TakeDamage(attackPower, target == owner ? null : owner, impact);
             // A lethal contact can rewind the target and interrupt this very
             // swing. Do not then knock the restored body away from its anchor.
             if (CancelForStunnedOwner()) return;
-            if (isDirectCharacterAttack && visualShape != ZeldaAttackVisualShape.Shockwave &&
+            if (damageResult != CharacterDamageResult.DirectionalShieldBlocked &&
+                isDirectCharacterAttack && visualShape != ZeldaAttackVisualShape.Shockwave &&
                 visualShape != ZeldaAttackVisualShape.DirectionalWave && target != owner)
                 CharacterPotionBuffs.TryMeleeKnockback(owner, target);
         }
@@ -656,7 +705,10 @@ public class ZeldaAttackHitbox : MonoBehaviour
         }
         else if (visualShape == ZeldaAttackVisualShape.Sword)
         {
-            spriteRenderer.sprite = swordSprite;
+            // A hero-specific picture, not a new damage shape. Other sword users
+            // and swordless hero variants keep their existing combat/appearance.
+            spriteRenderer.sprite = owner is HeroZeldaCharacterData hero && hero.HasSword
+                ? HeroSwordPixelArt.GetAttackSprite() : swordSprite;
         }
         else if (visualShape == ZeldaAttackVisualShape.Wrench)
         {

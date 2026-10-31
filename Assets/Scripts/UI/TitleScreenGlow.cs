@@ -12,6 +12,8 @@ public sealed class TitleScreenGlow : BaseMeshEffect
 {
     private const int HaloCopies = 24;
     private const float CyanHaloIntensity = .75f;
+    private float haloRadiusScale = 1f;
+    private float haloIntensityScale = 1f;
     private readonly List<UIVertex> source = new List<UIVertex>();
     private readonly List<UIVertex> output = new List<UIVertex>();
     private static readonly Vector2[] Directions =
@@ -28,6 +30,14 @@ public sealed class TitleScreenGlow : BaseMeshEffect
     {
         if (target != null && target.GetComponent<TitleScreenGlow>() == null)
             target.gameObject.AddComponent<TitleScreenGlow>();
+    }
+
+    /// <summary>Opt-in halo tuning; default instances retain the shared gameplay style.</summary>
+    public void ConfigureHalo(float radiusScale, float intensityScale)
+    {
+        haloRadiusScale = System.Math.Max(.5f, System.Math.Min(2f, radiusScale));
+        haloIntensityScale = System.Math.Max(0f, System.Math.Min(2f, intensityScale));
+        if (graphic != null) graphic.SetVerticesDirty();
     }
 
     public override void ModifyMesh(VertexHelper vertices)
@@ -85,7 +95,7 @@ public sealed class TitleScreenGlow : BaseMeshEffect
     {
         for (int direction = 0; direction < Directions.Length; direction++)
         {
-            Vector2 offset = Directions[direction] * radius;
+            Vector2 offset = Directions[direction] * (radius * haloRadiusScale);
             for (int index = 0; index < source.Count; index++)
             {
                 UIVertex vertex = source[index];
@@ -96,7 +106,7 @@ public sealed class TitleScreenGlow : BaseMeshEffect
                 Color32 color = vertex.color;
                 bool blue = IsLuminousBlue(color);
                 // Cyan is perceptually brighter than blue: soften only its halo, not the crisp core.
-                float intensity = blue && color.g > color.b ? CyanHaloIntensity : 1f;
+                float intensity = (blue && color.g > color.b ? CyanHaloIntensity : 1f) * (blue ? haloIntensityScale : 1f);
                 if (blue) color = FluorescentTint(color, false);
                 color.a = (byte)Mathf.RoundToInt(color.a * (blue ? opacity : mutedOpacity) * intensity);
                 vertex.color = color;

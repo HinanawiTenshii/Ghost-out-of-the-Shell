@@ -297,7 +297,10 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
         ValuesChanged?.Invoke();
         return true;
     }
-    public virtual bool CanTakeAttackDamage => !IsGhostForm;
+    // Permanent character-specific protection, independent of temporary potion buffs.
+    public virtual bool IsImmuneToDamage => false;
+    public virtual bool CanTakeAttackDamage => !IsGhostForm && !IsImmuneToDamage;
+    protected virtual bool TryBlockDirectionalDamage(DirectionalDamageContext impact) => false;
     public virtual int AttackPower => 0;
     public int FinalAttackPower => CharacterPotionBuffs.Has(this, AlchemyPotionKind.Weakness) ? 1 :
         (AttackPower + GetControlledGrowthAttackPower() + CharacterPotionBuffs.AttackBonus(this)) * (IsCombatExpertiseActive ? 2 : 1);
@@ -438,6 +441,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
 
     public virtual void ApplyRuntimeState(RuntimeState state)
     {
+        ResetSprintVisual();
         RestoreGrantedCharacterSkill(state.grantedCharacterSkillId);
         if (!string.IsNullOrEmpty(state.individualAccessId)) individualAccessId = state.individualAccessId;
         restoredPersistentCharacterId = state.persistentCharacterId;
@@ -481,19 +485,56 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
     }
 
     private PixelCharacterWalkAnimator walkAnimator;
+    [Header("Sprint Visual / 玩家奔跑表现（不适用于巨兽等特殊角色）")]
+    [SerializeField] private CharacterSprintVisualSettings sprintVisualSettings = new CharacterSprintVisualSettings();
+    private CharacterSprintVisual sprintVisual;
+    private ZeldaFourWayMover visualMover;
+
+    internal void RecordSprintVisualMovement(Vector2 displacement)
+    { if (sprintVisual != null) sprintVisual.RecordMovement(displacement); }
+    internal void ResetSprintVisual()
+    { if (sprintVisual != null) sprintVisual.ResetVisual(); }
+    public int GetMovementAnimationFrame(float framesPerSecond)
+        => sprintVisual != null && sprintVisual.OwnsPlayerClock ? sprintVisual.WalkFrame(framesPerSecond) :
+            Mathf.FloorToInt(Time.time * framesPerSecond) % 2;
+    internal bool TryGetSprintWalkFrame(float framesPerSecond, out int frame)
+    {
+        frame = 0;
+        if (sprintVisual == null || !sprintVisual.OwnsPlayerClock) return false;
+        frame = sprintVisual.WalkFrame(framesPerSecond); return true;
+    }
 
     public void ApplyCharacterVisualWithMovement(SpriteRenderer renderer, Vector2 facing, bool moving, bool attacking)
     {
+        // No additional components or per-NPC ticking: create this only on the first player sprint.
+        if (Application.isPlaying && sprintVisual == null && moving && !attacking && !IsDead && !IsGhostLike &&
+            CharacterSprintVisual.Supports(this))
+        {
+            if (visualMover == null) visualMover = GetComponent<ZeldaFourWayMover>();
+            if (visualMover != null && visualMover.isActiveAndEnabled && visualMover.IsSprinting)
+            {
+                if (sprintVisualSettings == null) sprintVisualSettings = new CharacterSprintVisualSettings();
+                if (sprintVisualSettings.enabled)
+                {
+                    sprintVisual = gameObject.AddComponent<CharacterSprintVisual>();
+                    sprintVisual.Initialize(this, visualMover, sprintVisualSettings);
+                }
+            }
+        }
+        if (sprintVisual != null) moving = sprintVisual.Prepare(renderer, moving, attacking);
         ApplyCharacterVisual(renderer, facing, moving, attacking);
         // Paladin has its own authored animation. Unknown future types opt in explicitly.
-        if (!PixelCharacterWalkAnimator.Supports(this)) return;
-        if (walkAnimator == null && moving && !attacking && !IsDead && renderer != null)
+        if (PixelCharacterWalkAnimator.Supports(this))
         {
-            walkAnimator = GetComponent<PixelCharacterWalkAnimator>();
-            if (walkAnimator == null) walkAnimator = gameObject.AddComponent<PixelCharacterWalkAnimator>();
-            walkAnimator.Initialize(this);
+            if (walkAnimator == null && moving && !attacking && !IsDead && renderer != null)
+            {
+                walkAnimator = GetComponent<PixelCharacterWalkAnimator>();
+                if (walkAnimator == null) walkAnimator = gameObject.AddComponent<PixelCharacterWalkAnimator>();
+                walkAnimator.Initialize(this);
+            }
+            if (walkAnimator != null) walkAnimator.Apply(renderer, moving && !IsDead, attacking);
         }
-        if (walkAnimator != null) walkAnimator.Apply(renderer, moving && !IsDead, attacking);
+        if (sprintVisual != null) sprintVisual.Apply(renderer);
     }
 
     public virtual void ApplyCharacterVisual(SpriteRenderer spriteRenderer, Vector2 facingDirection, bool isMoving, bool isAttacking)
@@ -627,7 +668,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
 
     public void KillFromPotion()
     {
-        if (isDead || ArenaChallengeController.ProtectsRegistrar(this)) return;
+        if (isDead || IsImmuneToDamage || ArenaChallengeController.ProtectsRegistrar(this)) return;
         controlTransferDamage = 0;
         Die();
     }
@@ -647,7 +688,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
 
     public void DieFromSoulDetonation()
     {
-        if (isDead || ArenaChallengeController.ProtectsRegistrar(this)) return;
+        if (isDead || IsImmuneToDamage || ArenaChallengeController.ProtectsRegistrar(this)) return;
         controlTransferDamage = Mathf.Max(0, currentHealth);
         soulDetonationDeath = true;
         currentHealth = 0;
@@ -659,6 +700,11 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
         ApplyDamage(damage, attacker, false);
     }
 
+    public CharacterDamageResult TakeDamage(int damage, ZeldaCharacterData attacker, DirectionalDamageContext impact)
+    {
+        return ApplyDamage(damage, attacker, false, null, impact);
+    }
+
     internal void TakeDominoDamage(int damage, ZeldaCharacterData attacker)
     {
         ApplyDamage(damage, attacker, true);
@@ -667,24 +713,35 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
     /// <summary>A distant gun hit reveals a firing location, not the shooter's identity.</summary>
     public void TakeHandgunDamage(int damage, Vector2 firingPosition, ZeldaCharacterData shooter = null)
     {
+        TakeHandgunDamage(damage, firingPosition, shooter,
+            DirectionalDamageContext.Projectile((Vector2)transform.position - firingPosition));
+    }
+
+    public CharacterDamageResult TakeHandgunDamage(int damage, Vector2 firingPosition,
+        ZeldaCharacterData shooter, DirectionalDamageContext impact)
+    {
         int healthBeforeHit = currentHealth;
         int shieldBeforeHit = HolyShieldBlockVersion;
         // Keep normal mitigation, feedback and domino propagation. A null attacker
         // deliberately prevents retaliation/witness evidence, including on lethal hits.
-        ApplyDamage(damage, null, false, shooter);
-        if (!isDead && (currentHealth < healthBeforeHit || HolyShieldBlockVersion != shieldBeforeHit))
+        var result = ApplyDamage(damage, null, false, shooter, impact);
+        if (!isDead && (currentHealth < healthBeforeHit || HolyShieldBlockVersion != shieldBeforeHit ||
+            result == CharacterDamageResult.DirectionalShieldBlocked))
         {
             var ai = GetComponent<ZeldaCharacterAiBase>();
             if (ai != null) ai.InvestigateHandgunShot(firingPosition);
         }
+        return result;
     }
 
-    private void ApplyDamage(int damage, ZeldaCharacterData attacker, bool shared, ZeldaCharacterData evidenceSource = null)
+    private CharacterDamageResult ApplyDamage(int damage, ZeldaCharacterData attacker, bool shared,
+        ZeldaCharacterData evidenceSource = null, DirectionalDamageContext impact = default)
     {
-        if (ArenaChallengeController.LimitDamage(this, damage) <= 0) return;
+        if (IsImmuneToDamage) return CharacterDamageResult.Ignored;
+        if (ArenaChallengeController.LimitDamage(this, damage) <= 0) return CharacterDamageResult.Ignored;
         if (isDead || damage <= 0 || currentHealth <= 0 || CharacterPotionBuffs.IsInvulnerable(this))
         {
-            return;
+            return CharacterDamageResult.Ignored;
         }
 
         ZeldaFourWayMover damagedMover = GetComponent<ZeldaFourWayMover>();
@@ -693,7 +750,16 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
             : null;
         if (!shared && wornBox != null && wornBox.TryBlockAttack(attacker))
         {
-            return;
+            return CharacterDamageResult.Ignored;
+        }
+
+        // Test the pre-hit facing before retaliation can turn the body. A physical
+        // block consumes neither Holy Shield charges nor linked/health-loss effects.
+        if (!shared && TryBlockDirectionalDamage(impact))
+        {
+            if (damagedMover != null) damagedMover.InterruptPossessionByDamage();
+            NotifyAttackEvidence(attacker, evidenceSource, false);
+            return CharacterDamageResult.DirectionalShieldBlocked;
         }
 
         ZeldaCharacterAiBase damagedAi = GetComponent<ZeldaCharacterAiBase>();
@@ -709,7 +775,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
             // The hit remains an offence even though no HP was lost. It must not
             // trigger Echo, death, or transfer damage that the shield fully absorbed.
             NotifyAttackEvidence(attacker, evidenceSource, shared);
-            return;
+            return CharacterDamageResult.HolyShieldBlocked;
         }
 
         resolvedDamage = ArenaChallengeController.LimitDamage(this, resolvedDamage);
@@ -738,6 +804,7 @@ public class ZeldaCharacterData : ZeldaCharacterCommonData
         {
             Die();
         }
+        return CharacterDamageResult.Damaged;
     }
 
     /// <summary>Reports a successful hostile spell without applying damage or consuming a shield charge.</summary>

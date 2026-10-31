@@ -322,7 +322,7 @@ public sealed partial class GameSaveSystem : MonoBehaviour
     {
         if (loading || writing || arena == null) return false;
         string scene = arena.gameObject.scene.name;
-        return RetroSceneLoadReveal.BeginTransition(scene, () =>
+        return RetroSceneLoadReveal.BeginLayoutTransition(scene, () =>
         {
             try
             {

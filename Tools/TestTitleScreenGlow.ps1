@@ -20,10 +20,12 @@ namespace UnityEngine {
 }
 namespace UnityEngine.UI {
  public class Graphic {
+  public void SetVerticesDirty(){}
   public UnityEngine.GameObject gameObject=new UnityEngine.GameObject();
   public T GetComponent<T>() where T:class{return gameObject.component as T;}
  }
  public abstract class BaseMeshEffect {
+  public Graphic graphic;
   public bool enabled=true; public bool IsActive(){return enabled;}
   public abstract void ModifyMesh(VertexHelper vertices);
  }
@@ -107,6 +109,18 @@ $graphic = [UnityEngine.UI.Graphic]::new()
 [TitleScreenGlow]::Attach($graphic); [TitleScreenGlow]::Attach($graphic); [TitleScreenGlow]::Attach($null)
 Check ($graphic.gameObject.adds -eq 1) 'Attaching is idempotent and null-safe'
 $controller = Get-Content -Raw "$taskRoot/Assets/Scripts/UI/TitleScreenController.cs"
+$effect.ConfigureHalo(1.6, 1.75)
+$enhanced = [UnityEngine.UI.VertexHelper]::new()
+$enhanced.data.AddRange([UnityEngine.UIVertex[]]$original)
+$effect.ModifyMesh($enhanced)
+Check ([Math]::Abs($enhanced.data[0].position.x - $original[0].position.x - 9.6) -lt .0001) 'Terminal opt-in increases halo radius only'
+Check ($enhanced.data[0].color.a -eq [Math]::Round(255 * .035 * 1.75)) 'Terminal opt-in increases halo intensity'
+Check ($enhanced.data[144].position.Equals($original[0].position)) 'Enhanced halo keeps original crisp glyph geometry'
+$effect.ConfigureHalo(1, 1)
+$standard = [UnityEngine.UI.VertexHelper]::new()
+$standard.data.AddRange([UnityEngine.UIVertex[]]$original)
+$effect.ModifyMesh($standard)
+Check ($standard.data[0].position.x -eq $original[0].position.x + 6) 'Shared default halo stays unchanged'
 $slots = Get-Content -Raw "$taskRoot/Assets/Scripts/UI/SaveSlotPanel.cs"
 Check (([regex]::Matches($controller, 'TitleScreenGlow.Attach\(text\)')).Count -eq 2) 'Title and menu labels are covered'
 Check ($controller.Contains('TitleScreenGlow.Attach(image)')) 'Thin frame edges are covered'

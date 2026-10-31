@@ -1,0 +1,11 @@
+Title/background editing: built-in image_gen. Original code-native item sprites exported and placed as integer-sized pixel blocks using System.Drawing, per user's requirement to strictly use actual game visuals. No AI redraw of final icons.
+Sources: Assets/Scripts/Items/{BombPickupItemVisual,ClockworkPuppetPickupItemVisual,CardboardBoxPickupItemVisual,DisposableHandgunPickupItemVisual}.cs. Bomb/box serialized palette checked against pickup prefabs. Puppet geometry executes original source routines. 753 opaque source pixels checked against composited PNG colors. Output 2408x1440 PNG and quality-98 JPG. PNG preserves exact icon colors; JPEG has normal lossy compression.
+Changes: Removed English game logo; removed comma; four authentic sprites in 2x2 inventory frames.
+
+Imagegen prompt:
+Edit this exact minimalist cover. Keep the same landscape aspect ratio 1622:970, background dark navy subtle CRT texture, the SAME Chinese typography, same position and scale of the text.
+Make only these changes:
+1. Completely remove the small lower-left English game logo "GHOST out of the SHELL". Fill seamlessly with existing navy background.
+2. Remove the comma after "一个道具". Main headline must now read exactly two lines "一个道具" / "多种用法" without any punctuation. Preserve the eyebrow "[独立游戏开发日志01]" exactly.
+3. Remove the entire cardboard box illustration AND its cyan square border on the right. Leave that whole right area blank with matching dark navy background. This is a background plate: authentic game sprite icons will be placed in that empty space in the next production step, so DO NOT invent or draw any items or frames.
+No additional text, no new illustrations. Everything else unchanged, especially clean minimalist typography and negative space.
